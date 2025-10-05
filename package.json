@@ -5,10 +5,12 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "format": "prettier --write src/**/*.js",
-    "test": "node --test tests/**/*.test.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,js}\"",
+    "clean": "rm -rf dist"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -36,10 +38,9 @@
     "xstate": "^5.22.0"
   },
   "devDependencies": {
-    "@statelyai/inspect": "^0.4.0",
-    "concurrently": "^9.2.1",
-    "nodemon": "^3.1.10",
+    "@types/node": "^24.6.2",
     "prettier": "^3.6.2",
-    "ws": "^8.18.3"
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   }
 }

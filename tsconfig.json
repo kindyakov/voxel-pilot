@@ -1,0 +1,32 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["ES2022"],
+		"outDir": "./dist",
+		"rootDir": "./src",
+
+		// Строгость
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+
+		// ES Modules
+		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+
+		// Производительность
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+
+		// Декораторы (если понадобятся для XState)
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": false
+	},
+	"include": ["src/**/*"],
+	"exclude": ["node_modules", "dist", "logs"]
+}
