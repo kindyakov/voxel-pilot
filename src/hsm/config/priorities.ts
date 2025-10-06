@@ -1,0 +1,51 @@
+export interface Priorities {
+	// URGENT_NEEDS
+	EMERGENCY_HEALING: number
+	EMERGENCY_EATING: number
+
+	// PEACEFUL
+	FOLLOWING: number
+	MINING: number
+	BUILDING: number
+	FARMING: number
+	SLEEPING: number
+	SHELTERING: number
+	IDLE: number
+
+	// COMBAT
+	COMBAT: number
+	FLEEING: number
+	MELEE_ATTACKING: number
+	RANGED_ATTACKING: number
+	DEFENDING: number
+
+	// TASKS
+	DEPOSIT_ITEMS: number
+	REPAIR_ARMOR_TOOLS: number
+}
+
+export const PRIORITIES: Priorities = {
+	// URGENT_NEEDS
+	EMERGENCY_HEALING: 8,
+	EMERGENCY_EATING: 8,
+
+	// PEACEFUL
+	FOLLOWING: 9,
+	MINING: 6,
+	BUILDING: 6,
+	FARMING: 6,
+	SLEEPING: 6,
+	SHELTERING: 6,
+	IDLE: 1,
+
+	// COMBAT
+	COMBAT: 7,
+	FLEEING: 7,
+	MELEE_ATTACKING: 7,
+	RANGED_ATTACKING: 7,
+	DEFENDING: 7,
+
+	// TASKS
+	DEPOSIT_ITEMS: 6.5,
+	REPAIR_ARMOR_TOOLS: 5
+}
