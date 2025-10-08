@@ -11,7 +11,7 @@ export function findNearbyEnemies({
 	position
 }: MachineContext): Entity | null {
 	if (!position) return null
-	
+
 	return enemies
 		.filter(
 			enemy =>

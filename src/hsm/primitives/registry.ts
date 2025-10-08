@@ -1,3 +1,1 @@
-export const PRIMITIVE_REGISTRY = {
-
-}
+export const PRIMITIVE_REGISTRY = {}

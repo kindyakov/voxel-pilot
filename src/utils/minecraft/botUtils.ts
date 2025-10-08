@@ -158,8 +158,9 @@ export class BotUtils {
 
 	getArrow(): Item | null {
 		return (
-			this._bot.inventory.items().find((item: Item) => item.name.includes('arrow')) ||
-			null
+			this._bot.inventory
+				.items()
+				.find((item: Item) => item.name.includes('arrow')) || null
 		)
 	}
 

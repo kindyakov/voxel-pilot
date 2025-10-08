@@ -33,11 +33,17 @@ declare module 'mineflayer' {
 		once(event: string, listener: (...args: any[]) => void): void
 		off<K extends keyof BotEvents>(event: K, listener: BotEvents[K]): void
 		off(event: string, listener: (...args: any[]) => void): void
-		emit<K extends keyof BotEvents>(event: K, ...args: Parameters<BotEvents[K]>): void
+		emit<K extends keyof BotEvents>(
+			event: K,
+			...args: Parameters<BotEvents[K]>
+		): void
 		emit(event: string, ...args: any[]): void
 		chat(message: string): void
 		quit(reason?: string): void
-		equip(item: Item, destination: 'hand' | 'head' | 'torso' | 'legs' | 'feet' | 'off-hand'): Promise<void>
+		equip(
+			item: Item,
+			destination: 'hand' | 'head' | 'torso' | 'legs' | 'feet' | 'off-hand'
+		): Promise<void>
 		consume(): Promise<void>
 		nearestEntity(filter?: (entity: Entity) => boolean): Entity | null
 

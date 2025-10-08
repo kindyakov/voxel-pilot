@@ -7,7 +7,7 @@ interface ParsedCommand {
 	args: string[]
 }
 
-export class CommandHandler {
+export default class CommandHandler {
 	private bot: Bot
 	private hsm: BotStateMachine
 

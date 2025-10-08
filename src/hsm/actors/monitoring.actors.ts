@@ -1,13 +1,13 @@
-import { fromCallback } from "xstate"
+import { fromCallback } from 'xstate'
 
 const serviceEntitiesTracking = fromCallback(({ sendBack }) => {
-  const interval = setInterval(() => {
-    sendBack({ type: 'UPDATE_ENTITIES' })
-  }, 100)
+	const interval = setInterval(() => {
+		sendBack({ type: 'UPDATE_ENTITIES' })
+	}, 100)
 
-  return () => clearInterval(interval)
+	return () => clearInterval(interval)
 })
 
 export default {
-  serviceEntitiesTracking,
+	serviceEntitiesTracking
 }

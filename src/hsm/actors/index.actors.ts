@@ -3,7 +3,7 @@ import monitoringActors from './monitoring.actors.js'
 import urgentNeedsActors from './urgentNeeds.actors.js'
 
 export const actors = {
-  ...combatActors,
-  ...monitoringActors,
-  ...urgentNeedsActors
+	...combatActors,
+	...monitoringActors,
+	...urgentNeedsActors
 }
