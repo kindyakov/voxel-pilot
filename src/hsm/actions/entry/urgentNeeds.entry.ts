@@ -1,14 +1,14 @@
-import type { ActionParams } from '../../types'
+import type { MachineActionParams } from '@hsm/types'
 
-const entryEmergencyEating = ({ context, event }) => {
-  console.log('🚨 Вход в EMERGENCY_EATING 🥩')
+const entryEmergencyEating = ({ context, event }: MachineActionParams) => {
+	console.log('🚨 Вход в EMERGENCY_EATING 🥩')
 }
 
-const entryEmergencyHealing = ({ context, event }) => {
-  console.log('🚨 Вход в EMERGENCY_HEALING 💗')
+const entryEmergencyHealing = ({ context, event }: MachineActionParams) => {
+	console.log('🚨 Вход в EMERGENCY_HEALING 💗')
 }
 
 export default {
-  entryEmergencyEating,
-  entryEmergencyHealing,
+	entryEmergencyEating,
+	entryEmergencyHealing
 }

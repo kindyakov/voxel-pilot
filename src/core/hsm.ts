@@ -1,9 +1,11 @@
 import EventEmitter from 'node:events'
 import { createActor, type Actor, type AnyStateMachine } from 'xstate'
-import type { Bot, Entity } from '../types/index'
+import type { Bot, Entity } from '@types'
+import type { MachineContext } from '@hsm/context'
+import type { MachineEvent } from '@hsm/types'
 
-import { machine } from '../hsm/machine'
-import { AntiLoopGuard } from '../hsm/utils/antiLoop'
+import { machine } from '@hsm/machine'
+import { AntiLoopGuard } from '@hsm/utils/antiLoop'
 
 class BotStateMachine extends EventEmitter {
 	private bot: Bot
@@ -15,7 +17,6 @@ class BotStateMachine extends EventEmitter {
 		super()
 		this.bot = bot
 
-		// Защита от зацикливания
 		this.antiLoopGuard = new AntiLoopGuard({
 			maxTransitionsPerSecond: 15,
 			emergencyStopAfter: 100,
@@ -108,15 +109,15 @@ class BotStateMachine extends EventEmitter {
 			return stateValue
 		}
 
-		if (typeof stateValue === 'object') {
+		if (typeof stateValue === 'object' && stateValue !== null) {
 			return JSON.stringify(stateValue)
 		}
 
 		return String(stateValue)
 	}
 
-	getContext() {
-		return this.actor.getSnapshot().context
+	getContext(): MachineContext {
+		return this.actor.getSnapshot().context as MachineContext
 	}
 
 	getCurrentState(): unknown {
@@ -128,25 +129,22 @@ class BotStateMachine extends EventEmitter {
 	}
 
 	isInState(statePath: string | Record<string, unknown>): boolean {
-		return this.actor.getSnapshot().matches(statePath)
+		return this.actor.getSnapshot().matches(statePath as any)
 	}
 
-	handlers() {
+	handlers(): void {
 		this.on('player-command', (commandName: string, options?: unknown) => {
 			if (commandName === 'stop') {
 				this.actor.send({ type: 'PLAYER_STOP' })
 			} else {
-				this.actor.send({ type: commandName })
+				this.actor.send({ type: commandName } as MachineEvent)
 			}
 		})
 	}
 
-	setupBotEvents() {
+	setupBotEvents(): void {
 		this.bot.on('health', () => {
-			const context = this.getContext() as {
-				health?: number
-				food?: number
-			}
+			const context = this.getContext()
 
 			if (context.health !== this.bot.health) {
 				console.log('Здоровье:', this.bot.health.toFixed(1))
@@ -175,7 +173,7 @@ class BotStateMachine extends EventEmitter {
 		this.bot.on('breath', () => {
 			this.actor.send({
 				type: 'UPDATE_OXYGEN',
-				food: this.bot.oxygenLevel
+				oxygenLevel: this.bot.oxygenLevel
 			})
 		})
 

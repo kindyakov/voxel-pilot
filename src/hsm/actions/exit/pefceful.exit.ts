@@ -1,11 +1,11 @@
-import type { ActionParams } from '../../types'
+import type { MachineActionParams } from '@hsm/types'
 
-const exitMining = ({}: ActionParams) => {}
-const exitFarming = ({}: ActionParams) => {}
-const exitBuilding = ({}: ActionParams) => {}
-const exitSleeping = ({}: ActionParams) => {}
-const exitFollowing = ({}: ActionParams) => {}
-const exitSheltering = ({}: ActionParams) => {}
+const exitMining = ({}: MachineActionParams) => {}
+const exitFarming = ({}: MachineActionParams) => {}
+const exitBuilding = ({}: MachineActionParams) => {}
+const exitSleeping = ({}: MachineActionParams) => {}
+const exitFollowing = ({}: MachineActionParams) => {}
+const exitSheltering = ({}: MachineActionParams) => {}
 
 export default {
 	exitBuilding,

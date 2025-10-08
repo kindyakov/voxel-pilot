@@ -1,15 +1,24 @@
 import { assign } from 'xstate'
-import { findNearbyEnemies } from '../../utils/findNearbyEnemies'
+import type { MachineActionParams } from '@hsm/types'
+import { findNearbyEnemies } from '@hsm/utils/findNearbyEnemies'
 
-const setTargetOnEnemy = assign(({ context }) => {
+const setTargetOnEnemy = assign(({ context }: MachineActionParams) => {
 	const nearestEnemy = findNearbyEnemies(context)
-	const entity = nearestEnemy || null
-	const distance =
-		nearestEnemy?.position.distanceTo(context.position) || Infinity
+
+	if (!nearestEnemy || !context.position) {
+		return {
+			nearestEnemy: {
+				entity: null,
+				distance: Infinity
+			}
+		}
+	}
+
+	const distance = nearestEnemy.position.distanceTo(context.position)
 
 	return {
 		nearestEnemy: {
-			entity,
+			entity: nearestEnemy,
 			distance
 		}
 	}

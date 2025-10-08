@@ -1,3 +1,5 @@
-export function isEntityOfType(entity, type = 'hostile') {
-  return entity.type === type
+import type { Entity, EntityType } from '@types'
+
+export function isEntityOfType(entity: Entity, type: EntityType = 'hostile') {
+	return entity.type === type
 }

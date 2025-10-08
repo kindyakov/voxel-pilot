@@ -1,16 +1,19 @@
 import { createMachine } from 'xstate'
-import { context } from './context'
-import { actions } from './actions/index.actions'
-import { guards } from './guards/index.guards'
-import { actors } from './actors/index.actors'
+import type { MachineEvent } from '@hsm/types'
+import { context, type MachineContext } from '@hsm/context'
+import { actions } from '@hsm/actions/index.actions'
+import { guards } from '@hsm/guards/index.guards'
+import { actors } from '@hsm/actors/index.actors'
 
 export const machine = createMachine(
 	{
 		/** @xstate-layout N4IgpgJg5mDOIC5QFkCSA5AogYQEoEEAxAFQH0AhAeWIGIBlTMq4gbQAYBdRUABwHtYASwAugvgDtuIAB6IAtAEYAbACY2AOiUBmLQE42K3VoCsAFgDsJgDQgAnojML1KhSq2mVADmO7TnlQC+ATZoWHhETNQ0AKoACgAi+MSYpLGUdKjEqJTo7FxIIPxCohJSsgiKhhpsNbUKWgqOCjb2CI7Oru5ePn6BwSChOAQkFFFxicmkdEnRBFk5eVJFImKSBeWKxmzmmkp7e57e+iotDqZOLm4eR71BIRhDEaO08ZhJABKLBcsla6CtclMSg0bgU5l0ulUunM5hU5hs5QUpmMSnUQLYvgU-mMlk85juAwe4RGzHUyHwGFI+GwWQAapkAJrqWJvbCYQjRAAyZIwGAA4jRYpz8AzMLgpsRKLEvrwBCtSutEDpPOpjMq1WxrloYVpTghDKZnGx-LpjMZDJ4ap4lATBsTIsQyRT0FSaah6cQmSzqeyuepyNFUJz4vzBcLReK6JLpZwlnLfmVEOY9mjgZC2ApdN49ic7IhXMZ1NrTL5oT4YcCbf07cMHU7KdS6Yzmazfdy6JzMJhYqGhSKxRKpTLCvHVom2p4tKmlEj0Ti2A09SolLp1N5GloDCpDLjbUTa896y7G+7m962RzuYR8LhQgK+xHBzH8rLimPFQhzGZ1GCsdClHiDQeHqcjmCq2pbOaYEZgoyimHuYQHqS5INm6Hpeq2l7qIQlCcpylAAOq9uGA5RkOsbfKOCqgOUWieIaYF0SWKhmBixrGEusHqGwPjeFsJZAsmCgIY8JLUEerpNp6LY+lhdDvJgnLJLgxH9pG0bDj8740UmmrqDqpiGUY0IwqYeo6DsxhYpmGYeGaK4ifah4oceaHNrMfKYOgZBYJg8R0OomDIGKnnoNgDKkG8WToAKOGUPEpC4JgZFJfEmlUX8MiIGwepsI5SHiS5kmntJHleT5Xb+YFwW4KF4WRUkoZxQlDA3tgnwUa+8qZRsdEqGipgZlo24LguMIgV+qp1L+5rata+VPMhzrFeh6hld5pC+VVQUhV59UKfgnKhgdSnvIlyWSql6VvtRWUIDleb3QtYmOkVJ6retFV+QFO21XtEUnU1lDxVMby4O113deOcgWgNGZeNa7gQvCj2TuouiwYNxqbpYYKeM9dZvW50nYJQyDkEkNDoJQkVYGgyWQwmH5GBo6ZGEo5aqF4equABa50ZC2pKOi+LVvui2Fct73NqT5NJOorzYKgIYxTQjPaXdigc-pJgCZqejmFaPNwk4xqeILk5HIcBPOVLxNMrLFOOoryuhiwCgviON09fIyiFsNujbni66eAoBg88Nhpm9C+jQnR+Ni4hEuvXbUkO2TTsKzgruqywKie1pt0bH7RaGEHYFWaH4ePfU-jcYcMcYriCf3EnL0SdLJMZ-LwWdikSTENSADSoZeUFEXkDg+DBaQ164OrRfyMi+lWWHc2V2HyjG1i9fm+CTfxzbS2oWn6iO-LBAxX5VLEIP2Aj6rY-IBPU8z9g+EMAvPsVBY4HajxwI8aamhDzQaKovwohRMmSEX4qyt1EoTVOJV05y2duyLyKsBTUzIHQWYuBKDRHQK8NKnUvZQw-OaVcvNeiWB0MLTwEdDZTRRMiOiDQdBH0lifZB6hB50CHnQNWpDC7fyxujbcs0OZeEMtYGu3h+r7ENjqeOSJOEp24atPhAis5pAyGQTIQVBEGOQHQUgrxdEGJIQXDK44PBOD2INbcqgkTDTMDzDGOwdA6AsJqNgwstBqI7vbXh+B+EBSSrECk4obzIEoOKSUuFBERKiaQWWQpGCYC-uOOEU4lAwk1NoFQJZ5FLhqAo-YVcajmHqPBROCDbYaObFogKzVQb4BwO8GgOFCEJWalkihNQ1yWmUOCKo0ILDuJnM4EskJTTbD8LU+BTlkI5EyHE-k6gTrEDOrE9AazcAxASEkFIWyOrWO9tDRoQIjQNBYu4NUmZcwAhYjrLEWgOawUhObd5gTdn7I2ac0gfzLpCPOeQnSFQISolqLUe5DQMZ6nNEWLxehfDDVDqaOBhI26E1WZdAFhDPLimBXEw5EwUh9OETYj8mw6LcRhQuVhjyQIuAYg0ScHzMwAV8L8vF6yYqbMJQOElBz+kQrkFC+lMK4WZmaI9RQ7ypXwwxmac0wk6nLMKnylSAryqZFQMlIF2qyXHNplkLIDMqUXJpY0LYP5fzByZYHHmTCsR+C2JmQOwDeV7Pxbq7y+rDUipoElWJtIUh6s9GKzWVzCz6FUFsGVzrHpwijtZCwyYXDvL6Esgqr1tUbMjQa0xwbo0bHNtC95yIrLnDxL4JclhkVeNTeWEwWKazJzJAWgV7UkhGt9aSgAtoIcQYAy3ZT1LW3Y+wZ2KJ9f8nt7w+3BoAGZ8AADbrr4AAd3HT-H8ws-EsSXNc2dZ69i6HnX6vkZ8l1kGDbAddYAwA8D3YodGEFzIribSi39ASNV5q7QOnVN7e33uNbAAAFmAddwgwAACc307EKaHY9j0gQqgZVhmo7bxbtxFRssD-b9k0BXQAQ3g4OvdcrWiZkNOes9l6AOdoI4u5dxqABGABXQQ66IBvpBFicwMyISiahcicy2wfz0URvZHGyggj9HEHwCAcApAdpenGa14q4KolgtUx1Dzk0AjMDsXGloMReGE14X5SD0JafBZrcEnivHAhMGaScIEdBOC2DUZQ-4G7-tzSxuzZ5MJcgc0zCFNS1yOA5vGg2HF5VuB2KCS0bhA71C+bZxp0lzxtnUMrTskWNblBxPRvx0DlzGgsEoE90m-B6D0BzHE1oc3YvqcfVyp98tYVCPyEri99RFPtZmGEYIaiqqeYgKdbr6IFjUH4zUOXus8N636AMQZMGDe-jHAaDyAIsVxHVmug1YuNDDsCVh2x2sacQbljCsk-Qdi7D2GKO3xymYPUiKBwJ6LJknQ0Br82WKLauytlaYWntXhiQNyi2m7p7YzCiQwm59CuAYfKsOhZQTgkhDuWEAEIed0exeP0OE8KETh11KLd0sSFkMg85QeJysQnMvYmcqLYJFMsJYYnwT1vtgUkpMU1OyG0-KOltE1S23DQ5gcQHTg5vnFBzh5bzH8Ohby+F7kkHBCwGEB9j8WJ+reHOPFvxiWJqoi-H5sEKJ3CsP56fT6m1Kp0CN+K4Tq4UVudVZ55LhklWNDyeCWVzueGu62j9GqdUIpRTFyI6GhsnC+4XP73UWPXDB8MLatVEePp-Q2tH6qu0woAzeEdd78PHMbBTz+v3HnM+tG-SJvENXDLggLzLbuxBPea3NKiCyACMzQSS60Q4qJA5uG2GbrExpu9d1QVnJW22a8S8QPoTQehzSrwxMYOtPNZ-iNBCxCteTF8oMzoQPuifqXRaMPpNQFpzaI06BHUwU5lQmX8JuUOotgtNcHsz5e8yRFIuwb474H4+R+8NgM0ixJwMZ5Fa5pFQFoRNBYR44LA+p1VAD7tVtVpz5HRL5PIEoB5h478Ec4DJpkRlA4QMUTBtweY-x+ZX9KsD9JxjBL8QDl9XhCAMFKDa9EBUdnBMCwRTRLgdAeZB80RtwBZzhA5rNuDmlYD5AAI41YIUdMwzAY53F6g1xbdNxVBO9txlDQltFzF0hMhSBjEPd19Ss1DFUYQ8QSwPlHEUZWg1Bl4WcFxlQAImszCwl1BklUBolbw4lSAElOQ7CacHCKhtAdgMYQ8XBTQSxwROI0YCx08uh6IuCNd8DIdpJmlsJgYWo3gOlVD4igdtgUdDIDQeIPDhCcY0QD92VNRqkMxuC9cDdKjA5VwxMIQ-FgQUieYjhuJzhYQstbVzgr1+UYD7ChtNgsx7UDMwInVpsKhNwpxJs4QHkMQ9AwRZiQNNlK9tliNLpKjKg64WIcNfBoFYEQId4OCfBWJQ4zAfl8jnJu0b13ghViVtVLiMcGIsQMVasywTtnlGhmFU0YIvkeVPiVlgNC0A0LUS0ASFjv4ripwbi-E7iVwHiU1jRpkLAw5lws1jCjjCM71zi4lATdjnBHdDIwSCTWhHdS5LRYQ3AVxdNFMAggA */
+		types: {} as {
+			context: MachineContext
+			events: MachineEvent
+		},
 		id: 'MINECRAFT_BOT',
 		type: 'parallel',
-		predictableActionArguments: true,
-		preserveActionOrder: true,
 		context,
 		on: {
 			SET_BOT: {
@@ -192,7 +195,9 @@ export const machine = createMachine(
 								invoke: {
 									id: 'emergencyEating',
 									src: 'serviceEmergencyEating',
-									input: ({ context }) => ({ context })
+									input: ({ context }: { context: MachineContext }) => ({
+										context
+									})
 								},
 								on: {
 									FOOD_RESTORED: {
@@ -213,7 +218,9 @@ export const machine = createMachine(
 								invoke: {
 									id: 'emergencyHealing',
 									src: 'serviceEmergencyHealing',
-									input: ({ context }) => ({ context })
+									input: ({ context }: { context: MachineContext }) => ({
+										context
+									})
 								},
 								on: {
 									HEALTH_RESTORED: {
@@ -255,7 +262,9 @@ export const machine = createMachine(
 								invoke: {
 									id: 'fleeing',
 									src: 'serviceFleeing',
-									input: ({ context }) => ({ context })
+									input: ({ context }: { context: MachineContext }) => ({
+										context
+									})
 								}
 							},
 							MELEE_ATTACKING: {
@@ -271,7 +280,9 @@ export const machine = createMachine(
 								invoke: {
 									id: 'meleeAttack',
 									src: 'serviceMeleeAttack',
-									input: ({ context }) => ({ context })
+									input: ({ context }: { context: MachineContext }) => ({
+										context
+									})
 								}
 							},
 							RANGED_ATTACKING: {
@@ -285,7 +296,9 @@ export const machine = createMachine(
 								invoke: {
 									id: 'rangedAttack',
 									src: 'serviceRangedAttack',
-									input: ({ context }) => ({ context })
+									input: ({ context }: { context: MachineContext }) => ({
+										context
+									})
 								}
 							},
 							DEFENDING: {
@@ -325,7 +338,7 @@ export const machine = createMachine(
 									]
 								}
 							},
-							FOOD_SEAECH: {
+							FOOD_SEARCH: {
 								description: 'Поиск еды',
 								entry: {
 									type: 'entrySearchFood'
@@ -486,9 +499,8 @@ export const machine = createMachine(
 		}
 	},
 	{
-		actions,
+		actions: actions as any,
 		guards,
-		actors,
-		delays: {}
+		actors
 	}
 )

@@ -1,13 +1,13 @@
 import EventEmitter from 'node:events'
-import MineFlayer from 'mineflayer'
-import type { Bot } from '../types/index'
+import mineflayer from 'mineflayer'
+import type { Bot } from '@types'
 
-import BotStateMachine from './hsm'
-import Config from '../config/config'
-import Logger from '../config/logger'
-import { initConnection } from '../modules/connection/index'
-// import { CommandHandler } from '../modules/commands/CommandHandler'
-import { BotUtils } from '../utils/minecraft/botUtils'
+import BotStateMachine from '@core/hsm'
+import Config from '@config/config'
+import Logger from '@config/logger'
+import { initConnection } from '@modules/connection/index.js'
+// import { CommandHandler } from '@modules/commands/CommandHandler.js'
+import { BotUtils } from '@utils/minecraft/botUtils'
 
 class MinecraftBot extends EventEmitter {
 	private bot: Bot | null = null
@@ -29,7 +29,11 @@ class MinecraftBot extends EventEmitter {
 				return
 			}
 
-			this.bot = MineFlayer.createBot(Config.minecraft)
+			this.bot = mineflayer.createBot(Config.minecraft)
+			
+			if (!this.bot) {
+				throw Error('Не предвиденная ошибка при создании бота')	
+			}
 
 			this.bot.on('botReady', () => {
 				this.isConnected = true
@@ -40,6 +44,8 @@ class MinecraftBot extends EventEmitter {
 				this.bot.utils = new BotUtils(this.bot)
 				const hsm = new BotStateMachine(this.bot)
 				// const commandHandler = new CommandHandler(this.bot, hsm)
+
+				console.log(this.bot.inventory)
 
 				this.bot.chat('Я готов к работе ;)')
 			})

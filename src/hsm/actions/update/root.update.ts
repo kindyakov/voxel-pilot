@@ -1,16 +1,25 @@
 import { assign } from 'xstate'
-import type { ActionParams } from '../../types'
+import type { MachineActionParams } from '@hsm/types'
 
 const setBot = assign({
-	bot: ({ context, event }: ActionParams) => event.bot
+	bot: ({ event }: MachineActionParams) => {
+		if (event.type !== 'SET_BOT') return null
+		return event.bot
+	}
 })
 
 const updatePosition = assign({
-	position: ({ context, event }: ActionParams) => event.position
+	position: ({ event }: MachineActionParams) => {
+		if (event.type !== 'UPDATE_POSITION') return null
+		return event.position
+	}
 })
 
 const updateFoodSaturation = assign({
-	foodSaturation: ({ context, event }: ActionParams) => event.foodSaturation
+	foodSaturation: ({ event }: MachineActionParams) => {
+		if (event.type !== 'UPDATE_SATURATION') return 0
+		return event.foodSaturation
+	}
 })
 
 const updateAfterDeath = assign({

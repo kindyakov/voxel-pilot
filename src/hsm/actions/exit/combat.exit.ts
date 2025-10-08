@@ -1,6 +1,6 @@
-import type { ActionParams } from '../../types'
+import type { MachineActionParams } from '@hsm/types'
 
-const exitCombat = ({ context }: ActionParams) => {
+const exitCombat = ({ context }: MachineActionParams) => {
 	console.log('⚔️ Выход из COMBAT')
 }
 
@@ -8,19 +8,19 @@ const exitDeciding = () => {
 	console.log('🤔⚔️ Выход из состояния DECIDING')
 }
 
-const exitFleeing = ({ context }: ActionParams) => {
+const exitFleeing = ({ context }: MachineActionParams) => {
 	context.bot?.pathfinder.setGoal(null)
 	console.log('🏃 Выход из состояния FLEEING')
 }
 
-const exitMeleeAttack = ({ context }: ActionParams) => {
+const exitMeleeAttack = ({ context }: MachineActionParams) => {
 	console.log('🆑 Очистка боя')
 	context.bot?.pvp.stop()
 	context.bot?.pathfinder.setGoal(null)
 	console.log('⚔️ Выход из состояния MELEE_ATTACKING')
 }
 
-const exitRangedAttacking = ({ context }: ActionParams) => {
+const exitRangedAttacking = ({ context }: MachineActionParams) => {
 	context.bot?.hawkEye.stop()
 	context.bot?.pathfinder.setGoal(null)
 	console.log('🏹 Выход из состояния RANGED_ATTACKING')

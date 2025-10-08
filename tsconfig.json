@@ -8,6 +8,17 @@
 		"outDir": "./dist",
 		"rootDir": "./src",
 
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["src/*"],
+			"@types": ["src/types/index.ts"],
+			"@hsm/*": ["src/hsm/*"],
+			"@config/*": ["src/config/*"],
+			"@utils/*": ["src/utils/*"],
+			"@modules/*": ["src/modules/*"],
+			"@core/*": ["src/core/*"]
+		},
+
 		// Строгость
 		"strict": true,
 		"noUncheckedIndexedAccess": true,
@@ -24,7 +35,7 @@
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true,
 
-		// Декораторы (если понадобятся для XState)
+		// Декораторы
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": false
 	},

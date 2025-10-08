@@ -1,7 +1,7 @@
 import winston from 'winston'
-import config from './config'
 import path from 'path'
-import { WinstonLogLevel } from '../types'
+import type { WinstonLogLevel } from '@types'
+import Config from '@config/config'
 
 /**
  * Создание корреляционного ID для трекинга операций
@@ -31,27 +31,23 @@ const logFormat = winston.format.combine(
  * Настройка транспортов Winston
  */
 const transports: winston.transport[] = [
-	// Консольный вывод для разработки
 	new winston.transports.Console({
-		level: config.isDevelopment ? 'debug' : config.logging.level,
+		level: Config.isDevelopment ? 'debug' : Config.logging.level,
 		format: winston.format.combine(winston.format.colorize(), logFormat)
 	})
 ]
 
-// Файловый транспорт для продакшена
-if (config.isProduction || config.logging.file) {
-	const logDir = path.dirname(path.resolve(config.logging.file))
+if (Config.isProduction || Config.logging.file) {
+	const logDir = path.dirname(path.resolve(Config.logging.file))
 
 	transports.push(
-		// Общие логи
 		new winston.transports.File({
-			filename: config.logging.file,
-			level: config.logging.level,
+			filename: Config.logging.file,
+			level: Config.logging.level,
 			format: logFormat,
-			maxsize: 10 * 1024 * 1024, // 10MB
+			maxsize: 10 * 1024 * 1024,
 			maxFiles: 5
 		}),
-		// Отдельный файл для ошибок
 		new winston.transports.File({
 			filename: path.join(logDir, 'error.log'),
 			level: 'error',
@@ -66,7 +62,7 @@ if (config.isProduction || config.logging.file) {
  * Основной логгер Winston
  */
 const logger: winston.Logger = winston.createLogger({
-	level: config.logging.level,
+	level: Config.logging.level,
 	format: logFormat,
 	transports,
 	exitOnError: false
@@ -90,16 +86,10 @@ class BotLogger {
 		return this.correlationId
 	}
 
-	/**
-	 * Сброс корреляционного ID
-	 */
 	clearCorrelationId(): void {
 		this.correlationId = null
 	}
 
-	/**
-	 * Создание лог-записи с корреляционным ID
-	 */
 	log(
 		level: WinstonLogLevel,
 		message: string,
@@ -128,9 +118,6 @@ class BotLogger {
 		this.log('error', message, meta)
 	}
 
-	/**
-	 * Логирование действий бота
-	 */
 	botAction(
 		action: string,
 		status: ActionStatus,
@@ -146,9 +133,6 @@ class BotLogger {
 		})
 	}
 
-	/**
-	 * Логирование команд от игрока
-	 */
 	playerCommand(
 		username: string,
 		command: string,
@@ -161,23 +145,15 @@ class BotLogger {
 		})
 	}
 
-	/**
-	 * Логирование вызовов AI
-	 */
 	aiCall(prompt: string, response: string, duration: number): void {
 		this.info('Вызов AI', {
 			promptLength: prompt.length,
 			responseLength: response.length,
 			duration,
-			model: config.ai.model
+			model: Config.ai.model
 		})
 	}
 
-	/**
-	 * Логирование ошибок с трассировкой стека
-	 * @param {Error} error - объект ошибки
-	 * @param {string} [context] - контекст возникновения ошибки
-	 */
 	exception(error: Error, context: string = ''): void {
 		this.error(`Ошибка${context ? ` в ${context}` : ''}: ${error.message}`, {
 			error: error.stack,

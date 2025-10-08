@@ -11,52 +11,84 @@ export type HealthEvents =
 	| { type: 'UPDATE_FOOD'; food: number }
 	| { type: 'UPDATE_SATURATION'; foodSaturation: number }
 	| { type: 'UPDATE_OXYGEN'; oxygenLevel: number }
+	| { type: 'HEALTH_RESTORED' }
+	| { type: 'FOOD_RESTORED' }
+	| { type: 'FOOD_SEARCH' }
 
 export type CombatEvents =
 	| { type: 'START_COMBAT'; target: Entity }
 	| { type: 'STOP_COMBAT' }
 	| { type: 'WEAPON_BROKEN' }
+	| { type: 'NO_ENEMIES' }
+	| { type: 'ENEMY_BECAME_FAR' }
+	| { type: 'ENEMY_BECAME_CLOSE' }
+	| { type: 'NOT_SURROUNDED' }
 
-export type PositionEvents =
+export type UpdateEvents =
 	| { type: 'UPDATE_POSITION'; position: Vec3 }
 	| { type: 'DEATH' }
 	| { type: 'REMOVE_ENTITY'; entity: Entity }
+	| { type: 'UPDATE_ENTITIES' }
 
-export type BotEvents = 
-	| { type: 'SET_BOT'; bot: Bot } 
-	| { type: 'PLAYER_STOP' }
+export type ChatEvents =
+	| { type: 'mine' }
+	| { type: 'follow' }
+	| { type: 'sleep' }
+	| { type: 'shelter' }
+	| { type: 'farm' }
+	| { type: 'build' }
 
-// ✅ События задач
+export type BotEvents = { type: 'SET_BOT'; bot: Bot } | { type: 'PLAYER_STOP' }
+
 export type TaskEvents =
 	| { type: 'START_TASK'; taskName: string; params: AnyTaskParams }
 	| { type: 'TASK_COMPLETED'; result?: any }
 	| { type: 'TASK_FAILED'; reason: string }
 	| { type: 'TASK_PAUSED' }
 	| { type: 'TASK_RESUMED' }
+	| { type: 'ITEMS_DEPOSITED' }
+	| { type: 'REPAIR_COMPLETE' }
+	| { type: 'FOUND_FOOD' }
 
-// ✅ Финальный union всех событий
+export type SystemEvents = { type: 'ERROR'; error: string }
+
 export type MachineEvent =
 	| HealthEvents
 	| CombatEvents
-	| PositionEvents
+	| UpdateEvents
 	| BotEvents
 	| TaskEvents
+	| SystemEvents
+	| ChatEvents
 
 // ============================================
 // УТИЛИТАРНЫЕ ТИПЫ
 // ============================================
 
-export type GuardParams = {
+export type MachineGuard = (args: {
 	context: MachineContext
-	event?: MachineEvent
-}
+	event: MachineEvent
+}) => boolean
 
-export type ActionParams = {
+export type MachineAction = (args: {
+	context: MachineContext
+	event: MachineEvent
+}) => void | Partial<MachineContext>
+
+export type AssignAction = (args: {
+	context: MachineContext
+	event: MachineEvent
+}) => Partial<MachineContext>
+
+export type MachineActionParams = {
 	context: MachineContext
 	event: MachineEvent
 }
 
-export type AssignAction = (params: ActionParams) => Partial<MachineContext>
+export type MachineGuardParams = {
+	context: MachineContext
+	event: MachineEvent
+}
 
 // ============================================
 // ТИПЫ ДЛЯ TASK REGISTRY

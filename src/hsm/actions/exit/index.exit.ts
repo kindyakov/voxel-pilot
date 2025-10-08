@@ -1,9 +1,9 @@
-import combatExit from "./combat.exit.js"
-import pefcefulExit from "./pefceful.exit.js"
-import urgentNeedsExit from "./urgentNeeds.exit.js"
+import combatExit from './combat.exit'
+import pefcefulExit from './pefceful.exit'
+import urgentNeedsExit from './urgentNeeds.exit'
 
 export default {
-  ...combatExit,
-  ...pefcefulExit,
-  ...urgentNeedsExit,
+	...combatExit,
+	...pefcefulExit,
+	...urgentNeedsExit
 }

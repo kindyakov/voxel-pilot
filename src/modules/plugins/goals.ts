@@ -1,52 +1,68 @@
-import pathFinderPkg from 'mineflayer-pathfinder';
+import pathFinderPkg from 'mineflayer-pathfinder'
+import type { goals } from 'mineflayer-pathfinder'
+import type { Entity } from 'prismarine-entity'
 
-const { goals } = pathFinderPkg;
+const { goals: goalsClasses } = pathFinderPkg
 
 /**
  * Идти к координатам X, Y, Z и остановиться рядом (радиус)
- * @param {number} x
- * @param {number} y
- * @param {number} z
- * @param {number} range — радиус, в котором цель считается достигнутой
  */
-export const GoalNear = goals.GoalNear
+export class GoalNear extends goalsClasses.GoalNear {
+	constructor(x: number, y: number, z: number, range: number) {
+		super(x, y, z, range)
+	}
+}
 
 /**
  * Следовать за Entity (игрок, моб, предмет) на заданной дистанции
- * @param {Entity} entity — объект игрока/моба
- * @param {number} range — дистанция для слежки
  */
-export const GoalFollow = goals.GoalFollow
+export class GoalFollow extends goalsClasses.GoalFollow {
+	constructor(entity: Entity, range: number) {
+		super(entity, range)
+	}
+}
 
 /**
  * Дойти прямо к блоку (встать на него)
- * @param {number} x
- * @param {number} y
- * @param {number} z
  */
-export const GoalBlock = goals.GoalBlock
+export class GoalBlock extends goalsClasses.GoalBlock {
+	constructor(x: number, y: number, z: number) {
+		super(x, y, z)
+	}
+}
 
 /**
  * Дойти до позиции X, Z (игнорирует высоту Y)
- * @param {number} x
- * @param {number} z
  */
-export const GoalXZ = goals.GoalXZ
+export class GoalXZ extends goalsClasses.GoalXZ {
+	constructor(x: number, z: number) {
+		super(x, z)
+	}
+}
 
 /**
  * Дойти до конкретной высоты Y
- * @param {number} y
  */
-export const GoalY = goals.GoalY
+export class GoalY extends goalsClasses.GoalY {
+	constructor(y: number) {
+		super(y)
+	}
+}
 
 /**
  * Составная цель: достичь любую из переданных целей (OR)
- * @param {Goal[]} goalsList — массив целей
  */
-export const GoalCompositeAny = goals.GoalCompositeAny
+export class GoalCompositeAny extends goalsClasses.GoalCompositeAny<goals.Goal> {
+	constructor(goalsList: goals.Goal[]) {
+		super(goalsList)
+	}
+}
 
 /**
  * Составная цель: достичь все цели по очереди (AND)
- * @param {Goal[]} goalsList — массив целей
  */
-export const GoalCompositeAll = goals.GoalCompositeAll
+export class GoalCompositeAll extends goalsClasses.GoalCompositeAll<goals.Goal> {
+	constructor(goalsList: goals.Goal[]) {
+		super(goalsList)
+	}
+}

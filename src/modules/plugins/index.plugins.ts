@@ -6,10 +6,10 @@ import { initViewer } from './viewer'
 import { loadWebInventory } from './webInventory'
 import { loadAutoEat, initAutoEat } from './autoEat'
 import { loadTool } from './tool'
-import { loadHawkeye } from './hawkeye.js'
+import { loadHawkeye } from './hawkeye'
 import type { Bot } from '../../types'
 
-export const loadPlugins = (bot: Bot) => {
+export const loadPlugins = (bot: Bot): void => {
 	loadPathfinder(bot)
 	// loadMovement(bot)
 	loadArmorManager(bot)
@@ -21,7 +21,7 @@ export const loadPlugins = (bot: Bot) => {
 	loadHawkeye(bot)
 }
 
-export const initPlugins = (bot: Bot) => {
+export const initPlugins = (bot: Bot): void => {
 	initPathfinder(bot)
 	// initArmorManager(bot)
 	// initViewer(bot)

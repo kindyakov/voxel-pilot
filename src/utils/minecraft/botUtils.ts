@@ -1,10 +1,9 @@
-import { Item, Bot, Entity } from '../../types'
-import 'mineflayer-auto-eat'
+import type { Item, Bot, Entity } from '@types'
 
 type Priority = 'none' | 'low' | 'medium' | 'high' | 'critical'
 
 export class BotUtils {
-	private _eatingTimeoutId: NodeJS.Timeout | null = null // таймер для кушания
+	private _eatingTimeoutId: NodeJS.Timeout | null = null
 
 	constructor(private _bot: Bot) {}
 
@@ -22,7 +21,6 @@ export class BotUtils {
 			const entityY = entity.position.y
 			const yDiff = Math.abs(botY - entityY)
 
-			// Сначала проверяем высоту (быстрее), потом общую дистанцию
 			return (
 				yDiff <= 8 &&
 				this._bot.entity.position.distanceTo(entity.position) <= maxDistance
@@ -37,47 +35,22 @@ export class BotUtils {
 		return this._bot.nearestEntity(combined)
 	}
 
-	/**
-	 * Проверка заполненности инвентаря
-	 * @param {number} threshold - порог заполненности (по умолчанию полный)
-	 * @returns {boolean} true если инвентарь заполнен
-	 */
 	isInventoryFull(threshold: number = 36): boolean {
 		return this._bot.inventory.items().length >= threshold
 	}
 
-	/**
-	 * Проверка необходимости еды
-	 * @param {number} threshold - порог голода
-	 * @returns {boolean} true если нужно есть
-	 */
 	needsFood(threshold: number = 17): boolean {
 		return this._bot.food <= threshold
 	}
 
-	/**
-	 * Проверка необходимости лечения
-	 * @param {number} health - порог здоровья
-	 * @returns {boolean} true если нужно лечение
-	 */
 	needsHealing(health: number = 15): boolean {
 		return this._bot.health <= health
 	}
 
-	/**
-	 * Проверка необходимости лечения
-	 * @param {number} saturation - порог сытости
-	 * @returns {boolean} true если нужно есть
-	 */
 	needsSaturation(saturation: number = 1): boolean {
 		return this._bot.foodSaturation < saturation
 	}
 
-	/**
-	 * Комплексная проверка необходимости питания
-	 * @param {Object} thresholds - пороги для проверки
-	 * @returns {Object} объект с детальной информацией о необходимости питания
-	 */
 	needsToEat(
 		thresholds: { food: number; health: number; saturation: number } = {
 			food: 17,
@@ -109,7 +82,6 @@ export class BotUtils {
 			}
 		}
 
-		// Критическое состояние - здоровье очень низкое
 		if (currentHealth <= 6) {
 			result.shouldEat = true
 			result.priority = 'critical'
@@ -117,7 +89,6 @@ export class BotUtils {
 			return result
 		}
 
-		// Высокий приоритет - низкое здоровье + низкое насыщение
 		if (
 			currentHealth <= thresholds.health &&
 			currentSaturation < thresholds.saturation
@@ -128,7 +99,6 @@ export class BotUtils {
 			return result
 		}
 
-		// Средний приоритет - просто голод
 		if (currentFood <= thresholds.food) {
 			result.shouldEat = true
 			result.priority = 'medium'
@@ -136,7 +106,6 @@ export class BotUtils {
 			return result
 		}
 
-		// Низкий приоритет - только насыщение
 		if (currentSaturation < thresholds.saturation) {
 			result.shouldEat = true
 			result.priority = 'low'
@@ -146,24 +115,20 @@ export class BotUtils {
 		return result
 	}
 
-	/**
-	 * Поиск оружия в инвентаре
-	 * @returns {Object|null} оружие или null
-	 */
 	getMeleeWeapon(): Item | null {
 		const weaponItems = [
-			'netherite_sword', // незеритовый меч
-			'netherite_axe', // незеритовый топор
-			'diamond_sword', // алмазный меч
-			'diamond_axe', // алмазный топор
-			'iron_sword', // железный меч
-			'iron_axe', // железный топор
-			'golden_sword', // золотой меч
-			'golden_axe', // золотой топор
-			'stone_sword', // каменный меч
-			'stone_axe', // каменный топор
-			'wooden_sword', // деревянный меч
-			'wooden_axe' // деревянный топор
+			'netherite_sword',
+			'netherite_axe',
+			'diamond_sword',
+			'diamond_axe',
+			'iron_sword',
+			'iron_axe',
+			'golden_sword',
+			'golden_axe',
+			'stone_sword',
+			'stone_axe',
+			'wooden_sword',
+			'wooden_axe'
 		] as const
 
 		let weapon = null
@@ -193,21 +158,20 @@ export class BotUtils {
 
 	getArrow(): Item | null {
 		return (
-			this._bot.inventory.items().find(item => item.name.includes('arrow')) ||
+			this._bot.inventory.items().find((item: Item) => item.name.includes('arrow')) ||
 			null
 		)
 	}
 
 	searchPlayer(playerName: string = ''): Entity | null {
 		return this._bot.nearestEntity(
-			e => e.name === playerName || e.type === 'player'
+			(e: Entity) => e.name === playerName || e.type === 'player'
 		)
 	}
 
 	getAllItems(): Item[] {
 		const items = this._bot.inventory.items()
 
-		// Добавляем предмет из offhand если он существует
 		const offhandItem = this._bot.inventory.slots[45]
 		if (this._bot.registry.isNewerOrEqualTo('1.9') && offhandItem) {
 			items.push(offhandItem)
@@ -216,14 +180,12 @@ export class BotUtils {
 		return items
 	}
 
-	// Функция для поиска еды включая offhand
 	getAllFood(): Item[] {
 		return this.getAllItems()
 			.filter(item => this._bot.autoEat.foodsByName[item.name])
 			.filter(item => !this._bot.autoEat.opts.bannedFood.includes(item.name))
 	}
 
-	// Для еды
 	async eating(): Promise<void> {
 		if (!this._bot || this._bot?.health === 20) {
 			this.stopEating()
@@ -233,7 +195,7 @@ export class BotUtils {
 		try {
 			if (this._bot.food >= 20) {
 				console.log('Голод полный, жду регенерации здоровья...')
-				this.stopEating() // Очищаем предыдущий
+				this.stopEating()
 				this._eatingTimeoutId = setTimeout(() => this.eating(), 1500)
 				return
 			}

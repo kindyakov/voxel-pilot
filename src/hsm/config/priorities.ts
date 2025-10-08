@@ -48,4 +48,4 @@ export const PRIORITIES: Priorities = {
 	// TASKS
 	DEPOSIT_ITEMS: 6.5,
 	REPAIR_ARMOR_TOOLS: 5
-}
+} as const

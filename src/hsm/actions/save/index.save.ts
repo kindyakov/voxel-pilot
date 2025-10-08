@@ -1,5 +1,5 @@
-import pefcefulSave from "./pefceful.save.js"
+import pefcefulSave from './pefceful.save'
 
 export default {
-  ...pefcefulSave,
+	...pefcefulSave
 }

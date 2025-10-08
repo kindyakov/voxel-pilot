@@ -1,11 +1,11 @@
 import { loader as autoEat } from 'mineflayer-auto-eat'
 import type { Bot } from '../../types'
 
-export const loadAutoEat = (bot: Bot) => {
+export const loadAutoEat = (bot: Bot): void => {
 	bot.loadPlugin(autoEat)
 }
 
-export const initAutoEat = (bot: Bot) => {
+export const initAutoEat = (bot: Bot): void => {
 	// bot.autoEat.enableAuto()
 	bot.autoEat.setOpts({
 		eatingTimeout: 10000,
