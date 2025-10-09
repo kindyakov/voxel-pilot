@@ -14,6 +14,7 @@ interface ServiceAPI<TState extends ServiceState> {
 	bot: Bot
 	context: MachineContext
 	state: TState
+	input: any // Параметры из invoke input
 	event?: unknown
 	sendBack: (event: MachineEvent) => void
 	setState: (newState: Partial<TState>) => void
@@ -79,6 +80,7 @@ export function createStatefulService<
 			const api: ServiceAPI<TState> = {
 				context: getContext(),
 				state: internalState,
+				input: input, // Передаём все параметры
 				bot,
 				sendBack,
 				setState,
@@ -247,6 +249,7 @@ export function createStatefulService<
 							bot,
 							context: getContext(),
 							state: internalState,
+							input: input,
 							sendBack,
 							setState,
 							getContext,

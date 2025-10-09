@@ -3,7 +3,6 @@ export interface Priorities {
 	EMERGENCY_HEALING: number
 	EMERGENCY_EATING: number
 
-	// PEACEFUL
 	FOLLOWING: number
 	MINING: number
 	BUILDING: number
@@ -29,7 +28,6 @@ export const PRIORITIES: Priorities = {
 	EMERGENCY_HEALING: 8,
 	EMERGENCY_EATING: 8,
 
-	// PEACEFUL
 	FOLLOWING: 9,
 	MINING: 6,
 	BUILDING: 6,

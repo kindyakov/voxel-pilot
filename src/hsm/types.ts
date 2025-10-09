@@ -1,7 +1,6 @@
-import type { MachineContext } from './context'
-import type { Bot, Entity, Vec3 } from '../types'
-import type { AnyTaskParams } from './tasks/types'
-
+import type { MachineContext } from '@hsm/context'
+import type { Bot, Entity, Vec3, Block } from '@types'
+import type { Plan, Task } from '@hsm/tasks/index'
 // ============================================
 // СОБЫТИЯ
 // ============================================
@@ -40,15 +39,18 @@ export type ChatEvents =
 
 export type BotEvents = { type: 'SET_BOT'; bot: Bot } | { type: 'PLAYER_STOP' }
 
+export type PlanExecutorEvents =
+	| { type: 'START_PLAN'; plan: Plan }
+	| { type: 'VALIDATE_PLAN'; plan: Plan }
+	| { type: 'EXECUTE_TASK'; task: Task }
+
 export type TaskEvents =
-	| { type: 'START_TASK'; taskName: string; params: AnyTaskParams }
-	| { type: 'TASK_COMPLETED'; result?: any }
-	| { type: 'TASK_FAILED'; reason: string }
-	| { type: 'TASK_PAUSED' }
-	| { type: 'TASK_RESUMED' }
-	| { type: 'ITEMS_DEPOSITED' }
-	| { type: 'REPAIR_COMPLETE' }
 	| { type: 'FOUND_FOOD' }
+	| { type: 'NOT_FOUND'; reason: string }
+	| { type: 'FOUND'; block: Block; blockName: string }
+	| { type: 'SUCCESSFULLY' }
+	| { type: 'ARRIVED' }
+	| { type: 'NAVIGATION_FAILED' }
 
 export type SystemEvents = { type: 'ERROR'; error: string }
 
@@ -60,7 +62,7 @@ export type MachineEvent =
 	| TaskEvents
 	| SystemEvents
 	| ChatEvents
-
+	| PlanExecutorEvents
 // ============================================
 // УТИЛИТАРНЫЕ ТИПЫ
 // ============================================

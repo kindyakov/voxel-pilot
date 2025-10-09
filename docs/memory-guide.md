@@ -79,8 +79,8 @@ interface BotMemory {
 
 	stats: {
 		totalPlaytime: number
-		blocksMined: Map<blockType, count>
-		blocksPlaced: Map<blockType, count>
+		blocksMined: Map<blockName, count>
+		blocksPlaced: Map<blockName, count>
 		itemsCrafted: Map<itemType, count>
 		mobsKilled: Map<mobType, count>
 		distanceTraveled: number
@@ -294,7 +294,7 @@ interface DeathRecord {
 
 ```
 1. onStart
-   ├── Проверить bot.hsm.memory.findNearestKnown(blockType, pos)
+   ├── Проверить bot.hsm.memory.findNearestKnown(blockName, pos)
    ├── Если найдено рядом (< 32 блоков)
    │   └── Сразу отправить FOUND с сохранённой позицией
    └── Иначе
@@ -303,7 +303,7 @@ interface DeathRecord {
 2. onTick (если не найдено в памяти)
    ├── bot.findBlock(...)
    └── Если нашли
-       ├── bot.hsm.memory.rememberLocation(blockType, position)
+       ├── bot.hsm.memory.rememberLocation(blockName, position)
        └── sendBack(FOUND)
 ```
 

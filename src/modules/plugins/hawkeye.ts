@@ -1,6 +1,6 @@
-import minecraftHawkEye from 'minecrafthawkeye'
+import hawkeyePlugin from 'minecrafthawkeye'
 import type { Bot } from '../../types'
 
 export const loadHawkeye = (bot: Bot): void => {
-	bot.loadPlugin(minecraftHawkEye)
+	bot.loadPlugin((hawkeyePlugin as any).default || hawkeyePlugin)
 }

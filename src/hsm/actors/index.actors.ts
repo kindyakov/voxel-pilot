@@ -1,9 +1,11 @@
 import combatActors from './combat.actors.js'
-import monitoringActors from './monitoring.actors.js'
-import urgentNeedsActors from './urgentNeeds.actors.js'
+import monitoringActors from './monitoring.actors'
+import urgentNeedsActors from './urgentNeeds.actors'
+import primitivesActors from './primitives/index.primitives'
 
 export const actors = {
 	...combatActors,
 	...monitoringActors,
-	...urgentNeedsActors
+	...urgentNeedsActors,
+	...primitivesActors
 }

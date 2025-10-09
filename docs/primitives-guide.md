@@ -22,7 +22,7 @@
 
 | Примитив                | Что ищет     | Параметры                               | События              |
 | ----------------------- | ------------ | --------------------------------------- | -------------------- |
-| `primitiveSearchBlock`  | Блоки в мире | `blockType`, `maxDistance`              | `FOUND`, `NOT_FOUND` |
+| `primitiveSearchBlock`  | Блоки в мире | `blockName`, `maxDistance`              | `FOUND`, `NOT_FOUND` |
 | `primitiveSearchEntity` | Мобы, игроки | `entityType`, `category`, `maxDistance` | `FOUND`, `NOT_FOUND` |
 
 **category для entities:**
@@ -52,7 +52,7 @@
 | Примитив                 | Действие                | Параметры                             | События                     |
 | ------------------------ | ----------------------- | ------------------------------------- | --------------------------- |
 | `primitiveBreaking`      | Сломать блок            | `block`                               | `BROKEN`, `BREAKING_FAILED` |
-| `primitivePlacing`       | Поставить блок          | `blockType`, `position`, `faceVector` | `PLACED`, `PLACING_FAILED`  |
+| `primitivePlacing`       | Поставить блок          | `blockName`, `position`, `faceVector` | `PLACED`, `PLACING_FAILED`  |
 | `primitiveOpenContainer` | Открыть контейнер       | `container`                           | `OPENED`, `OPENING_FAILED`  |
 | `primitiveInteract`      | Взять/положить предметы | `action`, `items`                     | `COMPLETED`, `FAILED`       |
 
@@ -76,11 +76,13 @@
   name: string,              // Название для логов
   tickInterval?: number,     // Интервал проверки (ms)
   initialState?: object,     // Внутреннее состояние
+  asyncTickInterval?: number,// Интервал асинхронной проверки (ms)
 
   onStart?: (api) => void,   // При запуске
   onTick?: (api) => void,    // Каждый tick
   onEvents?: (api) => object,// События bot
   onCleanup?: (api) => void  // При остановке
+  onReceive?: (api) => void  // При получении события от HSM
 }
 ```
 
@@ -158,7 +160,7 @@ SEARCHING: {
   invoke: {
     src: 'primitiveSearchBlock',  // ← Имя service
     input: ({ context }) => ({    // ← Параметры
-      blockType: context.taskData.targetBlock,
+      blockName: context.taskData.targetBlock,
       maxDistance: 32
     })
   },
@@ -205,23 +207,41 @@ SEARCHING: {
 
 ## Файл реализации
 
-**Файл:** `src/hsm/actors/primitives.actors.js`
+**Файл:** `src/hsm/actors/primitives/primitiveSearchBlock.primitives.ts`
 
 ```javascript
 export const primitiveSearchBlock = createStatefulService({
 	/* ... */
 })
+```
+
+**Файл:** `src/hsm/actors/primitives/primitiveSearchEntity.primitives.ts`
+
+```javascript
 export const primitiveSearchEntity = createStatefulService({
-	/* ... */
+/_ ... _/
 })
+```
+
+**Файл:** `src/hsm/actors/primitives/primitiveNavigating.primitives.ts`
+
+```javascript
 export const primitiveNavigating = createStatefulService({
 	/* ... */
 })
+```
+
+**Файл:** `src/hsm/actors/primitives/primitiveBreaking.primitives.ts`
+
+```javascript
 export const primitiveBreaking = createStatefulService({
 	/* ... */
 })
-// ...
+```
 
+**Файл:** `src/hsm/actors/primitives/index.primitives.js`
+
+```javascript
 export default {
 	primitiveSearchBlock,
 	primitiveSearchEntity,
@@ -267,9 +287,9 @@ export const actors = {
 
 Добавление нового примитива:
 
-1. Создать service в `primitives.actors.js`
+1. Создать service в `src\hsm\actors\primitives\primitive[Name].primitives.js`
 2. Добавить в `PRIMITIVE_REGISTRY`
-3. Экспортировать из `primitives.actors.js`
+3. Экспортировать из `src\hsm\actors\primitives\index.primitives.ts`
 4. Использовать в Task через `invoke`
 
 **Новые примитивы для будущего:**

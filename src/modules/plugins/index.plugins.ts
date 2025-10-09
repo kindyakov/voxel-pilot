@@ -1,13 +1,16 @@
-import { loadPathfinder, initPathfinder } from './pathfinder'
-import { loadArmorManager, initArmorManager } from './armorManager'
-import { loadMovement } from './movement'
-import { loadPvp } from './pvp'
-import { initViewer } from './viewer'
-import { loadWebInventory } from './webInventory'
-import { loadAutoEat, initAutoEat } from './autoEat'
-import { loadTool } from './tool'
-import { loadHawkeye } from './hawkeye'
-import type { Bot } from '../../types'
+import type { Bot } from '@types'
+import { loadPathfinder, initPathfinder } from '@modules/plugins/pathfinder'
+import {
+	loadArmorManager,
+	initArmorManager
+} from '@modules/plugins/armorManager'
+import { loadMovement } from '@modules/plugins/movement'
+import { loadPvp } from '@modules/plugins/pvp'
+import { initViewer } from '@modules/plugins/viewer'
+import { loadWebInventory } from '@modules/plugins/webInventory'
+import { loadAutoEat, initAutoEat } from '@modules/plugins/autoEat'
+import { loadTool } from '@modules/plugins/tool'
+import { loadHawkeye } from '@modules/plugins/hawkeye'
 
 export const loadPlugins = (bot: Bot): void => {
 	loadPathfinder(bot)

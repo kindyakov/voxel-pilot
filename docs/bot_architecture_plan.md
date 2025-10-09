@@ -81,34 +81,35 @@ invoke: {
 ```
 src/
 ├── core/
-│   ├── bot.js              # Класс бота
-│   ├── hsm.js              # BotStateMachine
-│   └── memory.js           # BotMemory (persistent)
+│   ├── bot.ts              # Класс бота
+│   ├── commandHandler.ts   # Обработчик команд
+│   ├── hsm.ts              # BotStateMachine
+│   └── memory.ts           # BotMemory (persistent)
 │
 ├── hsm/
 │   ├── actors/
-│   │   ├── primitives.actors.js    # Services
-│   │   ├── combat.actors.js
-│   │   └── index.actors.js
+│   │   ├── primitives.actors.ts    # Services
+│   │   ├── combat.actors.ts
+│   │   └── index.actors.ts
 │   │
 │   ├── primitives/
-│   │   └── registry.js             # PRIMITIVE_REGISTRY
+│   │   └── registry.ts             # PRIMITIVE_REGISTRY
 │   │
 │   ├── tasks/
-│   │   └── registry.js             # TASK_REGISTRY
+│   │   └── registry.ts             # TASK_REGISTRY
 │   │
 │   ├── helpers/
-│   │   ├── createStatefulService.js
-│   │   ├── validatePlan.js
-│   │   └── fixPlan.js
+│   │   ├── createStatefulService.ts
+│   │   ├── validatePlan.ts
+│   │   └── fixPlan.ts
 │   │
-│   ├── machine.js                  # HSM states
-│   └── context.js
+│   ├── machine.ts                  # HSM states
+│   └── context.ts
 │
 ├── ai/
 │   ├── prompts/
-│   │   └── taskPlanner.js
-│   └── agent.js
+│   │   └── taskPlanner.ts
+│   └── agent.ts
 │
 └── data/
     └── bot_memory.json             # Долговременная память
@@ -244,7 +245,7 @@ bot.hsm.memory.updateStats(type, item, count)
 - Создаётся через `createStatefulService()`
 - НЕ является состоянием HSM
 - Запускается через `invoke` из Task state
-- Имеет lifecycle: `onStart` → `onTick` → `onCleanup`
+- Имеет lifecycle: `onStart` → `onTick` | `onAsyncTick` | `onEvents` → `onCleanup`
 
 ### Task = State с подсостояниями
 

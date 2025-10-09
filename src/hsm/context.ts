@@ -1,5 +1,5 @@
-import type { Bot, Vec3, Entity, Item } from '../types'
-import type { AnyTaskData } from './tasks/types'
+import type { Bot, Vec3, Entity, Item } from '@types'
+import type { AnyTaskData, Plan } from '@hsm/tasks/types'
 
 export interface MachineContext {
 	bot: Bot | null
@@ -67,6 +67,9 @@ export interface MachineContext {
 	}
 
 	taskData: AnyTaskData | null
+	plan: Plan | null
+	pausedPlan: Plan | null // Прерванный план
+	savedTaskState: null // Сохранённое состояние задачи
 }
 
 export const context: MachineContext = {
@@ -138,5 +141,8 @@ export const context: MachineContext = {
 		distance: Infinity
 	},
 
-	taskData: null
+	plan: null, // Текущий план
+	taskData: null, //  данные текущей задачи
+	pausedPlan: null, // Прерванный план
+	savedTaskState: null // Сохранённое состояние задачи
 }

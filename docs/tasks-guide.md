@@ -75,7 +75,7 @@ MINING
 │
 ├── SEARCHING
 │   ├── invoke: primitiveSearchBlock
-│   │   input: { blockType, maxDistance }
+│   │   input: { blockName, maxDistance }
 │   └── events:
 │       ├── FOUND → NAVIGATING
 │       └── NOT_FOUND → TASK_FAILED
@@ -182,7 +182,7 @@ MINING: {
 
 | Параметр      | Тип    | Обязательный | Описание                    |
 | ------------- | ------ | ------------ | --------------------------- |
-| `ore`         | string | ✅           | Тип блока для добычи        |
+| `blockName`   | string | ✅           | Тип блока для добычи        |
 | `count`       | number | ✅           | Количество                  |
 | `maxDistance` | number | ❌           | Радиус поиска (default: 32) |
 
@@ -365,7 +365,7 @@ CHECKING_PRECONDITIONS:
 ### Добавление новой задачи
 
 1. Определить в `TASK_REGISTRY`
-2. Создать state в `machine.js` → `TASKS`
+2. Создать state в `machine.ts` → `TASKS`
 3. Определить подсостояния
 4. Связать с примитивами через `invoke`
 5. Добавить `canExecute` с предусловиями

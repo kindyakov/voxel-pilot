@@ -28,7 +28,7 @@ class MinecraftBot extends EventEmitter {
 				return
 			}
 
-			this.bot = mineflayer.createBot(Config.minecraft)
+			this.bot = mineflayer.createBot(Config.minecraft) as Bot
 
 			if (!this.bot) {
 				throw Error('Не предвиденная ошибка при создании бота')

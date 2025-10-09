@@ -1,13 +1,13 @@
-import { createMachine } from 'xstate'
+import { createMachine, assign } from 'xstate'
 import type { MachineEvent } from '@hsm/types'
 import { context, type MachineContext } from '@hsm/context'
+import type { AnyTaskData } from '@hsm/tasks/index'
 import { actions } from '@hsm/actions/index.actions'
 import { guards } from '@hsm/guards/index.guards'
 import { actors } from '@hsm/actors/index.actors'
 
 export const machine = createMachine(
 	{
-		/** @xstate-layout N4IgpgJg5mDOIC5QFkCSA5AogYQEoEEAxAFQH0AhAeWIGIBlTMq4gbQAYBdRUABwHtYASwAugvgDtuIAB6IAtAEYAbACY2AOiUBmLQE42K3VoCsAFgDsJgDQgAnojML1KhSq2mVADmO7TnlQC+ATZoWHhETNQ0AKoACgAi+MSYpLGUdKjEqJTo7FxIIPxCohJSsgiKhhpsNbUKWgqOCjb2CI7Oru5ePn6BwSChOAQkFFFxicmkdEnRBFk5eVJFImKSBeWKxmzmmkp7e57e+iotDqZOLm4eR71BIRhDEaO08ZhJABKLBcsla6CtclMSg0bgU5l0ulUunM5hU5hs5QUpmMSnUQLYvgU-mMlk85juAwe4RGzHUyHwGFI+GwWQAapkAJrqWJvbCYQjRAAyZIwGAA4jRYpz8AzMLgpsRKLEvrwBCtSutEDpPOpjMq1WxrloYVpTghDKZnGx-LpjMZDJ4ap4lATBsTIsQyRT0FSaah6cQmSzqeyuepyNFUJz4vzBcLReK6JLpZwlnLfmVEOY9mjgZC2ApdN49ic7IhXMZ1NrTL5oT4YcCbf07cMHU7KdS6Yzmazfdy6JzMJhYqGhSKxRKpTLCvHVom2p4tKmlEj0Ti2A09SolLp1N5GloDCpDLjbUTa896y7G+7m962RzuYR8LhQgK+xHBzH8rLimPFQhzGZ1GCsdClHiDQeHqcjmCq2pbOaYEZgoyimHuYQHqS5INm6Hpeq2l7qIQlCcpylAAOq9uGA5RkOsbfKOCqgOUWieIaYF0SWKhmBixrGEusHqGwPjeFsJZAsmCgIY8JLUEerpNp6LY+lhdDvJgnLJLgxH9pG0bDj8740UmmrqDqpiGUY0IwqYeo6DsxhYpmGYeGaK4ifah4oceaHNrMfKYOgZBYJg8R0OomDIGKnnoNgDKkG8WToAKOGUPEpC4JgZFJfEmlUX8MiIGwepsI5SHiS5kmntJHleT5Xb+YFwW4KF4WRUkoZxQlDA3tgnwUa+8qZRsdEqGipgZlo24LguMIgV+qp1L+5rata+VPMhzrFeh6hld5pC+VVQUhV59UKfgnKhgdSnvIlyWSql6VvtRWUIDleb3QtYmOkVJ6retFV+QFO21XtEUnU1lDxVMby4O113deOcgWgNGZeNa7gQvCj2TuouiwYNxqbpYYKeM9dZvW50nYJQyDkEkNDoJQkVYGgyWQwmH5GBo6ZGEo5aqF4equABa50ZC2pKOi+LVvui2Fct73NqT5NJOorzYKgIYxTQjPaXdigc-pJgCZqejmFaPNwk4xqeILk5HIcBPOVLxNMrLFOOoryuhiwCgviON09fIyiFsNujbni66eAoBg88Nhpm9C+jQnR+Ni4hEuvXbUkO2TTsKzgruqywKie1pt0bH7RaGEHYFWaH4ePfU-jcYcMcYriCf3EnL0SdLJMZ-LwWdikSTENSADSoZeUFEXkDg+DBaQ164OrRfyMi+lWWHc2V2HyjG1i9fm+CTfxzbS2oWn6iO-LBAxX5VLEIP2Aj6rY-IBPU8z9g+EMAvPsVBY4HajxwI8aamhDzQaKovwohRMmSEX4qyt1EoTVOJV05y2duyLyKsBTUzIHQWYuBKDRHQK8NKnUvZQw-OaVcvNeiWB0MLTwEdDZTRRMiOiDQdBH0lifZB6hB50CHnQNWpDC7fyxujbcs0OZeEMtYGu3h+r7ENjqeOSJOEp24atPhAis5pAyGQTIQVBEGOQHQUgrxdEGJIQXDK44PBOD2INbcqgkTDTMDzDGOwdA6AsJqNgwstBqI7vbXh+B+EBSSrECk4obzIEoOKSUuFBERKiaQWWQpGCYC-uOOEU4lAwk1NoFQJZ5FLhqAo-YVcajmHqPBROCDbYaObFogKzVQb4BwO8GgOFCEJWalkihNQ1yWmUOCKo0ILDuJnM4EskJTTbD8LU+BTlkI5EyHE-k6gTrEDOrE9AazcAxASEkFIWyOrWO9tDRoQIjQNBYu4NUmZcwAhYjrLEWgOawUhObd5gTdn7I2ac0gfzLpCPOeQnSFQISolqLUe5DQMZ6nNEWLxehfDDVDqaOBhI26E1WZdAFhDPLimBXEw5EwUh9OETYj8mw6LcRhQuVhjyQIuAYg0ScHzMwAV8L8vF6yYqbMJQOElBz+kQrkFC+lMK4WZmaI9RQ7ypXwwxmac0wk6nLMKnylSAryqZFQMlIF2qyXHNplkLIDMqUXJpY0LYP5fzByZYHHmTCsR+C2JmQOwDeV7Pxbq7y+rDUipoElWJtIUh6s9GKzWVzCz6FUFsGVzrHpwijtZCwyYXDvL6Esgqr1tUbMjQa0xwbo0bHNtC95yIrLnDxL4JclhkVeNTeWEwWKazJzJAWgV7UkhGt9aSgAtoIcQYAy3ZT1LW3Y+wZ2KJ9f8nt7w+3BoAGZ8AADbrr4AAd3HT-H8ws-EsSXNc2dZ69i6HnX6vkZ8l1kGDbAddYAwA8D3YodGEFzIribSi39ASNV5q7QOnVN7e33uNbAAAFmAddwgwAACc307EKaHY9j0gQqgZVhmo7bxbtxFRssD-b9k0BXQAQ3g4OvdcrWiZkNOes9l6AOdoI4u5dxqABGABXQQ66IBvpBFicwMyISiahcicy2wfz0URvZHGyggj9HEHwCAcApAdpenGa14q4KolgtUx1Dzk0AjMDsXGloMReGE14X5SD0JafBZrcEnivHAhMGaScIEdBOC2DUZQ-4G7-tzSxuzZ5MJcgc0zCFNS1yOA5vGg2HF5VuB2KCS0bhA71C+bZxp0lzxtnUMrTskWNblBxPRvx0DlzGgsEoE90m-B6D0BzHE1oc3YvqcfVyp98tYVCPyEri99RFPtZmGEYIaiqqeYgKdbr6IFjUH4zUOXus8N636AMQZMGDe-jHAaDyAIsVxHVmug1YuNDDsCVh2x2sacQbljCsk-Qdi7D2GKO3xymYPUiKBwJ6LJknQ0Br82WKLauytlaYWntXhiQNyi2m7p7YzCiQwm59CuAYfKsOhZQTgkhDuWEAEIed0exeP0OE8KETh11KLd0sSFkMg85QeJysQnMvYmcqLYJFMsJYYnwT1vtgUkpMU1OyG0-KOltE1S23DQ5gcQHTg5vnFBzh5bzH8Ohby+F7kkHBCwGEB9j8WJ+reHOPFvxiWJqoi-H5sEKJ3CsP56fT6m1Kp0CN+K4Tq4UVudVZ55LhklWNDyeCWVzueGu62j9GqdUIpRTFyI6GhsnC+4XP73UWPXDB8MLatVEePp-Q2tH6qu0woAzeEdd78PHMbBTz+v3HnM+tG-SJvENXDLggLzLbuxBPea3NKiCyACMzQSS60Q4qJA5uG2GbrExpu9d1QVnJW22a8S8QPoTQehzSrwxMYOtPNZ-iNBCxCteTF8oMzoQPuifqXRaMPpNQFpzaI06BHUwU5lQmX8JuUOotgtNcHsz5e8yRFIuwb474H4+R+8NgM0ixJwMZ5Fa5pFQFoRNBYR44LA+p1VAD7tVtVpz5HRL5PIEoB5h478Ec4DJpkRlA4QMUTBtweY-x+ZX9KsD9JxjBL8QDl9XhCAMFKDa9EBUdnBMCwRTRLgdAeZB80RtwBZzhA5rNuDmlYD5AAI41YIUdMwzAY53F6g1xbdNxVBO9txlDQltFzF0hMhSBjEPd19Ss1DFUYQ8QSwPlHEUZWg1Bl4WcFxlQAImszCwl1BklUBolbw4lSAElOQ7CacHCKhtAdgMYQ8XBTQSxwROI0YCx08uh6IuCNd8DIdpJmlsJgYWo3gOlVD4igdtgUdDIDQeIPDhCcY0QD92VNRqkMxuC9cDdKjA5VwxMIQ-FgQUieYjhuJzhYQstbVzgr1+UYD7ChtNgsx7UDMwInVpsKhNwpxJs4QHkMQ9AwRZiQNNlK9tliNLpKjKg64WIcNfBoFYEQId4OCfBWJQ4zAfl8jnJu0b13ghViVtVLiMcGIsQMVasywTtnlGhmFU0YIvkeVPiVlgNC0A0LUS0ASFjv4ripwbi-E7iVwHiU1jRpkLAw5lws1jCjjCM71zi4lATdjnBHdDIwSCTWhHdS5LRYQ3AVxdNFMAggA */
 		types: {} as {
 			context: MachineContext
 			events: MachineEvent
@@ -26,160 +26,18 @@ export const machine = createMachine(
 				actions: ['updateFoodSaturation']
 			},
 			DEATH: {
-				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.PEACEFUL.IDLE',
+				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
 				actions: ['updateAfterDeath']
 			}
 		},
 		states: {
 			MAIN_ACTIVITY: {
-				initial: 'PEACEFUL',
+				initial: 'IDLE',
 				states: {
-					PEACEFUL: {
-						description:
-							'Переход в эти состояния по командам игрока (приоритеты 7 - 9)',
-						initial: 'IDLE',
-						states: {
-							IDLE: {
-								description: 'Приоритет 1',
-								entry: {
-									type: 'entryIdle'
-								}
-							},
-							MINING: {
-								description: 'Приоритет 7',
-								entry: {
-									type: 'entryMining'
-								},
-								exit: [
-									{
-										type: 'exitMining'
-									},
-									{
-										type: 'saveMiningProgress'
-									}
-								],
-								on: {
-									PLAYER_STOP: [
-										{
-											target: 'IDLE',
-											actions: [
-												{
-													type: 'saveMiningProgress'
-												}
-											]
-										}
-									]
-								}
-							},
-							BUILDING: {
-								description: 'Приоритет 7',
-								entry: {
-									type: 'entryBuilding'
-								},
-								exit: [
-									{
-										type: 'exitBuilding'
-									},
-									{
-										type: 'saveBuildingProgress'
-									}
-								],
-								on: {
-									PLAYER_STOP: [
-										{
-											target: 'IDLE',
-											actions: [
-												{
-													type: 'saveBuildingProgress'
-												}
-											],
-											meta: {}
-										}
-									]
-								}
-							},
-							SLEEPING: {
-								description: 'Приоритет 7',
-								entry: {
-									type: 'entrySleeping'
-								},
-								exit: {
-									type: 'exitSleeping'
-								},
-								on: {
-									PLAYER_STOP: [
-										{
-											target: 'IDLE',
-											actions: []
-										}
-									]
-								}
-							},
-							FARMING: {
-								description: 'Приоритет 7',
-								entry: {
-									type: 'entryFarming'
-								},
-								exit: [
-									{
-										type: 'exitFarming'
-									},
-									{
-										type: 'saveFarmingProgress'
-									}
-								],
-								on: {
-									PLAYER_STOP: [
-										{
-											target: 'IDLE',
-											actions: [
-												{
-													type: 'saveFarmingProgress'
-												}
-											]
-										}
-									]
-								}
-							},
-							FOLLOWING: {
-								description: 'Приоритет 9',
-								entry: {
-									type: 'entryFollowing'
-								},
-								exit: {
-									type: 'exitFollowing'
-								},
-								on: {
-									PLAYER_STOP: [
-										{
-											target: 'IDLE',
-											actions: []
-										}
-									]
-								}
-							},
-							SHELTERING: {
-								description: 'Приоритет 7',
-								entry: {
-									type: 'entrySheltering'
-								},
-								exit: {
-									type: 'exitSheltering'
-								},
-								on: {
-									PLAYER_STOP: [
-										{
-											target: 'IDLE',
-											actions: []
-										}
-									]
-								}
-							},
-							hist: {
-								history: 'shallow',
-								type: 'history'
-							}
-						}
+					IDLE: {
+						description: 'Ожидание (приоритет 1)',
+						entry: { type: 'entryIdle' },
+						exit: { type: 'exitIdle' }
 					},
 					URGENT_NEEDS: {
 						description: 'Срочные потребности (приоритет 8)',
@@ -202,9 +60,6 @@ export const machine = createMachine(
 								on: {
 									FOOD_RESTORED: {
 										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.hist'
-									},
-									FOOD_SEARCH: {
-										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.FOOD_SEAECH'
 									}
 								}
 							},
@@ -225,9 +80,6 @@ export const machine = createMachine(
 								on: {
 									HEALTH_RESTORED: {
 										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.hist'
-									},
-									FOOD_SEARCH: {
-										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.FOOD_SEAECH'
 									}
 								}
 							}
@@ -312,61 +164,123 @@ export const machine = createMachine(
 							}
 						}
 					},
-					TASKS: {
-						description: 'Задачи бота',
-						initial: 'DEPOSIT_ITEMS',
-						states: {
-							DEPOSIT_ITEMS: {
-								description: 'Выкладывание вещей в сундук',
-								on: {
-									ITEMS_DEPOSITED: [
-										{
-											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.hist',
-											actions: []
-										}
-									]
-								}
-							},
-							REPAIR_ARMOR_TOOLS: {
-								description: 'Починка брони и инструментов',
-								on: {
-									REPAIR_COMPLETE: [
-										{
-											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.hist',
-											actions: []
-										}
-									]
-								}
-							},
-							FOOD_SEARCH: {
-								description: 'Поиск еды',
-								entry: {
-									type: 'entrySearchFood'
-								},
-								on: {
-									FOUND_FOOD: [
-										{
-											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.hist',
-											actions: []
-										}
-									]
-								}
-							}
-						},
-						always: {
-							target: 'hist',
-							guard: 'noTasks',
-							actions: []
-						}
-					},
-
 					hist: {
 						history: 'shallow',
 						type: 'history'
+					},
+					TASKS: {
+						type: 'parallel',
+						states: {
+							PLAN_EXECUTOR: {
+								initial: 'IDLE',
+								states: {
+									IDLE: {
+										on: {
+											START_PLAN: {
+												target: 'VALIDATING',
+												actions: ['startPlan']
+											}
+										}
+									},
+									VALIDATING: {},
+									EXECUTING_TASK: {}
+								}
+							},
+
+							MINING: {
+								initial: 'SEARCHING',
+								states: {
+									CHECKING_PRECONDITIONS: {
+										entry: {
+											type: 'entryCheckingPreconditions'
+										},
+										exit: {
+											type: 'exitCheckingPreconditions'
+										},
+										on: {
+											SUCCESSFULLY: 'SEARCHING'
+										}
+									},
+									SEARCHING: {
+										invoke: {
+											id: 'miningSearching',
+											src: 'primitiveSearchBlock',
+											input: ({ context }: { context: MachineContext }) => ({
+												context
+											})
+										},
+										on: {
+											FOUND: {
+												target: 'NAVIGATING',
+												actions: assign({
+													taskData: ({
+														context,
+														event
+													}: {
+														context: MachineContext
+														event: MachineEvent
+													}) => ({
+														...context.taskData,
+														block: event.block
+													})
+												})
+											},
+											NOT_FOUND: 'TASK_FAILED'
+										}
+									},
+									NAVIGATING: {
+										invoke: {
+											id: 'miningNavigating',
+											src: 'primitiveNavigating',
+											input: ({ context }: { context: MachineContext }) => ({
+												context
+											})
+										},
+										on: {
+											ARRIVED: 'BREAKING',
+											NAVIGATION_FAILED: 'SEARCHING'
+										}
+									},
+									BREAKING: {
+										invoke: {
+											id: 'miningBreaking',
+											src: 'primitiveBreaking',
+											input: ({ context }: { context: MachineContext }) => ({
+												context
+											})
+										}
+									},
+									CHECKING_GOAL: {
+										always: [
+											{
+												guard: ({ context }: { context: MachineContext }) =>
+													context.taskData?.collected >=
+													context.taskData?.count,
+												target: 'TASK_COMPLETED'
+											},
+											{
+												target: 'SEARCHING' // ← Цикл: ищем следующий блок
+											}
+										]
+									},
+									TASK_COMPLETED: {
+										type: 'final'
+									},
+
+									TASK_FAILED: {
+										type: 'final'
+									}
+								}
+							},
+
+							SMELTING: {},
+							CRAFTING: {}
+						}
 					}
 				}
 			},
 			MONITORING: {
+				type: 'parallel',
 				states: {
 					HEALTH_MONITOR: {
 						entry: {
@@ -429,72 +343,31 @@ export const machine = createMachine(
 							src: 'serviceEntitiesTracking'
 						}
 					},
-					// "ARMOR_TOOLS_MONITOR": {
-					//   entry: {
-					//     type: "entryArmorToolsMonitoring"
-					//   },
-					//   always: {
-					//     target: "#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.REPAIR_ARMOR_TOOLS",
-					//     guard: "isBrokenArmorOrTools",
-					//     actions: []
-					//   }
-					// },
-					// "INVENTORY_MONITOR": {
-					//   entry: {
-					//     type: "entryInventoryMonitoring"
-					//   },
-					//   always: {
-					//     target: "#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DEPOSIT_ITEMS",
-					//     guard: "isInventoryFull",
-					//     actions: []
-					//   }
-					// },
+					ARMOR_TOOLS_MONITOR: {
+						entry: {
+							type: 'entryArmorToolsMonitoring'
+						},
+						always: {
+							guard: 'isBrokenArmorOrTools',
+							actions: []
+						}
+					},
+					INVENTORY_MONITOR: {
+						entry: {
+							type: 'entryInventoryMonitoring'
+						},
+						always: {
+							guard: 'isInventoryFull',
+							actions: []
+						}
+					},
 					CHAT_MONITOR: {
 						description: 'Команды игрока',
 						entry: {
 							type: 'entryChatMonitoring'
-						},
-						on: {
-							mine: [
-								{
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.PEACEFUL.MINING',
-									actions: []
-								}
-							],
-							follow: [
-								{
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.PEACEFUL.FOLLOWING',
-									actions: []
-								}
-							],
-							sleep: [
-								{
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.PEACEFUL.SLEEPING',
-									actions: []
-								}
-							],
-							shelter: [
-								{
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.PEACEFUL.SHELTERING',
-									actions: []
-								}
-							],
-							farm: [
-								{
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.PEACEFUL.FARMING',
-									actions: []
-								}
-							],
-							build: [
-								{
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.PEACEFUL.BUILDING',
-									actions: []
-								}
-							]
 						}
 					}
-				},
-				type: 'parallel'
+				}
 			}
 		}
 	},

@@ -1,7 +1,7 @@
 import {
 	createStatefulService,
 	type BaseServiceState
-} from '@hsm/actors/base/createStatefulService.js'
+} from '@/hsm/helpers/createStatefulService.js'
 import { GoalXZ, GoalNear } from '@modules/plugins/goals.js'
 
 interface EmergencyHealingState extends BaseServiceState {

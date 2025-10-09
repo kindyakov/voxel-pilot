@@ -1,89 +1,67 @@
-import type { Vec3, Item, Block } from '../../types'
+import type { Vec3, Item, Block } from '@types'
+
+export interface Plan {
+	goal: string
+	priority: number
+	tasks: Task[]
+	currentIndex?: number // Для executor
+}
+
+type TaskType =
+	| 'MINING'
+	| 'SMELTING'
+	| 'CRAFTING'
+	| 'BUILDING'
+	| 'deposit_items'
+
+export interface Task {
+	type: TaskType
+	params: Record<string, unknown>
+}
 
 // ============================================
 // MINING
 // ============================================
-export interface MiningParams {
-	ore: string
-	count: number
-	maxDistance?: number
-}
-
 export interface MiningTaskData {
-	targetBlock: string
-	targetCount: number
-	progress: {
-		found: number
-		currentBlock: Block | null
-	}
+	blockType: string
+	count: number
+	collected: number
+	targetBlock?: Block
+	maxDistance?: number
 }
 
 // ============================================
 // SMELTING
 // ============================================
-export interface SmeltingParams {
-	input: string
-	output: string
-	count: number
-	fuel?: string
-}
-
 export interface SmeltingTaskData {
 	inputItem: string
 	outputItem: string
-	targetCount: number
-	furnace: Block | null
-	progress: {
-		smelted: number
-	}
+	fuel: string
+	count: number
+	smelted: number
 }
 
 // ============================================
 // CRAFTING
 // ============================================
-export interface CraftingParams {
-	recipe: string
-	count: number
-	craftingTable?: boolean
-}
-
 export interface CraftingTaskData {
 	recipe: string
-	targetCount: number
-	craftingTable: Block | null
-	progress: {
-		crafted: number
-	}
+	count: number
+	crafted: number
 }
 
 // ============================================
 // BUILDING
 // ============================================
-export interface BuildingParams {
-	structure: string
-	location: Vec3
-	blocks?: string[]
-}
-
 export interface BuildingTaskData {
 	structure: string
 	location: Vec3
 	blocks: string[]
-	progress: {
-		placed: number
-		total: number
-	}
 }
 
 // ============================================
 // DEPOSIT_ITEMS
 // ============================================
-export interface DepositItemsParams {
-	keep_tools?: boolean
-	keep_food?: boolean
-	specific_items?: string[]
-}
-
 export interface DepositItemsTaskData {
 	chest: Block | null
 	itemsToDeposit: Item[]
@@ -92,14 +70,6 @@ export interface DepositItemsTaskData {
 // ============================================
 // UNIONS
 // ============================================
-
-// Union всех параметров задач
-export type AnyTaskParams =
-	| MiningParams
-	| SmeltingParams
-	| CraftingParams
-	| BuildingParams
-	| DepositItemsParams
 
 // Union всех taskData
 export type AnyTaskData =

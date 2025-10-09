@@ -3,7 +3,7 @@ import type { Entity, Item } from '@types'
 import {
 	createStatefulService,
 	type BaseServiceState
-} from '@hsm/actors/base/createStatefulService.js'
+} from '@/hsm/helpers/createStatefulService.js'
 import { GoalXZ } from '@modules/plugins/goals.js'
 
 interface MeleeAttackState extends BaseServiceState {
@@ -66,7 +66,7 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 		}
 
 		if (!state.currentTarget || state.currentTarget.id !== enemy.id) {
-			console.log(`⚔️ Атакую ${enemy.name} ${enemy.id}`)
+			console.log(`⚔️ Атакую ${enemy.name}, id: ${enemy.id}`)
 			if (state.currentTarget) bot.pvp.stop()
 			bot.pvp.attack(enemy)
 			setState({ currentTarget: enemy })
