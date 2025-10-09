@@ -28,6 +28,7 @@ export interface MiningTaskData {
 	collected: number
 	targetBlock?: Block
 	maxDistance?: number
+	navigationAttempts: number
 }
 
 // ============================================

@@ -51,6 +51,8 @@ export type TaskEvents =
 	| { type: 'SUCCESSFULLY' }
 	| { type: 'ARRIVED' }
 	| { type: 'NAVIGATION_FAILED' }
+	| { type: 'BROKEN' }
+	| { type: 'BREAKING_FAILED' }
 
 export type SystemEvents = { type: 'ERROR'; error: string }
 

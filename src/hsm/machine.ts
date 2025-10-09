@@ -1,7 +1,7 @@
 import { createMachine, assign } from 'xstate'
 import type { MachineEvent } from '@hsm/types'
 import { context, type MachineContext } from '@hsm/context'
-import type { AnyTaskData } from '@hsm/tasks/index'
+import type { AnyTaskData, MiningTaskData } from '@hsm/tasks/index'
 import { actions } from '@hsm/actions/index.actions'
 import { guards } from '@hsm/guards/index.guards'
 import { actors } from '@hsm/actors/index.actors'
@@ -218,10 +218,10 @@ export const machine = createMachine(
 														event
 													}: {
 														context: MachineContext
-														event: MachineEvent
+														event: Extract<MachineEvent, { type: 'FOUND' }>
 													}) => ({
-														...context.taskData,
-														block: event.block
+														...(context.taskData as MiningTaskData),
+														targetBlock: event.block
 													})
 												})
 											},
@@ -238,7 +238,26 @@ export const machine = createMachine(
 										},
 										on: {
 											ARRIVED: 'BREAKING',
-											NAVIGATION_FAILED: 'SEARCHING'
+											NAVIGATION_FAILED: [
+												{
+													guard: ({ context }) => {
+														const data = context.taskData as MiningTaskData
+														return data.navigationAttempts >= 3
+													},
+													target: 'TASK_FAILED'
+												},
+												{
+													target: 'SEARCHING',
+													actions: assign({
+														taskData: ({ context }) => ({
+															...(context.taskData as MiningTaskData),
+															navigationAttempts:
+																(context.taskData as MiningTaskData)
+																	.navigationAttempts + 1
+														})
+													})
+												}
+											]
 										}
 									},
 									BREAKING: {
@@ -248,14 +267,31 @@ export const machine = createMachine(
 											input: ({ context }: { context: MachineContext }) => ({
 												context
 											})
+										},
+										on: {
+											BROKEN: {
+												target: 'CHECKING_GOAL',
+												actions: assign({
+													taskData: ({ context }) => ({
+														...(context.taskData as MiningTaskData),
+														collected:
+															(context.taskData as MiningTaskData).collected + 1
+													})
+												})
+											},
+											BREAKING_FAILED: 'SEARCHING'
 										}
 									},
 									CHECKING_GOAL: {
 										always: [
 											{
-												guard: ({ context }: { context: MachineContext }) =>
-													context.taskData?.collected >=
-													context.taskData?.count,
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData =
+														context.taskData as MiningTaskData | null
+													return taskData
+														? taskData.collected >= taskData.count
+														: false
+												},
 												target: 'TASK_COMPLETED'
 											},
 											{
