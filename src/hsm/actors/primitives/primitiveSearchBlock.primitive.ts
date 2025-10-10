@@ -12,41 +12,59 @@ interface SearchBlockState extends BaseServiceState {
 	searching: boolean
 }
 
-export const primitiveSearchBlock = createStatefulService<SearchBlockState>({
+interface SearchBlockOptions {
+	blockName: string
+	maxDistance?: number
+	count?: number
+}
+
+const optDefault = {
+	maxDistance: 50,
+	count: 1
+}
+
+export const primitiveSearchBlock = createStatefulService<
+	SearchBlockState,
+	SearchBlockOptions
+>({
 	name: 'primitiveSearchBlock',
 	tickInterval: 1000,
 	initialState: {
 		blockName: '',
-		maxDistance: 64,
-		count: 1,
+		maxDistance: optDefault.maxDistance,
+		count: optDefault.count,
 		searching: false
 	},
 	onStart: api => {
-		const { blockType, maxDistance = 64, count = 1 } = api.input
+		const {
+			blockName,
+			maxDistance = optDefault.maxDistance,
+			count = optDefault.count
+		} = api.input
 
-		if (!blockType) {
-			console.error('[primitiveSearchBlock] ❌ Missing blockType')
+		if (!blockName) {
+			console.error('[primitiveSearchBlock] ❌ Missing blockName')
 			api.sendBack({
 				type: 'NOT_FOUND',
-				reason: 'Missing required parameter: blockType'
+				reason: 'Missing required parameter: blockName'
 			})
 			return
 		}
 
 		// Конвертируем name → ID
-		const blockData = api.bot.registry.blocksByName[blockType]
+		const blockData = api.bot.registry.blocksByName[blockName]
 
 		if (!blockData) {
-			console.error(`[primitiveSearchBlock] ❌ Unknown block: ${blockType}`)
+			console.error(`[primitiveSearchBlock] ❌ Unknown block: ${blockName}`)
 			api.sendBack({
 				type: 'NOT_FOUND',
-				reason: `Unknown block type: ${blockType}`
+				reason: `Unknown block type: ${blockName}`
 			})
 			return
 		}
 
 		api.setState({
-			blockName: blockType,
+			blockName,
 			blockId: blockData.id,
 			maxDistance,
 			count,
@@ -54,7 +72,7 @@ export const primitiveSearchBlock = createStatefulService<SearchBlockState>({
 		})
 
 		console.log(
-			`🔍 [primitiveSearchBlock] Searching for ${blockType} (ID: ${blockData.id}, max: ${maxDistance}m, count: ${count})`
+			`🔍 [primitiveSearchBlock] Searching for ${blockName} (ID: ${blockData.id}, max: ${maxDistance}m, count: ${count})`
 		)
 	},
 
@@ -81,8 +99,7 @@ export const primitiveSearchBlock = createStatefulService<SearchBlockState>({
 			// Отправляем результат
 			api.sendBack({
 				type: 'FOUND',
-				block,
-				blockName: api.state.blockName
+				block
 			})
 		}
 	},

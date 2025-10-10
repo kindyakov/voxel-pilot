@@ -135,9 +135,15 @@ class BotStateMachine extends EventEmitter {
 	handlers(): void {
 		this.on('player-command', (commandName: string, options?: unknown) => {
 			if (commandName === 'stop') {
-				this.actor.send({ type: 'PLAYER_STOP' })
 			} else {
-				this.actor.send({ type: commandName } as MachineEvent)
+				this.actor.send({
+					type: 'START_MINING',
+					taskData: {
+						blockName: 'stone',
+						navigationAttempts: 0,
+						count: 3
+					}
+				})
 			}
 		})
 	}

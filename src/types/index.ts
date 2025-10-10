@@ -16,7 +16,7 @@ export interface Bot extends MineflayerBot {
 		blocksByName: Record<string, { id: number; name: string; [key: string]: any }>
 	}
 	
-	// Метод поиска блоков
+	// Методы поиска блоков
 	findBlock: (options: {
 		matching: number | ((block: Block) => boolean)
 		maxDistance?: number
@@ -24,11 +24,13 @@ export interface Bot extends MineflayerBot {
 		useExtraInfo?: boolean
 	}) => Block | null
 	
-	// Метод поиска множества блоков
 	findBlocks: (options: {
 		matching: number | number[] | ((block: Block) => boolean)
 		maxDistance?: number
 		count?: number
 		useExtraInfo?: boolean
 	}) => Block[]
+	
+	// Метод копания (добавляется плагином mineflayer-tool)
+	dig: (block: Block, forceLook?: boolean | 'ignore', digFace?: 'auto' | string) => Promise<void>
 }

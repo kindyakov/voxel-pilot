@@ -1,4 +1,4 @@
-import type { PrimitiveType } from '@hsm/actors/primitives/index.primitives'
+import type { PrimitiveType } from '@/hsm/actors/primitives/index.primitive'
 
 type TaskType = 'MINING' | 'SMELTING' | 'CRAFTING' | 'BUILDING' | 'FARMING'
 

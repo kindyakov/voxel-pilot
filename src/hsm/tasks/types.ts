@@ -23,9 +23,9 @@ export interface Task {
 // MINING
 // ============================================
 export interface MiningTaskData {
-	blockType: string
-	count: number
-	collected: number
+	blockName: string
+	count?: number
+	collected?: number
 	targetBlock?: Block
 	maxDistance?: number
 	navigationAttempts: number

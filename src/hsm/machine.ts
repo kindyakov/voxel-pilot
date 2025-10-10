@@ -33,11 +33,24 @@ export const machine = createMachine(
 		states: {
 			MAIN_ACTIVITY: {
 				initial: 'IDLE',
+
 				states: {
 					IDLE: {
 						description: 'Ожидание (приоритет 1)',
 						entry: { type: 'entryIdle' },
-						exit: { type: 'exitIdle' }
+						exit: { type: 'exitIdle' },
+						on: {
+							START_MINING: {
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.MINING',
+								actions: assign({
+									taskData: ({
+										event
+									}: {
+										event: MachineEvent & { type: 'START_MINING' }
+									}) => event.taskData
+								})
+							}
+						}
 					},
 					URGENT_NEEDS: {
 						description: 'Срочные потребности (приоритет 8)',
@@ -169,7 +182,8 @@ export const machine = createMachine(
 						type: 'history'
 					},
 					TASKS: {
-						type: 'parallel',
+						initial: 'PLAN_EXECUTOR',
+
 						states: {
 							PLAN_EXECUTOR: {
 								initial: 'IDLE',
@@ -189,6 +203,7 @@ export const machine = createMachine(
 
 							MINING: {
 								initial: 'SEARCHING',
+
 								states: {
 									CHECKING_PRECONDITIONS: {
 										entry: {
@@ -206,7 +221,12 @@ export const machine = createMachine(
 											id: 'miningSearching',
 											src: 'primitiveSearchBlock',
 											input: ({ context }: { context: MachineContext }) => ({
-												context
+												context,
+												options: {
+													blockName: (context.taskData as MiningTaskData)
+														.blockName,
+													count: (context.taskData as MiningTaskData).count
+												}
 											})
 										},
 										on: {
@@ -233,11 +253,17 @@ export const machine = createMachine(
 											id: 'miningNavigating',
 											src: 'primitiveNavigating',
 											input: ({ context }: { context: MachineContext }) => ({
-												context
+												context,
+												options: {
+													target: (context.taskData as MiningTaskData)
+														.targetBlock
+												}
 											})
 										},
 										on: {
-											ARRIVED: 'BREAKING',
+											ARRIVED: {
+												target: 'BREAKING'
+											},
 											NAVIGATION_FAILED: [
 												{
 													guard: ({ context }) => {
@@ -265,7 +291,11 @@ export const machine = createMachine(
 											id: 'miningBreaking',
 											src: 'primitiveBreaking',
 											input: ({ context }: { context: MachineContext }) => ({
-												context
+												context,
+												options: {
+													block: (context.taskData as MiningTaskData)
+														.targetBlock
+												}
 											})
 										},
 										on: {
@@ -275,7 +305,8 @@ export const machine = createMachine(
 													taskData: ({ context }) => ({
 														...(context.taskData as MiningTaskData),
 														collected:
-															(context.taskData as MiningTaskData).collected + 1
+															((context.taskData as MiningTaskData).collected ||
+																0) + 1
 													})
 												})
 											},
@@ -289,7 +320,7 @@ export const machine = createMachine(
 													const taskData =
 														context.taskData as MiningTaskData | null
 													return taskData
-														? taskData.collected >= taskData.count
+														? (taskData.collected || 0) >= (taskData.count || 1)
 														: false
 												},
 												target: 'TASK_COMPLETED'

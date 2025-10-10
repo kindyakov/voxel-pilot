@@ -1,6 +1,6 @@
 import type { MachineContext } from '@hsm/context'
 import type { Bot, Entity, Vec3, Block } from '@types'
-import type { Plan, Task } from '@hsm/tasks/index'
+import type { Plan, Task, AnyTaskData } from '@hsm/tasks/index'
 // ============================================
 // СОБЫТИЯ
 // ============================================
@@ -47,12 +47,13 @@ export type PlanExecutorEvents =
 export type TaskEvents =
 	| { type: 'FOUND_FOOD' }
 	| { type: 'NOT_FOUND'; reason: string }
-	| { type: 'FOUND'; block: Block; blockName: string }
+	| { type: 'FOUND'; block: Block }
 	| { type: 'SUCCESSFULLY' }
 	| { type: 'ARRIVED' }
 	| { type: 'NAVIGATION_FAILED' }
 	| { type: 'BROKEN' }
 	| { type: 'BREAKING_FAILED' }
+	| { type: 'START_MINING'; taskData: AnyTaskData }
 
 export type SystemEvents = { type: 'ERROR'; error: string }
 

@@ -19,7 +19,7 @@ export const loadPlugins = (bot: Bot): void => {
 	// loadWebInventory(bot)
 	loadAutoEat(bot)
 	// loadDashboard(bot)
-	// loadTool(bot) // походу не совместим
+	loadTool(bot) // походу не совместим
 	loadPvp(bot)
 	loadHawkeye(bot)
 }
