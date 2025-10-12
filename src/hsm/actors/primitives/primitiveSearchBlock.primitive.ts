@@ -102,9 +102,5 @@ export const primitiveSearchBlock = createStatefulService<
 				block
 			})
 		}
-	},
-
-	onCleanup: api => {
-		console.log(`🧹 [primitiveSearchBlock] Cleanup`)
 	}
 })

@@ -249,4 +249,76 @@ export class BotUtils {
 			this._eatingTimeoutId = null
 		}
 	}
+
+	/**
+	 * Подсчитывает количество предметов определённого типа в инвентаре
+	 * @param itemId - ID предмета (например, block.drops[0])
+	 * @returns Общее количество предметов
+	 */
+	countItemInInventory(itemId: number): number {
+		let total = 0
+		const items = this._bot.inventory.items()
+
+		for (const item of items) {
+			if (item.type === itemId) {
+				total += item.count
+			}
+		}
+
+		return total
+	}
+
+	/**
+	 * Ожидает изменения количества предмета в инвентаре
+	 * @param itemId - ID предмета
+	 * @param initialCount - Начальное количество
+	 * @param timeout - Таймаут в мс
+	 * @returns true если количество увеличилось, false если таймаут
+	 */
+	waitForInventoryChange(
+		itemId: number,
+		initialCount: number,
+		timeout: number = 3000
+	): Promise<boolean> {
+		return new Promise(resolve => {
+			const startTime = Date.now()
+
+			const checkInterval = setInterval(() => {
+				const currentCount = this.countItemInInventory(itemId)
+
+				// Проверяем увеличилось ли количество
+				if (currentCount > initialCount) {
+					clearInterval(checkInterval)
+					resolve(true)
+					return
+				}
+
+				// Проверяем таймаут
+				if (Date.now() - startTime >= timeout) {
+					clearInterval(checkInterval)
+					resolve(false)
+				}
+			}, 100) // Проверка каждые 100мс
+		})
+	}
+
+	/**
+	 * Проверяет есть ли в инвентаре хотя бы один предмет определённого типа
+	 */
+	hasItemInInventory(itemId: number): boolean {
+		return this.countItemInInventory(itemId) > 0
+	}
+
+	/**
+	 * Проверяет есть ли свободное место в инвентаре
+	 */
+	hasInventorySpace(): boolean {
+		// Проверяем слоты с 9 по 44 (инвентарь игрока)
+		for (let i = 9; i <= 44; i++) {
+			if (!this._bot.inventory.slots[i]) {
+				return true
+			}
+		}
+		return false
+	}
 }

@@ -203,7 +203,8 @@ export const machine = createMachine(
 
 							MINING: {
 								initial: 'SEARCHING',
-
+								entry: { type: 'entryMining' },
+								exit: { type: 'exitMining' },
 								states: {
 									CHECKING_PRECONDITIONS: {
 										entry: {
@@ -231,7 +232,7 @@ export const machine = createMachine(
 										},
 										on: {
 											FOUND: {
-												target: 'NAVIGATING',
+												target: 'CHECKING_DISTANCE',
 												actions: assign({
 													taskData: ({
 														context,
@@ -247,6 +248,17 @@ export const machine = createMachine(
 											},
 											NOT_FOUND: 'TASK_FAILED'
 										}
+									},
+									CHECKING_DISTANCE: {
+										always: [
+											{
+												target: 'BREAKING',
+												guard: 'isBlockNearby'
+											},
+											{
+												target: 'NAVIGATING'
+											}
+										]
 									},
 									NAVIGATING: {
 										invoke: {

@@ -52,7 +52,7 @@ export type TaskEvents =
 	| { type: 'ARRIVED' }
 	| { type: 'NAVIGATION_FAILED' }
 	| { type: 'BROKEN' }
-	| { type: 'BREAKING_FAILED' }
+	| { type: 'BREAKING_FAILED'; reason?: string }
 	| { type: 'START_MINING'; taskData: AnyTaskData }
 
 export type SystemEvents = { type: 'ERROR'; error: string }

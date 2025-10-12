@@ -1,9 +1,9 @@
 import type { MachineActionParams } from '@hsm/types'
 
-const entrySearchFood = ({ context, event }: MachineActionParams) => {
-	console.log('Ищу еду...')
+const entryMining = ({ context, event }: MachineActionParams) => {
+	console.log('Вход в состояние MINING')
 }
 
 export default {
-	entrySearchFood
+	entryMining
 }
