@@ -6,6 +6,10 @@ const noTasks = and([
 	({ context }: MachineGuardParams): boolean => !context.taskData
 ])
 
+const hasRequiredTool = and([
+	({ context }: MachineGuardParams): boolean => context.taskData?.requiredTool
+])
+
 export default {
 	noTasks
 }

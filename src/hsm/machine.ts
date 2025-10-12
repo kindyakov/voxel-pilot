@@ -67,7 +67,7 @@ export const machine = createMachine(
 									id: 'emergencyEating',
 									src: 'serviceEmergencyEating',
 									input: ({ context }: { context: MachineContext }) => ({
-										context
+										bot: context.bot
 									})
 								},
 								on: {
@@ -87,7 +87,7 @@ export const machine = createMachine(
 									id: 'emergencyHealing',
 									src: 'serviceEmergencyHealing',
 									input: ({ context }: { context: MachineContext }) => ({
-										context
+										bot: context.bot
 									})
 								},
 								on: {
@@ -128,7 +128,7 @@ export const machine = createMachine(
 									id: 'fleeing',
 									src: 'serviceFleeing',
 									input: ({ context }: { context: MachineContext }) => ({
-										context
+										bot: context.bot
 									})
 								}
 							},
@@ -146,7 +146,7 @@ export const machine = createMachine(
 									id: 'meleeAttack',
 									src: 'serviceMeleeAttack',
 									input: ({ context }: { context: MachineContext }) => ({
-										context
+										bot: context.bot
 									})
 								}
 							},
@@ -162,7 +162,7 @@ export const machine = createMachine(
 									id: 'rangedAttack',
 									src: 'serviceRangedAttack',
 									input: ({ context }: { context: MachineContext }) => ({
-										context
+										bot: context.bot
 									})
 								}
 							},
@@ -202,9 +202,15 @@ export const machine = createMachine(
 							},
 
 							MINING: {
-								initial: 'SEARCHING',
+								initial: 'CHECKING_PRECONDITIONS',
 								entry: { type: 'entryMining' },
 								exit: { type: 'exitMining' },
+								onDone: {
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: assign({
+										taskData: () => null
+									})
+								},
 								states: {
 									CHECKING_PRECONDITIONS: {
 										entry: {
@@ -213,8 +219,23 @@ export const machine = createMachine(
 										exit: {
 											type: 'exitCheckingPreconditions'
 										},
-										on: {
-											SUCCESSFULLY: 'SEARCHING'
+										always: [
+											{
+												guard: 'hasRequiredTool',
+												target: 'SEARCHING'
+											},
+											{
+												target: 'REQUESTING_TOOL'
+											}
+										]
+									},
+									REQUESTING_TOOL: {
+										// Новое состояние - пока заглушка
+										entry: () => {
+											console.log('❌ Need tool for mining!')
+										},
+										after: {
+											3000: 'TASK_FAILED'
 										}
 									},
 									SEARCHING: {
@@ -222,7 +243,7 @@ export const machine = createMachine(
 											id: 'miningSearching',
 											src: 'primitiveSearchBlock',
 											input: ({ context }: { context: MachineContext }) => ({
-												context,
+												bot: context.bot,
 												options: {
 													blockName: (context.taskData as MiningTaskData)
 														.blockName,
@@ -265,7 +286,7 @@ export const machine = createMachine(
 											id: 'miningNavigating',
 											src: 'primitiveNavigating',
 											input: ({ context }: { context: MachineContext }) => ({
-												context,
+												bot: context.bot,
 												options: {
 													target: (context.taskData as MiningTaskData)
 														.targetBlock
@@ -303,7 +324,7 @@ export const machine = createMachine(
 											id: 'miningBreaking',
 											src: 'primitiveBreaking',
 											input: ({ context }: { context: MachineContext }) => ({
-												context,
+												bot: context.bot,
 												options: {
 													block: (context.taskData as MiningTaskData)
 														.targetBlock
@@ -326,6 +347,12 @@ export const machine = createMachine(
 										}
 									},
 									CHECKING_GOAL: {
+										entry: ({ context }) => {
+											const data = context.taskData as MiningTaskData
+											console.log(
+												`📊 CHECKING_GOAL: collected=${data.collected}, count=${data.count}`
+											)
+										},
 										always: [
 											{
 												guard: ({ context }: { context: MachineContext }) => {
@@ -343,7 +370,11 @@ export const machine = createMachine(
 										]
 									},
 									TASK_COMPLETED: {
-										type: 'final'
+										type: 'final',
+										entry: {
+											type: 'taskCompleted',
+											params: { taskType: 'MINING' }
+										}
 									},
 
 									TASK_FAILED: {

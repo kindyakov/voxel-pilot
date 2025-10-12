@@ -112,10 +112,10 @@ export const primitiveBreaking = createStatefulService<
 			)
 
 			// Если item далеко - идём к нему
-			if (distance > 1.5) {
+			if (distance >= 0.5) {
 				console.log(`🏃 [primitiveBreaking] Navigating to item...`)
 				const { x, y, z } = item.position
-				bot.pathfinder.setGoal(new GoalNear(x, y, z, 1))
+				bot.pathfinder.setGoal(new GoalNear(x, y, z, 0.5))
 
 				// Ждём подбор через проверку инвентаря
 				const collected = await bot.utils.waitForInventoryChange(

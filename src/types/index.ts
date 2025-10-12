@@ -29,7 +29,10 @@ export interface Bot extends MineflayerBot {
 		maxDistance?: number
 		count?: number
 		useExtraInfo?: boolean
-	}) => Block[]
+	}) => import('vec3').Vec3[]
+	
+	// Получить блок по координатам
+	blockAt: (point: import('vec3').Vec3 | null) => Block | null
 	
 	// Метод копания (добавляется плагином mineflayer-tool)
 	dig: (block: Block, forceLook?: boolean | 'ignore', digFace?: 'auto' | string) => Promise<void>

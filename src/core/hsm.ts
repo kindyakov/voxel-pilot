@@ -141,7 +141,7 @@ class BotStateMachine extends EventEmitter {
 					taskData: {
 						blockName: 'stone',
 						navigationAttempts: 0,
-						count: 3
+						count: 10
 					}
 				})
 			}
