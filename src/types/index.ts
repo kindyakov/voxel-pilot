@@ -1,5 +1,10 @@
-import type { Bot as MineflayerBot } from 'mineflayer'
+// Реэкспортируем типы из модулей для удобства
+import type * as Mineflayer from 'mineflayer'
+import type { EatUtil } from 'mineflayer-auto-eat/dist/new.js'
+import type { Pathfinder, Movements } from 'mineflayer-pathfinder'
+import type { HawkEye } from 'minecrafthawkeye'
 import type { Block } from 'prismarine-block'
+import type { Entity } from 'prismarine-entity'
 
 export type { Item } from 'prismarine-item'
 export type { Entity, EntityType } from 'prismarine-entity'
@@ -9,31 +14,50 @@ export type { Pathfinder, goals } from 'mineflayer-pathfinder'
 
 export type WinstonLogLevel = 'debug' | 'info' | 'warn' | 'error'
 
-// Расширенный тип Bot с дополнительными методами mineflayer
-export interface Bot extends MineflayerBot {
-	// Registry с доступом к блокам
-	registry: MineflayerBot['registry'] & {
-		blocksByName: Record<string, { id: number; name: string; [key: string]: any }>
-	}
+// Extend Bot type with custom properties
+export interface Bot {
+	// Base mineflayer properties (essential ones)
+	username: string
+	entity: any
+	entities: { [id: string]: Entity }
+	health: number
+	food: number
+	foodSaturation: number
+	oxygenLevel: number
+	inventory: any
+	heldItem: any
+	registry: any
+	movement: any
 	
-	// Методы поиска блоков
-	findBlock: (options: {
-		matching: number | ((block: Block) => boolean)
-		maxDistance?: number
-		count?: number
-		useExtraInfo?: boolean
-	}) => Block | null
-	
-	findBlocks: (options: {
-		matching: number | number[] | ((block: Block) => boolean)
-		maxDistance?: number
-		count?: number
-		useExtraInfo?: boolean
-	}) => import('vec3').Vec3[]
-	
-	// Получить блок по координатам
-	blockAt: (point: import('vec3').Vec3 | null) => Block | null
-	
-	// Метод копания (добавляется плагином mineflayer-tool)
-	dig: (block: Block, forceLook?: boolean | 'ignore', digFace?: 'auto' | string) => Promise<void>
+	// Methods
+	on: (event: string, listener: (...args: any[]) => void) => this
+	once: (event: string, listener: (...args: any[]) => void) => this
+	off: (event: string, listener: (...args: any[]) => void) => this
+	emit: (event: string, ...args: any[]) => boolean
+	chat: (message: string) => void
+	quit: (reason?: string) => void
+	loadPlugin: (plugin: any) => void
+	dig: (block: Block, forceLook?: boolean | 'ignore' | 'raycast') => Promise<void>
+	equip: (item: any, destination: string) => Promise<void>
+	consume: () => Promise<void>
+	blockAt: (point: any, extraInfos?: boolean) => Block | null
+	findBlocks: (options: any) => any[]
+	nearestEntity: (match?: (entity: Entity) => boolean) => Entity | null
+
+	// Plugins
+	autoEat: EatUtil
+	pathfinder: Pathfinder
+	movements: Movements
+	hawkEye: HawkEye
+
+	tool: any
+
+	armorManager: any
+
+	pvp: any
+
+	// Custom utilities
+	utils: import('../utils/minecraft/botUtils').BotUtils
+	hsm: import('../core/hsm').default
 }
+

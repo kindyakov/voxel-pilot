@@ -220,6 +220,10 @@ export const machine = createMachine(
 											type: 'exitCheckingPreconditions'
 										},
 										always: [
+											// {
+											// 	guard: 'hasInventorySpace',
+											// 	target: ''
+											// },
 											{
 												guard: 'hasRequiredTool',
 												target: 'SEARCHING'
@@ -232,7 +236,11 @@ export const machine = createMachine(
 									REQUESTING_TOOL: {
 										// Новое состояние - пока заглушка
 										entry: () => {
-											console.log('❌ Need tool for mining!')
+											const taskData = context.taskData as MiningTaskData
+											console.log(
+												`❌ [REQUESTING_TOOL] Need tool for ${taskData.blockName}`
+											)
+											console.log('   Task will fail in 3 seconds...')
 										},
 										after: {
 											3000: 'TASK_FAILED'

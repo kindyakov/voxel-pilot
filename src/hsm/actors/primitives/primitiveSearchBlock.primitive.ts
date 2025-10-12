@@ -141,18 +141,25 @@ export const primitiveSearchBlock = createStatefulService<
 
 		// Сортируем по приоритету
 		const prioritizedBlocks = safeBlocks.sort((a, b) => {
-			// Приоритет 1: На той же высоте (±2 блока)
-			const aOnLevel = Math.abs(a.yDiff) <= 2
-			const bOnLevel = Math.abs(b.yDiff) <= 2
+			// Приоритет 1: Точно на той же высоте
+			const aExactLevel = a.yDiff === 0
+			const bExactLevel = b.yDiff === 0
+			if (aExactLevel && !bExactLevel) return -1
+			if (!aExactLevel && bExactLevel) return 1
 
-			if (aOnLevel && !bOnLevel) return -1
-			if (!aOnLevel && bOnLevel) return 1
+			// Приоритет 2: Выше бота (любая высота)
+			const aAbove = a.yDiff > 0
+			const bAbove = b.yDiff > 0
+			if (aAbove && !bAbove) return -1
+			if (!aAbove && bAbove) return 1
 
-			// Приоритет 2: Выше бота лучше чем ниже
-			if (a.yDiff >= 0 && b.yDiff < 0) return -1
-			if (a.yDiff < 0 && b.yDiff >= 0) return 1
+			// Приоритет 3: Чуть ниже (только -1)
+			const aSlightlyBelow = a.yDiff === -1
+			const bSlightlyBelow = b.yDiff === -1
+			if (aSlightlyBelow && !bSlightlyBelow) return -1
+			if (!aSlightlyBelow && bSlightlyBelow) return 1
 
-			// Приоритет 3: Ближе лучше
+			// Приоритет 4: Ближе по расстоянию
 			return a.distanceTotal - b.distanceTotal
 		})
 

@@ -28,6 +28,7 @@ class MinecraftBot extends EventEmitter {
 				return
 			}
 
+			// @ts-expect-error - Type augmentation issue with mineflayer
 			this.bot = mineflayer.createBot(Config.minecraft) as Bot
 
 			if (!this.bot) {
