@@ -29,6 +29,7 @@ export interface MiningTaskData {
 	targetBlock?: Block
 	maxDistance?: number
 	navigationAttempts: number
+	lastMinedPosition?: Vec3
 }
 
 // ============================================

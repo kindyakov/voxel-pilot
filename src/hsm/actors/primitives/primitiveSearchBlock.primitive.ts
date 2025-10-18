@@ -1,8 +1,17 @@
-import type { Block } from '@/types'
+import type { Vec3 } from '@/types'
 import {
 	createStatefulService,
 	type BaseServiceState
 } from '@/hsm/helpers/createStatefulService'
+import {
+	checkBlockSafety,
+	isBlockDirectlyBelowBot,
+	calculateBlockScore,
+	getYBonus,
+	getDistancePenalty,
+	formatYDiff,
+	type AnalyzedBlock
+} from '@/hsm/utils/blockAnalysis.utils'
 
 interface SearchBlockState extends BaseServiceState {
 	blockName: string
@@ -10,6 +19,7 @@ interface SearchBlockState extends BaseServiceState {
 	count: number
 	blockId?: number
 	searching: boolean
+	lastMinedPosition?: Vec3 | null
 }
 
 interface SearchBlockOptions {
@@ -19,7 +29,7 @@ interface SearchBlockOptions {
 }
 
 const optDefault = {
-	maxDistance: 50,
+	maxDistance: 100,
 	count: 1
 }
 
@@ -33,7 +43,8 @@ export const primitiveSearchBlock = createStatefulService<
 		blockName: '',
 		maxDistance: optDefault.maxDistance,
 		count: optDefault.count,
-		searching: false
+		searching: false,
+		lastMinedPosition: null
 	},
 
 	onStart: api => {
@@ -89,16 +100,15 @@ export const primitiveSearchBlock = createStatefulService<
 		const blockPositions = api.bot.findBlocks({
 			matching: blockId,
 			maxDistance,
-			count: 100 // Ищем много блоков для выбора
+			count: 100
 		})
 
 		if (blockPositions.length === 0) {
-			// Блоки не найдены, продолжаем поиск
 			return
 		}
 
-		// Анализируем и приоритизируем блоки
-		const analyzedBlocks = blockPositions
+		// Анализируем блоки
+		const analyzedBlocks: AnalyzedBlock[] = blockPositions
 			.map(pos => {
 				const block = api.bot.blockAt(pos)
 				if (!block) return null
@@ -117,61 +127,71 @@ export const primitiveSearchBlock = createStatefulService<
 					yDiff
 				}
 			})
-			.filter(b => b !== null)
+			.filter(b => b !== null) as AnalyzedBlock[]
 
 		if (analyzedBlocks.length === 0) {
 			return
 		}
 
-		// Фильтруем опасные блоки (прямо под ногами)
+		// Фильтруем опасные блоки
 		const safeBlocks = analyzedBlocks.filter(b => {
-			// Блок под ногами (Y ниже И горизонтально близко)
-			if (b.yDiff < 0 && b.distanceHorizontal < 2) {
-				return false // Опасно - можем упасть
+			// Фильтр 1: Блок прямо под ногами бота
+			if (isBlockDirectlyBelowBot(api.bot, b.position)) {
+				console.log(
+					`⚠️ [primitiveSearchBlock] Пропуск блока под ногами бота: ${b.position}`
+				)
+				return false
 			}
+
+			// Фильтр 2: Опасность под целевым блоком
+			const safetyCheck = checkBlockSafety(api.bot, b.position)
+			if (!safetyCheck.isSafe) {
+				console.log(
+					`⚠️ [primitiveSearchBlock] Пропуск блока в ${b.position} - ${safetyCheck.reason}`
+				)
+				return false
+			}
+
 			return true
 		})
 
 		if (safeBlocks.length === 0) {
-			console.log(
-				'⚠️ [primitiveSearchBlock] All blocks are unsafe (under feet)'
-			)
+			console.log('⚠️ [primitiveSearchBlock] Все блоки небезопасны')
 			return
 		}
 
-		// Сортируем по приоритету
+		// 🔥 ВЗВЕШЕННАЯ СОРТИРОВКА (бонус за Y - штраф за расстояние)
 		const prioritizedBlocks = safeBlocks.sort((a, b) => {
-			// Приоритет 1: Точно на той же высоте
-			const aExactLevel = a.yDiff === 0
-			const bExactLevel = b.yDiff === 0
-			if (aExactLevel && !bExactLevel) return -1
-			if (!aExactLevel && bExactLevel) return 1
+			const aScore = calculateBlockScore(a)
+			const bScore = calculateBlockScore(b)
+			return bScore - aScore // Больше = лучше
+		})
 
-			// Приоритет 2: Выше бота (любая высота)
-			const aAbove = a.yDiff > 0
-			const bAbove = b.yDiff > 0
-			if (aAbove && !bAbove) return -1
-			if (!aAbove && bAbove) return 1
+		// 🔥 ЛОГИРОВАНИЕ: Показываем ТОП-5 блоков с оценками
+		// console.log(`📊 [primitiveSearchBlock] Top 5 blocks after weighted sorting:`)
+		prioritizedBlocks.slice(0, 5).forEach((block, index) => {
+			const yBonus = getYBonus(block.yDiff)
+			const penalty = getDistancePenalty(block.distanceTotal)
+			const score = yBonus - penalty
 
-			// Приоритет 3: Чуть ниже (только -1)
-			const aSlightlyBelow = a.yDiff === -1
-			const bSlightlyBelow = b.yDiff === -1
-			if (aSlightlyBelow && !bSlightlyBelow) return -1
-			if (!aSlightlyBelow && bSlightlyBelow) return 1
-
-			// Приоритет 4: Ближе по расстоянию
-			return a.distanceTotal - b.distanceTotal
+			// console.log(
+			// 	`  ${index + 1}. Pos: (${block.position.x}, ${block.position.y}, ${block.position.z}) | ` +
+			// 		`${formatYDiff(block.yDiff)} | Dist: ${block.distanceTotal.toFixed(2)}m | ` +
+			// 		`Score: ${score.toFixed(1)} (bonus:${yBonus} - penalty:${penalty.toFixed(1)})`
+			// )
 		})
 
 		const best = prioritizedBlocks[0]
 
 		if (!best) {
-			console.log('⚠️ [primitiveSearchBlock] No suitable block found')
+			console.log('⚠️ [primitiveSearchBlock] Подходящий блок не найден')
 			return
 		}
 
 		console.log(
-			`✅ [primitiveSearchBlock] Found ${blockName} at ${best.position} (Y diff: ${best.yDiff.toFixed(1)}, distance: ${best.distanceTotal.toFixed(1)}m)`
+			`✅ [primitiveSearchBlock] Found ${blockName} at ${best.position} ` +
+				`(Y diff: ${best.yDiff.toFixed(1)}, distance: ${best.distanceTotal.toFixed(1)}m, ` +
+				`score: ${calculateBlockScore(best).toFixed(1)})`
 		)
 
 		// Останавливаем поиск

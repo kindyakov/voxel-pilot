@@ -53,7 +53,7 @@ export const primitiveBreaking = createStatefulService<
 
 			if (!expectedItemDrop) {
 				console.log(
-					'⚠️ [primitiveBreaking] Block has no drops, skipping collection'
+					'⚠️ [primitiveBreaking] Блока нет в списке дропов, пропускаем сбор'
 				)
 				await bot.dig(block)
 				sendBack({ type: 'BROKEN' })
@@ -71,18 +71,18 @@ export const primitiveBreaking = createStatefulService<
 			// Запоминаем количество до копания
 			const countBefore = bot.utils.countItemInInventory(expectedItemId)
 			console.log(
-				`📊 [primitiveBreaking] ${block.name} in inventory before: ${countBefore}`
+				`📊 [primitiveBreaking] ${block.name} в инвентаре до копания: ${countBefore}`
 			)
 
 			// Копаем блок
 			await bot.dig(block)
-			console.log(`✅ [primitiveBreaking] Block broken: ${block.name}`)
+			console.log(`✅ [primitiveBreaking] Блок сломан: ${block.name}`)
 
 			// Проверка отмены после копания
 			if (abortSignal.aborted) return
 
 			// Ждём спавн item'а
-			await utils.sleep(500)
+			await utils.sleep(300)
 
 			// Ищем выпавший предмет
 			const item = bot.nearestEntity((e: any) => {
@@ -92,13 +92,15 @@ export const primitiveBreaking = createStatefulService<
 			})
 
 			if (!item) {
-				console.log('⚠️ [primitiveBreaking] Item entity not found in world')
+				console.log(
+					'⚠️ [primitiveBreaking] Объект Item, не найденный в world после копания блока'
+				)
 
 				// Проверяем инвентарь на всякий случай
 				const countAfter = bot.utils.countItemInInventory(expectedItemId)
 				if (countAfter > countBefore) {
 					console.log(
-						`✅ [primitiveBreaking] Item auto-collected (${countAfter - countBefore})`
+						`✅ [primitiveBreaking] Item автоматически собран (+${countAfter - countBefore})`
 					)
 				}
 
@@ -108,12 +110,12 @@ export const primitiveBreaking = createStatefulService<
 
 			const distance = bot.entity.position.distanceTo(item.position)
 			console.log(
-				`📦 [primitiveBreaking] Found item at distance: ${distance.toFixed(2)}`
+				`📦 [primitiveBreaking] Найден объект Item в мире на расстоянии: ${distance.toFixed(2)}`
 			)
 
 			// Если item далеко - идём к нему
 			if (distance >= 0.5) {
-				console.log(`🏃 [primitiveBreaking] Navigating to item...`)
+				console.log(`🏃 [primitiveBreaking] Навигация к объекту Item...`)
 				const { x, y, z } = item.position
 				bot.pathfinder.setGoal(new GoalNear(x, y, z, 0.5))
 
@@ -130,14 +132,16 @@ export const primitiveBreaking = createStatefulService<
 				if (collected) {
 					const countAfter = bot.utils.countItemInInventory(expectedItemId)
 					console.log(
-						`✅ [primitiveBreaking] Item collected (+${countAfter - countBefore})`
+						`✅ [primitiveBreaking] Объект Item собран (+${countAfter - countBefore})`
 					)
 				} else {
-					console.log(`⚠️ [primitiveBreaking] Failed to collect item (timeout)`)
+					console.log(
+						`⚠️ [primitiveBreaking] Не удалось забрать объект Item (тайм-аут)`
+					)
 				}
 			} else {
 				console.log(
-					`✅ [primitiveBreaking] Item is nearby, waiting for auto-collect...`
+					`✅ [primitiveBreaking] Объект Item близко, ожидание автоподбора...`
 				)
 
 				// Даём время на автоподбор
@@ -150,7 +154,11 @@ export const primitiveBreaking = createStatefulService<
 				const countAfter = bot.utils.countItemInInventory(expectedItemId)
 				if (countAfter > countBefore) {
 					console.log(
-						`✅ [primitiveBreaking] Item auto-collected (+${countAfter - countBefore})`
+						`✅ [primitiveBreaking] Объект Item собран (+${countAfter - countBefore})`
+					)
+				} else {
+					console.log(
+						`⚠️ [primitiveBreaking] Не удалось забрать объект Item (тайм-аут)`
 					)
 				}
 			}

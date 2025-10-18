@@ -133,19 +133,25 @@ class BotStateMachine extends EventEmitter {
 	}
 
 	handlers(): void {
-		this.on('player-command', (commandName: string, options?: unknown) => {
-			if (commandName === 'stop') {
-			} else {
-				this.actor.send({
-					type: 'START_MINING',
-					taskData: {
-						blockName: 'stone',
-						navigationAttempts: 0,
-						count: 10
-					}
-				})
+		this.on(
+			'player-command',
+			(
+				commandName: string,
+				{ username, options }: { username: string; options?: string[] }
+			) => {
+				if (commandName === 'stop') {
+				} else {
+					this.actor.send({
+						type: 'START_MINING',
+						taskData: {
+							blockName: options?.[0] || 'stone',
+							navigationAttempts: 0,
+							count: 3
+						}
+					})
+				}
 			}
-		})
+		)
 	}
 
 	setupBotEvents(): void {

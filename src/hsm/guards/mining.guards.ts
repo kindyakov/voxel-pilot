@@ -92,13 +92,41 @@ export const isBlockNearby = ({
 	const { bot } = context
 	if (!bot) return false
 
-	const distance = bot.entity.position.distanceTo(taskData.targetBlock.position)
+	const blockPos = taskData.targetBlock.position
+	const botPos = bot.entity.position
 
-	// Досягаемость - примерно 4 блока
-	const isNearby = distance <= 4
+	const distanceXZ = Math.sqrt(
+		Math.pow(blockPos.x - botPos.x, 2) + Math.pow(blockPos.z - botPos.z, 2)
+	)
+	const distanceY = Math.abs(blockPos.y - botPos.y)
+
+	// Правила досягаемости:
+	// - Y+1 (над головой) и XZ <= 3 - NEARBY (можно добыть без навигации)
+	// - Y (на уровне) и XZ <= 4 - NEARBY
+	// - Y-1 (под ногами) и XZ <= 4 - NEARBY
+	// - Остальные - далеко
+
+	let isNearby = false
+
+	if (distanceY === 1 && distanceXZ <= 3) {
+		// Y+1 и близко по XZ
+		isNearby = true
+	} else if (distanceY === 0 && distanceXZ <= 4) {
+		// На том же уровне
+		isNearby = true
+	} else if (distanceY === 1 && blockPos.y < botPos.y && distanceXZ <= 4) {
+		// Y-1 (под ногами)
+		isNearby = true
+	}
 
 	if (isNearby) {
-		console.log(`✅ [isBlockNearby] Block is nearby (${distance.toFixed(2)}m)`)
+		console.log(
+			`✅ [isBlockNearby] Block is nearby (XZ: ${distanceXZ.toFixed(2)}m, Y: ${distanceY})`
+		)
+	} else {
+		console.log(
+			`❌ [isBlockNearby] Block is far (XZ: ${distanceXZ.toFixed(2)}m, Y: ${distanceY})`
+		)
 	}
 
 	return isNearby

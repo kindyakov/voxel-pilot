@@ -31,7 +31,7 @@ export default class CommandHandler {
 
 		logger.playerCommand(username, command, args)
 
-		this.hsm.emit('player-command', command, { username, ...args })
+		this.hsm.emit('player-command', command, { username, options: args })
 	}
 
 	parseMessage(msg: string): ParsedCommand | null {
