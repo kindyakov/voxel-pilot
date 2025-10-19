@@ -6,16 +6,17 @@
 
 1. **Дистанция** (быстро ~0.1ms) - фильтр по евклидовой дистанции
 2. **Raycast** (быстро ~1ms) - проверка прямой видимости (есть ли блоки между ботом и врагом)
-3. **Pathfinder** (медленно ~50-500ms, с кешем) - проверка существования пути обхода
+3. **Pathfinder** (медленно ~50-500ms, с кешем) - проверка существования пути обхода **БЕЗ копания блоков**
 
 ## Файлы
 
 ### Созданные файлы
+
 - `src/utils/combat/enemyVisibility.ts` - утилиты для проверки видимости
 
 ### Обновлённые файлы
+
 - `src/hsm/context.ts` - добавлены настройки фильтрации
-- `src/hsm/actions/update/monitoring.update.ts` - обновлен `updateEntities` action
 - `src/core/hsm.ts` - добавлена периодическая очистка кеша
 
 ## Настройки (context.preferences)
@@ -32,54 +33,66 @@ preferences: {
 ## API
 
 ### `canSeeEnemy(bot, enemy): boolean`
+
 Проверяет прямую видимость через raycast (Уровень 2).
 
 **Возвращает `true` если:**
+
 - Нет блоков между ботом и врагом
 - Блок прозрачный (стекло, вода, листва)
 
 **Возвращает `false` если:**
+
 - Solid блок блокирует видимость
 
 ### `isEnemyReachable(bot, enemy, maxPathLength, timeout, cacheDuration): Promise<boolean>`
+
 Проверяет достижимость через pathfinder (Уровень 3).
 
 **Возвращает `true` если:**
+
 - Pathfinder нашел путь
 - Длина пути <= maxPathLength
 
 **Возвращает `false` если:**
+
 - Нет пути
 - Путь слишком длинный
 - Timeout
 
 ### `canAttackEnemy(bot, enemy, maxDistance, maxPathLength, pathfindTimeout): Promise<boolean>`
+
 Полная 3-уровневая проверка.
 
 **Пример использования:**
+
 ```typescript
 import { canAttackEnemy } from '@utils/combat/enemyVisibility'
 
 const canAttack = await canAttackEnemy(
-  bot,
-  enemy,
-  context.preferences.maxDistToEnemy,
-  context.preferences.maxDistToEnemy * context.preferences.maxPathLengthMultiplier,
-  context.preferences.pathfindTimeout
+	bot,
+	enemy,
+	context.preferences.maxDistToEnemy,
+	context.preferences.maxDistToEnemy *
+		context.preferences.maxPathLengthMultiplier,
+	context.preferences.pathfindTimeout
 )
 
 if (canAttack) {
-  // Атаковать
+	// Атаковать
 }
 ```
 
 ### `clearPathfindCache(): void`
+
 Полная очистка кеша pathfinder.
 
 ### `cleanupPathfindCache(maxAge): void`
+
 Удаление устаревших записей из кеша.
 
 **Параметры:**
+
 - `maxAge` - максимальный возраст записи (мс)
 
 **Автоматическая очистка:**
@@ -91,7 +104,7 @@ if (canAttack) {
 1. ENTITIES_MONITOR получает список врагов
    ↓
 2. updateEntities action применяет 3-уровневую фильтрацию:
-   
+
    УРОВЕНЬ 1: Дистанция
    ├─ > maxDistToEnemy (20) → игнорировать
    └─ ≤ maxDistToEnemy → проверить дальше
@@ -114,23 +127,27 @@ if (canAttack) {
 ## Производительность
 
 ### Оптимизации
+
 1. **Кеш pathfinder** - результаты хранятся 3 секунды
 2. **Ранний выход** - 90% врагов отсеиваются на Уровне 1-2
 3. **Очистка кеша** - каждые 10 секунд удаляются старые записи
 
 ### Замеры
+
 - Уровень 1 (дистанция): ~0.1ms
 - Уровень 2 (raycast): ~1ms
 - Уровень 3 (pathfinder без кеша): ~50-500ms
 - Уровень 3 (pathfinder с кешем): ~0.1ms
 
-**Итого:** 
+**Итого:**
+
 - С кешем: ~1.2ms на врага
 - Без кеша: ~51-501ms на врага (только для невидимых)
 
 ## Логи
 
 ### canSeeEnemy
+
 ```
 👁️ [canSeeEnemy] zombie ВИДЕН (прямая видимость)
 👁️ [canSeeEnemy] skeleton ВИДЕН (через glass)
@@ -138,6 +155,7 @@ if (canAttack) {
 ```
 
 ### isEnemyReachable
+
 ```
 📦 [isEnemyReachable] zombie (из кеша: ДОСТИЖИМ)
 🔍 [isEnemyReachable] Проверяю путь до skeleton...
@@ -147,11 +165,13 @@ if (canAttack) {
 ```
 
 ### canAttackEnemy
+
 ```
 📏 [canAttackEnemy] enderman слишком далеко (32.5 > 20)
 ```
 
 ### Очистка кеша
+
 ```
 ✅ [Кеш pathfinder] Периодическая очистка включена (каждые 10с)
 🧹 [cleanupPathfindCache] Удалено 3 устаревших записей
@@ -160,65 +180,73 @@ if (canAttack) {
 ## Примеры использования
 
 ### В action
+
 ```typescript
 import { canSeeEnemy } from '@utils/combat/enemyVisibility'
 
 const checkVisibility = assign(({ context }) => {
-  const visibleEnemies = context.enemies.filter(enemy => 
-    canSeeEnemy(context.bot, enemy)
-  )
-  
-  return { visibleEnemies }
+	const visibleEnemies = context.enemies.filter(enemy =>
+		canSeeEnemy(context.bot, enemy)
+	)
+
+	return { visibleEnemies }
 })
 ```
 
 ### В guard
+
 ```typescript
 import { canAttackEnemy } from '@utils/combat/enemyVisibility'
 
 const canAttackNearestEnemy = async ({ context }) => {
-  if (!context.nearestEnemy.entity) return false
-  
-  return await canAttackEnemy(
-    context.bot,
-    context.nearestEnemy.entity,
-    context.preferences.maxDistToEnemy,
-    context.preferences.maxDistToEnemy * context.preferences.maxPathLengthMultiplier,
-    context.preferences.pathfindTimeout
-  )
+	if (!context.nearestEnemy.entity) return false
+
+	return await canAttackEnemy(
+		context.bot,
+		context.nearestEnemy.entity,
+		context.preferences.maxDistToEnemy,
+		context.preferences.maxDistToEnemy *
+			context.preferences.maxPathLengthMultiplier,
+		context.preferences.pathfindTimeout
+	)
 }
 ```
 
 ### Очистка кеша вручную
+
 ```typescript
 import { clearPathfindCache } from '@utils/combat/enemyVisibility'
 
 // При телепортации, изменении мира, и т.д.
 bot.on('forcedMove', () => {
-  clearPathfindCache()
+	clearPathfindCache()
 })
 ```
 
 ## Тестирование
 
 ### Сценарий 1: Враг на равнине
+
 - Дистанция: 10 блоков ✅
 - Raycast: видим ✅
 - **Результат:** Атаковать ✅
 
 ### Сценарий 2: Враг за забором (путь 25 блоков)
+
 - Дистанция: 10 блоков ✅
 - Raycast: НЕ видим ❌
 - Pathfinder: путь 25 блоков < 40 ✅
 - **Результат:** Атаковать ✅ (бот обойдет забор)
 
 ### Сценарий 3: Враг под землей (соседняя шахта)
+
 - Дистанция: 8 блоков ✅
 - Raycast: НЕ видим ❌
 - Pathfinder: нет пути ❌
 - **Результат:** Игнорировать ❌
 
 ### Сценарий 4: Враг за стеной в пещере
+
 - Дистанция: 12 блоков ✅
 - Raycast: НЕ видим ❌
 - Pathfinder: путь 60 блоков > 40 ❌
@@ -227,6 +255,7 @@ bot.on('forcedMove', () => {
 ## Настройка
 
 ### Уменьшить нагрузку на производительность
+
 ```typescript
 preferences: {
   pathfindTimeout: 500,           // Меньше timeout
@@ -236,6 +265,7 @@ preferences: {
 ```
 
 ### Увеличить агрессивность
+
 ```typescript
 preferences: {
   pathfindTimeout: 1200,          // Больше timeout

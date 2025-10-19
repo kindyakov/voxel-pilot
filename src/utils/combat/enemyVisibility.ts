@@ -1,5 +1,8 @@
 import type { Bot, Entity } from '@types'
 import { GoalNear } from '@modules/plugins/goals'
+import pathFinderPkg from 'mineflayer-pathfinder'
+
+const { Movements } = pathFinderPkg
 
 /**
  * Кеш результатов pathfinder для оптимизации
@@ -53,21 +56,33 @@ export function canSeeEnemy(bot: Bot, enemy: Entity): boolean {
 		}
 
 		// Нашли solid блок - видимость заблокирована
-		console.log(
-			`🚫 [canSeeEnemy] ${enemy.name || enemy.username || 'враг'} НЕ ВИДЕН (блокирует ${blockAtPos.name})`
-		)
+		// console.log(
+		// 	`🚫 [canSeeEnemy] ${enemy.name || enemy.username || 'враг'} НЕ ВИДЕН (блокирует ${blockAtPos.name})`
+		// )
 		return false
 	}
 
 	// Нет solid блоков на линии → ВИДИМ
-	console.log(
-		`👁️ [canSeeEnemy] ${enemy.name || enemy.username || 'враг'} ВИДЕН (прямая видимость)`
-	)
+	// console.log(
+	// 	`👁️ [canSeeEnemy] ${enemy.name || enemy.username || 'враг'} ВИДЕН (прямая видимость)`
+	// )
 	return true
 }
 
 /**
  * УРОВЕНЬ 2: Проверка достижимости через pathfinder (МЕДЛЕННО ~50-500ms, С КЕШЕМ)
+ *
+ * ВАЖНО: Проверяет путь БЕЗ копания блоков (canDig = false).
+ * Это означает что бот НЕ будет атаковать врагов:
+ * - За стеной (нужно копать)
+ * - Под землёй (нужно копать)
+ * - В соседней шахте (нужно копать)
+ *
+ * Бот БУДЕТ атаковать врагов:
+ * - На прямой видимости
+ * - За забором с путём обхода
+ * - За углом с путём обхода
+ *
  * @param bot - Mineflayer бот
  * @param enemy - Враг для проверки
  * @param maxPathLength - Максимальная длина пути
@@ -91,9 +106,9 @@ export async function isEnemyReachable(
 
 	// Проверка кеша
 	if (cached && now - cached.timestamp < cacheDuration) {
-		console.log(
-			`📦 [isEnemyReachable] ${enemy.name || 'враг'} (из кеша: ${cached.reachable ? 'ДОСТИЖИМ' : 'НЕ достижим'})`
-		)
+		// console.log(
+		// 	`📦 [isEnemyReachable] ${enemy.name || 'враг'} (из кеша: ${cached.reachable ? 'ДОСТИЖИМ' : 'НЕ достижим'})`
+		// )
 		return cached.reachable
 	}
 
@@ -102,6 +117,13 @@ export async function isEnemyReachable(
 	)
 
 	try {
+		// Создаём временный Movements с ОТКЛЮЧЕННЫМ копанием блоков
+		// Используется ТОЛЬКО для проверки достижимости
+		const checkMovements = new Movements(bot)
+		checkMovements.canDig = false // ← НЕ ломать блоки при проверке
+		checkMovements.allowParkour = bot.movements.allowParkour
+		checkMovements.allowSprinting = bot.movements.allowSprinting
+
 		// Создаём goal для pathfinder
 		const goal = new GoalNear(
 			enemy.position.x,
@@ -110,9 +132,9 @@ export async function isEnemyReachable(
 			2
 		)
 
-		// Пытаемся найти путь с timeout
+		// Пытаемся найти путь с timeout (БЕЗ копания блоков)
 		const path = await Promise.race([
-			bot.pathfinder.getPathTo(bot.movements, goal, timeout),
+			bot.pathfinder.getPathTo(checkMovements, goal, timeout),
 			new Promise<null>(resolve => setTimeout(() => resolve(null), timeout))
 		])
 
@@ -143,9 +165,9 @@ export async function isEnemyReachable(
 			return false
 		}
 
-		console.log(
-			`✅ [isEnemyReachable] ${enemy.name || 'враг'} ДОСТИЖИМ (путь: ${pathLength} блоков)`
-		)
+		// console.log(
+		// 	`✅ [isEnemyReachable] ${enemy.name || 'враг'} ДОСТИЖИМ (путь: ${pathLength} блоков)`
+		// )
 		pathfindCache.set(enemy.id, {
 			reachable: true,
 			pathLength,
@@ -153,9 +175,9 @@ export async function isEnemyReachable(
 		})
 		return true
 	} catch (error) {
-		console.log(
-			`⚠️ [isEnemyReachable] Ошибка проверки пути: ${error instanceof Error ? error.message : String(error)}`
-		)
+		// console.log(
+		// 	`⚠️ [isEnemyReachable] Ошибка проверки пути: ${error instanceof Error ? error.message : String(error)}`
+		// )
 		pathfindCache.set(enemy.id, {
 			reachable: false,
 			pathLength: Infinity,
@@ -188,9 +210,9 @@ export async function canAttackEnemy(
 	// УРОВЕНЬ 1: Проверка дистанции (быстро)
 	const distance = bot.entity.position.distanceTo(enemy.position)
 	if (distance > maxDistance) {
-		console.log(
-			`📏 [canAttackEnemy] ${enemy.name || 'враг'} слишком далеко (${distance.toFixed(1)} > ${maxDistance})`
-		)
+		// console.log(
+		// 	`📏 [canAttackEnemy] ${enemy.name || 'враг'} слишком далеко (${distance.toFixed(1)} > ${maxDistance})`
+		// )
 		return false
 	}
 

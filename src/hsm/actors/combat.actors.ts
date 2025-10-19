@@ -5,6 +5,7 @@ import {
 	type BaseServiceState
 } from '@/hsm/helpers/createStatefulService.js'
 import { GoalXZ } from '@modules/plugins/goals.js'
+import { canSeeEnemy } from '@utils/combat/enemyVisibility'
 
 interface MeleeAttackState extends BaseServiceState {
 	currentTarget: Entity | null
@@ -58,8 +59,9 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 		if (distance > preferences.enemyRangedRange) {
 			const weapon = bot.utils.getRangeWeapon() // поиск оружия лук/арбалет
 			const arrows = bot.utils.getArrow()
+			const isSeeEnemy = canSeeEnemy(bot, nearestEnemy.entity)
 
-			if (weapon && arrows) {
+			if (weapon && arrows && isSeeEnemy) {
 				sendBack({ type: 'ENEMY_BECAME_FAR' })
 				return
 			}
@@ -91,11 +93,12 @@ const serviceRangedAttack = createStatefulService<RangedAttackState>({
 		weaponType: null
 	},
 
-	onStart: ({ bot, sendBack, setState }) => {
+	onStart: ({ bot, sendBack, setState, context }) => {
 		const weapon = bot.utils.getRangeWeapon() // поиск оружия лук/арбалет
 		const arrows = bot.utils.getArrow()
+		const isSeeEnemy = canSeeEnemy(bot, context.nearestEnemy.entity!)
 
-		if (weapon && arrows) {
+		if (weapon && arrows && isSeeEnemy) {
 			bot.equip(weapon, 'hand')
 			const weaponType = getWeaponType(weapon.name)
 			console.log(`🏹 Экипировал: ${weapon.name} (${weaponType})`)
@@ -125,8 +128,9 @@ const serviceRangedAttack = createStatefulService<RangedAttackState>({
 
 		const enemy = nearestEnemy.entity
 		const distance = nearestEnemy.distance
+		const isSeeEnemy = canSeeEnemy(bot, nearestEnemy.entity)
 
-		if (distance <= preferences.enemyMeleeRange) {
+		if (distance <= preferences.enemyMeleeRange || !isSeeEnemy) {
 			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
 			return
 		}

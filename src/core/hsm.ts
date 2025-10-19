@@ -6,12 +6,14 @@ import type { MachineEvent } from '@hsm/types'
 
 import { machine } from '@hsm/machine'
 import { AntiLoopGuard } from '@hsm/utils/antiLoop'
+import { cleanupPathfindCache } from '@utils/combat/enemyVisibility'
 
 class BotStateMachine extends EventEmitter {
 	private bot: Bot
 	private readonly machine: AnyStateMachine = machine
 	private actor!: Actor<typeof machine>
 	private antiLoopGuard: AntiLoopGuard
+	private pathfindCacheCleanupInterval?: NodeJS.Timeout
 
 	constructor(bot: Bot) {
 		super()
@@ -29,7 +31,11 @@ class BotStateMachine extends EventEmitter {
 	async init(): Promise<void> {
 		await this.bot.memory.load()
 
-		this.actor = createActor(this.machine)
+		this.actor = createActor(this.machine, {
+			input: {
+				bot: this.bot
+			}
+		})
 
 		console.log('HSM машина создана')
 
@@ -41,13 +47,17 @@ class BotStateMachine extends EventEmitter {
 
 		this.actor.start()
 
-		this.actor.send({
-			type: 'SET_BOT',
-			bot: this.bot
-		})
-
 		console.log('HSM актор запущен')
 		console.log('Активные состояния', this.actor.getSnapshot().value)
+
+		// Периодическая очистка кеша pathfinder
+		this.pathfindCacheCleanupInterval = setInterval(() => {
+			cleanupPathfindCache(5000) // Удалять записи старше 5 секунд
+		}, 10000) // Каждые 10 секунд
+
+		console.log(
+			'✅ [Кеш pathfinder] Периодическая очистка включена (каждые 10с)'
+		)
 	}
 
 	setupAntiLoopObserver(): void {
@@ -127,7 +137,19 @@ class BotStateMachine extends EventEmitter {
 	}
 
 	getCurrentStateString(): string {
-		return this.getStateString(this.actor.getSnapshot().value)
+		// Защита: если actor еще не инициализирован
+		if (!this.actor) {
+			// console.warn('⚠️ getCurrentStateString: actor еще не создан')
+			return 'IDLE'
+		}
+
+		const snapshot = this.actor.getSnapshot()
+		if (!snapshot) {
+			// console.warn('⚠️ getCurrentStateString: snapshot undefined')
+			return 'IDLE'
+		}
+
+		return this.getStateString(snapshot.value)
 	}
 
 	isInState(statePath: string | Record<string, unknown>): boolean {
@@ -220,6 +242,10 @@ class BotStateMachine extends EventEmitter {
 	 * Остановка всех сервисов при завершении работы
 	 */
 	stop(): void {
+		if (this.pathfindCacheCleanupInterval) {
+			clearInterval(this.pathfindCacheCleanupInterval)
+		}
+
 		if (this.actor) {
 			this.actor.stop()
 		}

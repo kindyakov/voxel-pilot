@@ -1,4 +1,5 @@
 import { createMachine, assign } from 'xstate'
+import type { Bot } from '@types'
 import type { MachineEvent } from '@hsm/types'
 import { context, type MachineContext } from '@hsm/context'
 import type { AnyTaskData, MiningTaskData } from '@hsm/tasks/index'
@@ -11,14 +12,15 @@ export const machine = createMachine(
 		types: {} as {
 			context: MachineContext
 			events: MachineEvent
+			input: { bot: Bot }
 		},
 		id: 'MINECRAFT_BOT',
 		type: 'parallel',
-		context,
+		context: ({ input }) => ({
+			...context,
+			bot: input.bot
+		}),
 		on: {
-			SET_BOT: {
-				actions: ['setBot']
-			},
 			UPDATE_POSITION: {
 				actions: ['updatePosition']
 			},
@@ -139,7 +141,7 @@ export const machine = createMachine(
 								on: {
 									ENEMY_BECAME_FAR: {
 										target: 'RANGED_ATTACKING',
-										guard: 'canUseRanged'
+										guard: 'canUseRangedAndEnemyFar'
 									}
 								},
 								invoke: {
@@ -448,7 +450,6 @@ export const machine = createMachine(
 						always: {
 							target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
 							guard: 'isEnemyNearby',
-							actions: ['setTargetOnEnemy'],
 							meta: {}
 						},
 						on: {
@@ -461,7 +462,10 @@ export const machine = createMachine(
 						},
 						invoke: {
 							id: 'entitiesTracking',
-							src: 'serviceEntitiesTracking'
+							src: 'serviceEntitiesTracking',
+							input: ({ context }: { context: MachineContext }) => ({
+								bot: context.bot
+							})
 						}
 					},
 					ARMOR_TOOLS_MONITOR: {

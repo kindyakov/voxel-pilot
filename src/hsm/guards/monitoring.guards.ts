@@ -1,5 +1,4 @@
 import { and, not, stateIn } from 'xstate'
-import type { Entity } from '@types'
 import type { MachineGuardParams } from '@hsm/types'
 import { getHigherPriorityConditions } from '@hsm/utils/getPriority.js'
 
@@ -24,15 +23,7 @@ const isEnemyNearby = and([
 	not(stateIn({ MAIN_ACTIVITY: 'COMBAT' })),
 	({ context, event }: MachineGuardParams) =>
 		getHigherPriorityConditions(context, 'COMBAT'),
-	({ context, event }) => {
-		if (!context.position || !context.enemies.length) return false
-		return context.enemies.some(
-			(enemy: Entity) =>
-				enemy.position &&
-				enemy.position.distanceTo(context.position!) <=
-					context.preferences.maxDistToEnemy
-		)
-	}
+	({ context, event }) => context.nearestEnemy.entity !== null
 ])
 
 const isInventoryFull = and([

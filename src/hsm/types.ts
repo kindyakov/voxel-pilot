@@ -27,7 +27,12 @@ export type UpdateEvents =
 	| { type: 'UPDATE_POSITION'; position: Vec3 }
 	| { type: 'DEATH' }
 	| { type: 'REMOVE_ENTITY'; entity: Entity }
-	| { type: 'UPDATE_ENTITIES' }
+	| {
+			type: 'UPDATE_ENTITIES'
+			entities: Entity[]
+			enemies: Entity[]
+			nearestEnemy: { entity: Entity | null; distance: number }
+	  }
 
 export type ChatEvents =
 	| { type: 'mine' }
@@ -37,7 +42,7 @@ export type ChatEvents =
 	| { type: 'farm' }
 	| { type: 'build' }
 
-export type BotEvents = { type: 'SET_BOT'; bot: Bot } | { type: 'PLAYER_STOP' }
+export type BotEvents = { type: 'PLAYER_STOP' }
 
 export type PlanExecutorEvents =
 	| { type: 'START_PLAN'; plan: Plan }

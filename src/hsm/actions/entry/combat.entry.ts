@@ -3,7 +3,12 @@ import type { MachineActionParams } from '@hsm/types'
 const entryCombat = ({ context }: MachineActionParams) => {
 	console.log('⚔️ Вход в состояние COMBAT')
 
-	context.bot?.armorManager.equipAll() // Бот при наличии брони в инвенторе наденет её
+	// Бот при наличии брони в инвенторе наденет её
+	context.bot?.armorManager.equipAll()
+
+	if (context.bot) {
+		context.bot.movements.canDig = false
+	}
 }
 
 const entryDeciding = ({ context }: MachineActionParams) => {

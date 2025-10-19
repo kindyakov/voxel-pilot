@@ -2,6 +2,9 @@ import type { MachineActionParams } from '@hsm/types'
 
 const exitCombat = ({ context }: MachineActionParams) => {
 	console.log('⚔️ Выход из COMBAT')
+	if (context.bot) {
+		context.bot.movements.canDig = true
+	}
 }
 
 const exitDeciding = () => {

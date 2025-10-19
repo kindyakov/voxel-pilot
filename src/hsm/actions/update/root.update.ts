@@ -1,13 +1,6 @@
 import { assign } from 'xstate'
 import type { MachineActionParams } from '@hsm/types'
 
-const setBot = assign({
-	bot: ({ event }: MachineActionParams) => {
-		if (event.type !== 'SET_BOT') return null
-		return event.bot
-	}
-})
-
 const updatePosition = assign({
 	position: ({ event }: MachineActionParams) => {
 		if (event.type !== 'UPDATE_POSITION') return null
@@ -47,7 +40,6 @@ const updateAfterDeath = assign({
 })
 
 export default {
-	setBot,
 	updatePosition,
 	updateFoodSaturation,
 	updateAfterDeath
