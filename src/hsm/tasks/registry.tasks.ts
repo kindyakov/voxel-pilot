@@ -3,7 +3,7 @@ import type { PrimitiveType } from '@/hsm/actors/primitives/index.primitive'
 type TaskType = 'MINING' | 'SMELTING' | 'CRAFTING' | 'BUILDING' | 'FARMING'
 
 type RequiredParamsType =
-	| 'ore'
+	| 'blockName'
 	| 'count'
 	| 'inputItem'
 	| 'outputItem'
@@ -30,8 +30,13 @@ export const TASK_REGISTRY: Record<TaskType, TaskRegistryItem> = {
 	MINING: {
 		name: 'MINING',
 		description: 'Добыча блоков',
-		required_params: ['ore', 'count'],
-		primitives_used: ['primitiveSearchBlock', 'primitiveNavigating'],
+		required_params: ['blockName', 'count'],
+		optional_params: ['maxDistance'],
+		primitives_used: [
+			'primitiveSearchBlock',
+			'primitiveNavigating',
+			'primitiveBreaking'
+		],
 		preconditions: {
 			tool: 'pickaxe',
 			inventory_space: true

@@ -5,8 +5,8 @@ import Logger from '@config/logger'
 const minecraftBot = new MinecraftBot()
 minecraftBot.start()
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
 	Logger.info('Остановка бота...')
-	minecraftBot.stop('Выключение сервера')
+	await minecraftBot.stop('Выключение сервера')
 	process.exit()
 })

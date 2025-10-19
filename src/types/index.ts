@@ -28,7 +28,7 @@ export interface Bot {
 	heldItem: any
 	registry: any
 	movement: any
-	
+
 	// Methods
 	on: (event: string, listener: (...args: any[]) => void) => this
 	once: (event: string, listener: (...args: any[]) => void) => this
@@ -37,7 +37,10 @@ export interface Bot {
 	chat: (message: string) => void
 	quit: (reason?: string) => void
 	loadPlugin: (plugin: any) => void
-	dig: (block: Block, forceLook?: boolean | 'ignore' | 'raycast') => Promise<void>
+	dig: (
+		block: Block,
+		forceLook?: boolean | 'ignore' | 'raycast'
+	) => Promise<void>
 	equip: (item: any, destination: string) => Promise<void>
 	consume: () => Promise<void>
 	blockAt: (point: any, extraInfos?: boolean) => Block | null
@@ -59,5 +62,5 @@ export interface Bot {
 	// Custom utilities
 	utils: import('../utils/minecraft/botUtils').BotUtils
 	hsm: import('../core/hsm').default
+	memory: import('../core/memory').default
 }
-

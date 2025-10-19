@@ -3,6 +3,7 @@ import mineflayer from 'mineflayer'
 import type { Bot } from '@types'
 import BotStateMachine from '@core/hsm'
 import CommandHandler from '@core/commandHandler.js'
+import BotMemory from '@core/memory.js'
 import Config from '@config/config'
 import Logger from '@config/logger'
 import { initConnection } from '@modules/connection/index.js'
@@ -42,8 +43,13 @@ class MinecraftBot extends EventEmitter {
 				if (!this.bot) return
 
 				this.bot.utils = new BotUtils(this.bot)
-				const hsm = new BotStateMachine(this.bot)
-				new CommandHandler(this.bot, hsm)
+				this.bot.memory = new BotMemory(this.bot.username)
+				this.bot.hsm = new BotStateMachine(this.bot)
+				new CommandHandler(this.bot, this.bot.hsm)
+
+				setInterval(() => {
+					this.bot!.memory.save()
+				}, 5 * 60 * 1000)
 
 				this.bot.chat('Я готов к работе ;)')
 			})
@@ -70,15 +76,20 @@ class MinecraftBot extends EventEmitter {
 		}
 	}
 
-	stop(reason: string = 'Бот остановлен вручную.'): void {
-		if (!this.bot) {
-			Logger.warn('Попытка остановить бота, который не был запущен.')
-			return
+	async stop(reason: string = 'Бот остановлен вручную.'): Promise<void> {
+		try {
+			if (!this.bot) {
+				Logger.warn('Попытка остановить бота, который не был запущен.')
+				return
+			}
+			await this.bot.memory.save()
+			this.isConnected = false
+			Logger.info('Отключение бота...')
+			this.bot.quit(reason)
+			this.bot = null
+		} catch (error) {
+			console.error(error)
 		}
-		this.isConnected = false
-		Logger.info('Отключение бота...')
-		this.bot.quit(reason)
-		this.bot = null
 	}
 
 	scheduleReconnect(): void {

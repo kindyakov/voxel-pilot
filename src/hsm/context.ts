@@ -59,6 +59,11 @@ export interface MachineContext {
 		// Пороги для EMERGENCY_HEALING
 		healthEmergency: number
 		healthFullyRestored: number
+
+		// Фильтрация врагов (3-уровневая)
+		pathfindTimeout: number // Timeout для pathfinder при проверке достижимости (мс)
+		maxPathLengthMultiplier: number // Множитель для макс. длины пути (maxDistToEnemy * multiplier)
+		pathfindCacheDuration: number // Время жизни кеша pathfinder (мс)
 	}
 
 	nearestEnemy: {
@@ -133,7 +138,12 @@ export const context: MachineContext = {
 
 		// Пороги для EMERGENCY_HEALING
 		healthEmergency: 10,
-		healthFullyRestored: 18
+		healthFullyRestored: 18,
+
+		// Фильтрация врагов (3-уровневая)
+		pathfindTimeout: 800, // 800ms для проверки пути
+		maxPathLengthMultiplier: 2, // Путь не длиннее чем maxDistToEnemy * 2
+		pathfindCacheDuration: 3000 // Кеш на 3 секунды
 	},
 
 	nearestEnemy: {

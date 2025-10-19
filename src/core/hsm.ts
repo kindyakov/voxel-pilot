@@ -26,7 +26,9 @@ class BotStateMachine extends EventEmitter {
 		this.init()
 	}
 
-	init(): void {
+	async init(): Promise<void> {
+		await this.bot.memory.load()
+
 		this.actor = createActor(this.machine)
 
 		console.log('HSM машина создана')
@@ -212,6 +214,17 @@ class BotStateMachine extends EventEmitter {
 				this.actor.send({ type: 'WEAPON_BROKEN' })
 			}
 		})
+	}
+
+	/**
+	 * Остановка всех сервисов при завершении работы
+	 */
+	stop(): void {
+		if (this.actor) {
+			this.actor.stop()
+		}
+
+		console.log('❌ [HSM] Остановлен')
 	}
 }
 

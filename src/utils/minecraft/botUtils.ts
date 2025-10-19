@@ -11,7 +11,7 @@ export class BotUtils {
 	 * Поиск ближайшего враждебного моба
 	 */
 	findNearestEnemy(
-		maxDistance: number = 15,
+		maxDistance: number = 20,
 		filter: ((entity: Entity) => boolean) | null = null
 	): Entity | null {
 		const baseFilter = (entity: Entity): boolean => {

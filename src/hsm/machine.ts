@@ -203,7 +203,12 @@ export const machine = createMachine(
 
 							MINING: {
 								initial: 'CHECKING_PRECONDITIONS',
-								entry: { type: 'entryMining' },
+								entry: [
+									'entryMining',
+									assign({
+										taskData: actions.restoreMiningProgress
+									})
+								],
 								exit: { type: 'exitMining' },
 								onDone: {
 									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
@@ -379,14 +384,12 @@ export const machine = createMachine(
 									},
 									TASK_COMPLETED: {
 										type: 'final',
-										entry: {
-											type: 'taskCompleted',
-											params: { taskType: 'MINING' }
-										}
+										entry: 'taskMiningCompleted'
 									},
 
 									TASK_FAILED: {
-										type: 'final'
+										type: 'final',
+										entry: 'taskMiningFailed'
 									}
 								}
 							},

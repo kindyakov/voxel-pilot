@@ -7,9 +7,6 @@ import {
 	checkBlockSafety,
 	isBlockDirectlyBelowBot,
 	calculateBlockScore,
-	getYBonus,
-	getDistancePenalty,
-	formatYDiff,
 	type AnalyzedBlock
 } from '@/hsm/utils/blockAnalysis.utils'
 
@@ -165,20 +162,6 @@ export const primitiveSearchBlock = createStatefulService<
 			const aScore = calculateBlockScore(a)
 			const bScore = calculateBlockScore(b)
 			return bScore - aScore // Больше = лучше
-		})
-
-		// 🔥 ЛОГИРОВАНИЕ: Показываем ТОП-5 блоков с оценками
-		// console.log(`📊 [primitiveSearchBlock] Top 5 blocks after weighted sorting:`)
-		prioritizedBlocks.slice(0, 5).forEach((block, index) => {
-			const yBonus = getYBonus(block.yDiff)
-			const penalty = getDistancePenalty(block.distanceTotal)
-			const score = yBonus - penalty
-
-			// console.log(
-			// 	`  ${index + 1}. Pos: (${block.position.x}, ${block.position.y}, ${block.position.z}) | ` +
-			// 		`${formatYDiff(block.yDiff)} | Dist: ${block.distanceTotal.toFixed(2)}m | ` +
-			// 		`Score: ${score.toFixed(1)} (bonus:${yBonus} - penalty:${penalty.toFixed(1)})`
-			// )
 		})
 
 		const best = prioritizedBlocks[0]
