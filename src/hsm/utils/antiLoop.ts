@@ -4,83 +4,56 @@ export interface AntiLoopGuardConfig {
 	windowMs: number
 }
 
-export interface Transition {
-	from: string
-	to: string
+export interface Update {
 	timestamp: number
 }
 
 export interface AntiLoopGuardStats {
-	transitionsInLastSecond: number
-	totalTransitions: number
-	emergencyStopped: boolean
-	recentTransitions: Transition[]
+	updatesInLastSecond: number
+	totalUpdates: number
+	loopDetected: boolean
+	recentUpdates: Update[]
 }
 
 export class AntiLoopGuard {
-	private maxTransitionsPerSecond: number
-	private emergencyStopAfter: number
+	private maxUpdatesPerSecond: number
 	private windowMs: number
-	private transitionHistory: Transition[] = []
-	private totalTransitions: number = 0
-	private emergencyStopped: boolean = false
+	private updateHistory: Update[] = []
+	private totalUpdates: number = 0
+	private loopDetected: boolean = false
 
 	constructor(options: AntiLoopGuardConfig) {
-		this.maxTransitionsPerSecond = options.maxTransitionsPerSecond
-		this.emergencyStopAfter = options.emergencyStopAfter
+		this.maxUpdatesPerSecond = options.maxTransitionsPerSecond
 		this.windowMs = options.windowMs
 	}
 
 	/**
-	 * Записывает переход и проверяет на зацикливание
-	 * @returns {boolean} true если переход безопасен, false если нужно остановить
+	 * Записывает факт обновления машины состояний и проверяет на зацикливание
+	 * @returns {boolean} true если обновление безопасно, false если обнаружено зацикливание
 	 */
-	recordTransition(fromState: string, toState: string): boolean {
-		if (this.emergencyStopped) {
+	recordUpdate(): boolean {
+		if (this.loopDetected) {
 			return false
 		}
 
 		const now = Date.now()
-		const transition: Transition = {
-			from: fromState,
-			to: toState,
+		const update: Update = {
 			timestamp: now
 		}
 
-		this.transitionHistory.push(transition)
-		this.totalTransitions++
+		this.updateHistory.push(update)
+		this.totalUpdates++
 
 		// Очищаем старые записи (старше 1 секунды)
-		this.transitionHistory = this.transitionHistory.filter(
-			t => now - t.timestamp < this.windowMs
+		this.updateHistory = this.updateHistory.filter(
+			u => now - u.timestamp < this.windowMs
 		)
 
-		// Проверка 1: Слишком много переходов за секунду
-		if (this.transitionHistory.length > this.maxTransitionsPerSecond) {
-			console.warn(
-				`⚠️ WARNING: ${this.transitionHistory.length} transitions in ${this.windowMs}ms`
+		// ЕДИНСТВЕННАЯ ПРОВЕРКА: слишком много обновлений за секунду → обнаружено зацикливание
+		if (this.updateHistory.length > this.maxUpdatesPerSecond) {
+			this.reportLoop(
+				`Too many updates: ${this.updateHistory.length} updates in ${this.windowMs}ms (limit: ${this.maxUpdatesPerSecond})`
 			)
-			console.warn(
-				'Recent transitions:',
-				this.transitionHistory.slice(-5).map(t => `${t.from} → ${t.to}`)
-			)
-
-			// Если переходов в 2 раза больше лимита - останавливаем
-			if (this.transitionHistory.length > this.maxTransitionsPerSecond * 2) {
-				this.emergencyStop('Too many transitions per second')
-				return false
-			}
-		}
-
-		// Проверка 2: Общее количество переходов достигло лимита
-		if (this.totalTransitions >= this.emergencyStopAfter) {
-			this.emergencyStop('Total transition limit reached')
-			return false
-		}
-
-		// Проверка 3: Обнаружение паттерна A→B→A→B (пинг-понг)
-		if (this.detectPingPong()) {
-			this.emergencyStop('Ping-pong loop detected')
 			return false
 		}
 
@@ -88,48 +61,21 @@ export class AntiLoopGuard {
 	}
 
 	/**
-	 * Обнаруживает паттерн A→B→A→B (пинг-понг между двумя состояниями)
+	 * Сообщает об обнаружении зацикливания
 	 */
-	detectPingPong(): boolean {
-		const recent = this.transitionHistory.slice(-6)
-		if (recent.length < 4) return false
-
-		// Проверяем последние 4 перехода на паттерн A→B→A→B
-		const pattern = recent.slice(-4)
-		const isPingPong =
-			pattern[0]?.from === pattern[2]?.from &&
-			pattern[0]?.to === pattern[2]?.to &&
-			pattern[1]?.from === pattern[3]?.from &&
-			pattern[1]?.to === pattern[3]?.to &&
-			pattern[0]?.from === pattern[1]?.to &&
-			pattern[0]?.to === pattern[1]?.from
-
-		if (isPingPong) {
-			console.error(
-				'🔁 Ping-pong detected:',
-				pattern.map(t => `${t.from} → ${t.to}`).join(' | ')
-			)
-		}
-
-		return isPingPong
-	}
-
-	/**
-	 * Экстренная остановка машины
-	 */
-	emergencyStop(reason: string): void {
-		this.emergencyStopped = true
+	reportLoop(reason: string): void {
+		this.loopDetected = true
 		console.error('')
 		console.error('═'.repeat(60))
-		console.error('🚨 EMERGENCY STOP ACTIVATED 🚨')
+		console.error('🔁 LOOP DETECTED - AntiLoopGuard 🔁')
 		console.error('═'.repeat(60))
 		console.error(`Reason: ${reason}`)
-		console.error(`Total transitions: ${this.totalTransitions}`)
+		console.error(`Total updates: ${this.totalUpdates}`)
 		console.error('')
-		console.error('Last 20 transitions:')
-		this.transitionHistory.slice(-20).forEach((t, i) => {
-			const time = new Date(t.timestamp).toISOString().split('T')[1]
-			console.error(`  ${i + 1}. [${time}] ${t.from} → ${t.to}`)
+		console.error('Last 20 updates:')
+		this.updateHistory.slice(-20).forEach((u, i) => {
+			const time = new Date(u.timestamp).toISOString().split('T')[1]
+			console.error(`  ${i + 1}. [${time}] Update`)
 		})
 		console.error('═'.repeat(60))
 	}
@@ -138,9 +84,9 @@ export class AntiLoopGuard {
 	 * Сброс счетчиков
 	 */
 	reset(): void {
-		this.transitionHistory = []
-		this.totalTransitions = 0
-		this.emergencyStopped = false
+		this.updateHistory = []
+		this.totalUpdates = 0
+		this.loopDetected = false
 	}
 
 	/**
@@ -148,10 +94,10 @@ export class AntiLoopGuard {
 	 */
 	getStats(): AntiLoopGuardStats {
 		return {
-			transitionsInLastSecond: this.transitionHistory.length,
-			totalTransitions: this.totalTransitions,
-			emergencyStopped: this.emergencyStopped,
-			recentTransitions: this.transitionHistory.slice(-10)
+			updatesInLastSecond: this.updateHistory.length,
+			totalUpdates: this.totalUpdates,
+			loopDetected: this.loopDetected,
+			recentUpdates: this.updateHistory.slice(-10)
 		}
 	}
 }

@@ -6,8 +6,8 @@ type ParamsStateValue = string | Record<string, string | Record<string, string>>
 export const getStatePriority = (stateName: string): number =>
 	(PRIORITIES[stateName as keyof typeof PRIORITIES] as number | undefined) ?? 1
 
-export const getCurrentPriority = (stateValue: ParamsStateValue) => {
-	const activeStates = extractActiveStates(stateValue)
+export const getCurrentPriority = (stateValue: ParamsStateValue | unknown) => {
+	const activeStates = extractActiveStates(stateValue as ParamsStateValue)
 	const priorities = activeStates
 		.map(stateName => getStatePriority(stateName))
 		.filter(p => p > 0)
@@ -38,7 +38,7 @@ export function getHigherPriorityConditions(
 ): boolean {
 	if (!context.bot?.hsm) return false
 
-	const currentState = context.bot!.hsm.getCurrentStateString()
+	const currentState = context.bot!.hsm.getCurrentStateValue()
 	const currentPriority = getCurrentPriority(currentState)
 	const targetPriority = getStatePriority(stateName)
 

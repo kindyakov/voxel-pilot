@@ -17,7 +17,7 @@ const exitFleeing = ({ context }: MachineActionParams) => {
 }
 
 const exitMeleeAttack = ({ context }: MachineActionParams) => {
-	console.log('🆑 Очистка боя')
+	// console.log('🆑 Очистка боя')
 	context.bot?.pvp.stop()
 	context.bot?.pathfinder.setGoal(null)
 	console.log('⚔️ Выход из состояния MELEE_ATTACKING')

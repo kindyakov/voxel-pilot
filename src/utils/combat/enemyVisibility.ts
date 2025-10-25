@@ -126,9 +126,9 @@ export async function isEnemyReachable(
 
 	// Враг на 4+ блока ниже И под ним solid блок → в яме, недостижим
 	if (heightDiff >= 4 && blockBelowEnemy && blockBelowEnemy.material) {
-		console.log(
-			`⚡ [isEnemyReachable] БЫСТРАЯ ПРОВЕРКА: враг в яме (на ${heightDiff.toFixed(1)} блок(ов) ниже, под ним ${blockBelowEnemy.name}), недостижим без копания`
-		)
+		// console.log(
+		// 	`⚡ [isEnemyReachable] БЫСТРАЯ ПРОВЕРКА: враг в яме (на ${heightDiff.toFixed(1)} блок(ов) ниже, под ним ${blockBelowEnemy.name}), недостижим без копания`
+		// )
 		pathfindCache.set(enemy.id, {
 			reachable: false,
 			pathLength: Infinity,
@@ -186,9 +186,9 @@ export async function isEnemyReachable(
 
 		// Проверяем результат поиска
 		if (!path || path.status !== 'success') {
-			console.log(
-				`❌ [isEnemyReachable] ${enemy.name || 'враг'} НЕ ДОСТИЖИМ (статус: ${path?.status || 'null'})`
-			)
+			// console.log(
+			// 	`❌ [isEnemyReachable] ${enemy.name || 'враг'} НЕ ДОСТИЖИМ (статус: ${path?.status || 'null'})`
+			// )
 			pathfindCache.set(enemy.id, {
 				reachable: false,
 				pathLength: Infinity,

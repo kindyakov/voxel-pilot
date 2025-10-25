@@ -20,7 +20,7 @@ class BotStateMachine extends EventEmitter {
 		this.bot = bot
 
 		this.antiLoopGuard = new AntiLoopGuard({
-			maxTransitionsPerSecond: 15,
+			maxTransitionsPerSecond: 50,
 			emergencyStopAfter: 100,
 			windowMs: 1000
 		})
@@ -52,8 +52,8 @@ class BotStateMachine extends EventEmitter {
 
 		// Периодическая очистка кеша pathfinder
 		this.pathfindCacheCleanupInterval = setInterval(() => {
-			cleanupPathfindCache(5000) // Удалять записи старше 5 секунд
-		}, 10000) // Каждые 10 секунд
+			cleanupPathfindCache(10000) // Удалять записи старше 10 секунд
+		}, 15000) // Каждые 15 секунд
 
 		console.log(
 			'✅ [Кеш pathfinder] Периодическая очистка включена (каждые 10с)'
@@ -61,58 +61,26 @@ class BotStateMachine extends EventEmitter {
 	}
 
 	setupAntiLoopObserver(): void {
-		let lastState: string | null = null
-		let lastTransitionTime = Date.now()
-		let rapidTransitionCount = 0
+		this.actor.subscribe(() => {
+			// Просто записываем факт обновления машины состояний
+			const isAllowed = this.antiLoopGuard.recordUpdate()
 
-		this.actor.subscribe(snapshot => {
-			const currentState = this.getStateString(snapshot.value)
-			const now = Date.now()
+			if (!isAllowed) {
+				console.error('')
+				console.error('🚨 Остановка бота из-за зацикливания!')
+				console.error('Статистика:', this.antiLoopGuard.getStats())
+				console.error('')
 
-			if (lastState && lastState !== currentState) {
-				const timeSinceLastTransition = now - lastTransitionTime
+				this.actor.stop()
 
-				const isAllowed = this.antiLoopGuard.recordTransition(
-					lastState,
-					currentState
-				)
-
-				if (!isAllowed) {
-					console.error('')
-					console.error('🚨 Остановка бота из-за зацикливания!')
-					console.error('Статистика:', this.antiLoopGuard.getStats())
-					console.error('')
-
-					this.actor.stop()
-
-					if (this.bot && this.bot.chat) {
-						this.bot.chat('⚠️ Произошла критическая ошибка! Остановка...')
-					}
-
-					setTimeout(() => {
-						process.exit(1)
-					}, 1000)
-
-					return
+				if (this.bot && this.bot.chat) {
+					this.bot.chat('⚠️ Произошла критическая ошибка! Остановка...')
 				}
 
-				if (timeSinceLastTransition < 50) {
-					rapidTransitionCount++
-
-					if (rapidTransitionCount > 20) {
-						console.error(
-							`🚨 CRITICAL: ${rapidTransitionCount} rapid transitions (< 50ms)`
-						)
-						console.error(`${lastState} → ${currentState}`)
-					}
-				} else {
-					rapidTransitionCount = 0
-				}
-
-				lastTransitionTime = now
+				setTimeout(() => {
+					process.exit(1)
+				}, 1000)
 			}
-
-			lastState = currentState
 		})
 	}
 
@@ -126,6 +94,51 @@ class BotStateMachine extends EventEmitter {
 		}
 
 		return String(stateValue)
+	}
+
+	/**
+	 * Извлекает листовые (конечные) состояния из иерархии для AntiLoopGuard
+	 * Например: {"MAIN_ACTIVITY": {"COMBAT": "MELEE_ATTACKING"}} → "MELEE_ATTACKING"
+	 */
+	extractLeafStates(stateValue: unknown): string[] {
+		const states: string[] = []
+
+		const traverse = (value: unknown): void => {
+			if (typeof value === 'string') {
+				states.push(value)
+			} else if (typeof value === 'object' && value !== null) {
+				Object.values(value).forEach(traverse)
+			}
+		}
+
+		traverse(stateValue)
+		return states
+	}
+
+	/**
+	 * Возвращает простое представление состояния для AntiLoopGuard
+	 * Приоритетно берёт состояние из MAIN_ACTIVITY, иначе первое доступное
+	 */
+	getSimpleStateName(stateValue: unknown): string {
+		// Для параллельных машин xstate
+		if (typeof stateValue === 'object' && stateValue !== null) {
+			const stateObj = stateValue as Record<string, any>
+
+			// Приоритетно ищем MAIN_ACTIVITY
+			if (stateObj.MAIN_ACTIVITY) {
+				const mainActivityStates = this.extractLeafStates(
+					stateObj.MAIN_ACTIVITY
+				)
+				if (mainActivityStates.length > 0) {
+					// Возвращаем самое глубокое состояние в MAIN_ACTIVITY
+					return mainActivityStates[mainActivityStates.length - 1] || 'UNKNOWN'
+				}
+			}
+		}
+
+		// Фоллбэк: берём первое листовое состояние
+		const leafStates = this.extractLeafStates(stateValue)
+		return leafStates[0] || 'UNKNOWN'
 	}
 
 	getContext(): MachineContext {
@@ -150,6 +163,20 @@ class BotStateMachine extends EventEmitter {
 		}
 
 		return this.getStateString(snapshot.value)
+	}
+
+	getCurrentStateValue(): unknown {
+		// Защита: если actor еще не инициализирован
+		if (!this.actor) {
+			return 'IDLE'
+		}
+
+		const snapshot = this.actor.getSnapshot()
+		if (!snapshot) {
+			return 'IDLE'
+		}
+
+		return snapshot.value
 	}
 
 	isInState(statePath: string | Record<string, unknown>): boolean {

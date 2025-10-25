@@ -16,9 +16,9 @@ const entryEntitiesMonitoring = ({ context, event }: MachineActionParams) => {
 const entryChatMonitoring = ({ context, event }: MachineActionParams) => {}
 
 const entryInventoryMonitoring = ({ context, event }: MachineActionParams) => {
-	console.log(
-		`🔍 Мониторинг инвентаря: ${context.inventory.length} - использовано слотов`
-	)
+	// console.log(
+	// 	`🔍 Мониторинг инвентаря: ${context.inventory.length} - использовано слотов`
+	// )
 }
 
 const entryArmorToolsMonitoring = ({
