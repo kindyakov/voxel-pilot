@@ -9,3 +9,4 @@ node_modules
 Desktop.ini
 *.ps1
 CLAUDE.md
+.claude

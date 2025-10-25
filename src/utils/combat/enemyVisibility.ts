@@ -112,9 +112,30 @@ export async function isEnemyReachable(
 		return cached.reachable
 	}
 
-	console.log(
-		`🔍 [isEnemyReachable] Проверяю путь до ${enemy.name || 'враг'}...`
-	)
+	const botPos = bot.entity.position
+	const enemyPos = enemy.position
+	const distance = botPos.distanceTo(enemyPos)
+	const heightDiff = botPos.y - enemyPos.y
+
+	// БЫСТРАЯ ПРОВЕРКА: Враг явно в яме/под землёй?
+	// Если враг находится намного ниже и под ним solid блок - это яма, недостижима без копания
+	const blockAtBot = bot.blockAt(botPos)
+	const blockBelowBot = bot.blockAt(botPos.offset(0, -1, 0))
+	const blockAtEnemy = bot.blockAt(enemyPos)
+	const blockBelowEnemy = bot.blockAt(enemyPos.offset(0, -1, 0))
+
+	// Враг на 4+ блока ниже И под ним solid блок → в яме, недостижим
+	if (heightDiff >= 4 && blockBelowEnemy && blockBelowEnemy.material) {
+		console.log(
+			`⚡ [isEnemyReachable] БЫСТРАЯ ПРОВЕРКА: враг в яме (на ${heightDiff.toFixed(1)} блок(ов) ниже, под ним ${blockBelowEnemy.name}), недостижим без копания`
+		)
+		pathfindCache.set(enemy.id, {
+			reachable: false,
+			pathLength: Infinity,
+			timestamp: now
+		})
+		return false
+	}
 
 	try {
 		// Создаём временный Movements с ОТКЛЮЧЕННЫМ копанием блоков
@@ -132,15 +153,41 @@ export async function isEnemyReachable(
 			2
 		)
 
-		// Пытаемся найти путь с timeout (БЕЗ копания блоков)
-		const path = await Promise.race([
-			bot.pathfinder.getPathTo(checkMovements, goal, timeout),
-			new Promise<null>(resolve => setTimeout(() => resolve(null), timeout))
-		])
+		// ИСПРАВЛЕНИЕ: Используем генератор правильно чтобы A* полностью завершила поиск
+		// getPathFromTo() возвращает генератор который итерирует A* поиск
+		// Это критично с canDig = false, так как нужно несколько итераций для полного исследования
+		const generator = bot.pathfinder.getPathFromTo(
+			checkMovements,
+			bot.entity.position,
+			goal,
+			{ timeout }
+		)
 
-		if (!path || path.status === 'timeout' || path.status === 'noPath') {
+		let path: any = null
+		let iterationCount = 0
+		const maxIterations = 1000 // Безопасность от бесконечного цикла
+
+		// Итерируем генератор до завершения поиска
+		// A* поиск может требовать несколько итераций для полного исследования пространства
+		for (const yielded of generator) {
+			iterationCount++
+			path = yielded.result
+
+			// Выходим если поиск завершён (не partial)
+			if (path.status !== 'partial') {
+				break
+			}
+
+			// Безопасность от бесконечного цикла
+			if (iterationCount >= maxIterations) {
+				break
+			}
+		}
+
+		// Проверяем результат поиска
+		if (!path || path.status !== 'success') {
 			console.log(
-				`❌ [isEnemyReachable] ${enemy.name || 'враг'} НЕ ДОСТИЖИМ (нет пути)`
+				`❌ [isEnemyReachable] ${enemy.name || 'враг'} НЕ ДОСТИЖИМ (статус: ${path?.status || 'null'})`
 			)
 			pathfindCache.set(enemy.id, {
 				reachable: false,
@@ -151,7 +198,19 @@ export async function isEnemyReachable(
 		}
 
 		// Считаем длину пути
-		const pathLength = path.path.length
+		const pathLength = path.path?.length || 0
+
+		if (pathLength === 0) {
+			console.log(
+				`❌ [isEnemyReachable] ${enemy.name || 'враг'} НЕ ДОСТИЖИМ (путь пустой)`
+			)
+			pathfindCache.set(enemy.id, {
+				reachable: false,
+				pathLength: 0,
+				timestamp: now
+			})
+			return false
+		}
 
 		if (pathLength > maxPathLength) {
 			console.log(
@@ -165,9 +224,9 @@ export async function isEnemyReachable(
 			return false
 		}
 
-		// console.log(
-		// 	`✅ [isEnemyReachable] ${enemy.name || 'враг'} ДОСТИЖИМ (путь: ${pathLength} блоков)`
-		// )
+		console.log(
+			`✅ [isEnemyReachable] ${enemy.name || 'враг'} ДОСТИЖИМ (путь: ${pathLength} блоков)`
+		)
 		pathfindCache.set(enemy.id, {
 			reachable: true,
 			pathLength,
@@ -175,9 +234,9 @@ export async function isEnemyReachable(
 		})
 		return true
 	} catch (error) {
-		// console.log(
-		// 	`⚠️ [isEnemyReachable] Ошибка проверки пути: ${error instanceof Error ? error.message : String(error)}`
-		// )
+		console.log(
+			`⚠️ [isEnemyReachable] Ошибка проверки пути: ${error instanceof Error ? error.message : String(error)}`
+		)
 		pathfindCache.set(enemy.id, {
 			reachable: false,
 			pathLength: Infinity,
