@@ -81,7 +81,7 @@ export const primitiveSearchBlock = createStatefulService<
 		})
 
 		console.log(
-			`🔍 [primitiveSearchBlock] Searching for ${blockName} (ID: ${blockData.id}, max: ${maxDistance}m, count: ${count})`
+			`🔍 [primitiveSearchBlock] В поисках ${blockName} (ID: ${blockData.id}, max: ${maxDistance}m, count: ${count})`
 		)
 	},
 
@@ -172,7 +172,7 @@ export const primitiveSearchBlock = createStatefulService<
 		}
 
 		console.log(
-			`✅ [primitiveSearchBlock] Found ${blockName} at ${best.position} ` +
+			`✅ [primitiveSearchBlock] Нашел ${blockName} на ${best.position} ` +
 				`(Y diff: ${best.yDiff.toFixed(1)}, distance: ${best.distanceTotal.toFixed(1)}m, ` +
 				`score: ${calculateBlockScore(best).toFixed(1)})`
 		)

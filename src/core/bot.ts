@@ -47,9 +47,12 @@ class MinecraftBot extends EventEmitter {
 				this.bot.hsm = new BotStateMachine(this.bot)
 				new CommandHandler(this.bot, this.bot.hsm)
 
-				setInterval(() => {
-					this.bot!.memory.save()
-				}, 5 * 60 * 1000)
+				setInterval(
+					() => {
+						this.bot!.memory.save()
+					},
+					5 * 60 * 1000
+				)
 
 				this.bot.chat('Я готов к работе ;)')
 			})
@@ -84,6 +87,7 @@ class MinecraftBot extends EventEmitter {
 			}
 			await this.bot.memory.save()
 			this.isConnected = false
+			this.bot.hsm.stop()
 			Logger.info('Отключение бота...')
 			this.bot.quit(reason)
 			this.bot = null

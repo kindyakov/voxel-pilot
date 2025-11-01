@@ -60,7 +60,8 @@ export const serviceEntitiesTracking = createStatefulService({
 				context.preferences.maxDistToEnemy,
 				context.preferences.maxDistToEnemy *
 					context.preferences.maxPathLengthMultiplier,
-				context.preferences.pathfindTimeout
+				context.preferences.pathfindTimeout,
+				context.isActiveTask
 			)
 
 			if (canAttack) {

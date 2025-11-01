@@ -18,7 +18,9 @@ const entryMining = ({ context }: MachineActionParams) => {
  * Функция-ассайнер для восстановления прогресса MINING
  * Используется в machine.ts как: assign({ taskData: restoreMiningProgress })
  */
-const restoreMiningProgress = ({ context }: MachineActionParams): MiningTaskData | null => {
+const restoreMiningProgress = ({
+	context
+}: MachineActionParams): MiningTaskData | null => {
 	const bot = context.bot
 	if (!bot) {
 		console.warn('⚠️ [restoreMiningProgress] Bot не инициализирован')
@@ -77,20 +79,20 @@ const taskMiningCompleted = ({ context }: MachineActionParams) => {
 	context.taskData = null
 
 	// Завершить цель в памяти
-	const currentGoal = bot.memory.getMemory().goals.current
-	if (currentGoal) {
-		bot.memory.completeCurrentGoal()
-		console.log(
-			`✅ [MINING] Цель "${currentGoal.goal}" добавлена в completed goals`
-		)
+	// const currentGoal = bot.memory.getMemory().goals.current
+	// if (currentGoal) {
+	// 	bot.memory.completeCurrentGoal()
+	// 	console.log(
+	// 		`✅ [MINING] Цель "${currentGoal.goal}" добавлена в completed goals`
+	// 	)
 
-		// Немедленное сохранение
-		bot.memory.save().catch((err) => {
-			console.error('❌ [taskMiningCompleted] Ошибка сохранения памяти:', err)
-		})
-	} else {
-		console.warn('⚠️ [taskMiningCompleted] Нет текущей цели для завершения')
-	}
+	// 	// Немедленное сохранение
+	// 	bot.memory.save().catch(err => {
+	// 		console.error('❌ [taskMiningCompleted] Ошибка сохранения памяти:', err)
+	// 	})
+	// } else {
+	// 	console.warn('⚠️ [taskMiningCompleted] Нет текущей цели для завершения')
+	// }
 }
 
 /**
@@ -110,22 +112,24 @@ const taskMiningFailed = ({ context }: MachineActionParams) => {
 	context.taskData = null
 
 	// Провалить цель в памяти
-	const currentGoal = bot.memory.getMemory().goals.current
-	if (currentGoal) {
-		const reason = taskData
-			? `Не удалось найти/добыть ${taskData.blockName}`
-			: 'Неизвестная причина'
+	// const currentGoal = bot.memory.getMemory().goals.current
+	// if (currentGoal) {
+	// 	const reason = taskData
+	// 		? `Не удалось найти/добыть ${taskData.blockName}`
+	// 		: 'Неизвестная причина'
 
-		bot.memory.failCurrentGoal(reason)
-		console.log(`❌ [MINING] Цель "${currentGoal.goal}" добавлена в failed goals`)
+	// 	bot.memory.failCurrentGoal(reason)
+	// 	console.log(
+	// 		`❌ [MINING] Цель "${currentGoal.goal}" добавлена в failed goals`
+	// 	)
 
-		// Немедленное сохранение
-		bot.memory.save().catch((err) => {
-			console.error('❌ [taskMiningFailed] Ошибка сохранения памяти:', err)
-		})
-	} else {
-		console.warn('⚠️ [taskMiningFailed] Нет текущей цели для провала')
-	}
+	// 	// Немедленное сохранение
+	// 	bot.memory.save().catch(err => {
+	// 		console.error('❌ [taskMiningFailed] Ошибка сохранения памяти:', err)
+	// 	})
+	// } else {
+	// 	console.warn('⚠️ [taskMiningFailed] Нет текущей цели для провала')
+	// }
 }
 
 export default {

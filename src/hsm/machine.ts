@@ -1,6 +1,6 @@
 import { createMachine, assign } from 'xstate'
 import type { Bot } from '@types'
-import type { MachineEvent } from '@hsm/types'
+import type { MachineActionParams, MachineEvent } from '@hsm/types'
 import { context, type MachineContext } from '@hsm/context'
 import type { AnyTaskData, MiningTaskData } from '@hsm/tasks/index'
 import { actions } from '@hsm/actions/index.actions'
@@ -185,7 +185,8 @@ export const machine = createMachine(
 					},
 					TASKS: {
 						initial: 'PLAN_EXECUTOR',
-
+						entry: ['entryTasks'],
+						exit: ['exitTasks'],
 						states: {
 							PLAN_EXECUTOR: {
 								initial: 'IDLE',
@@ -206,10 +207,10 @@ export const machine = createMachine(
 							MINING: {
 								initial: 'CHECKING_PRECONDITIONS',
 								entry: [
-									'entryMining',
-									assign({
-										taskData: actions.restoreMiningProgress
-									})
+									'entryMining'
+									// assign({
+									// 	taskData: actions.restoreMiningProgress
+									// })
 								],
 								exit: { type: 'exitMining' },
 								onDone: {
@@ -242,12 +243,17 @@ export const machine = createMachine(
 									},
 									REQUESTING_TOOL: {
 										// Новое состояние - пока заглушка
-										entry: () => {
+										entry: ({ context }: MachineActionParams) => {
 											const taskData = context.taskData as MiningTaskData
 											console.log(
-												`❌ [REQUESTING_TOOL] Need tool for ${taskData.blockName}`
+												`❌ [REQUESTING_TOOL] Нужен инструмент для "${taskData?.blockName}"`
 											)
-											console.log('   Task will fail in 3 seconds...')
+											console.log(
+												'   Задание будет завершено через 3 секунды...'
+											)
+											context.bot?.chat(
+												`Нужен инструмент для "${taskData?.blockName}"`
+											)
 										},
 										after: {
 											3000: 'TASK_FAILED'
@@ -388,7 +394,6 @@ export const machine = createMachine(
 										type: 'final',
 										entry: 'taskMiningCompleted'
 									},
-
 									TASK_FAILED: {
 										type: 'final',
 										entry: 'taskMiningFailed'

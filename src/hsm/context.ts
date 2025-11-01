@@ -71,6 +71,7 @@ export interface MachineContext {
 		distance: number
 	}
 
+	isActiveTask: boolean
 	taskData: AnyTaskData | null
 	plan: Plan | null
 	pausedPlan: Plan | null // Прерванный план
@@ -151,6 +152,7 @@ export const context: MachineContext = {
 		distance: Infinity
 	},
 
+	isActiveTask: false,
 	plan: null, // Текущий план
 	taskData: null, //  данные текущей задачи
 	pausedPlan: null, // Прерванный план

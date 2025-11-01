@@ -12,7 +12,7 @@ export const hasRequiredTool = ({
 	const taskData = context.taskData as MiningTaskData | null
 
 	if (!taskData || !taskData.blockName) {
-		console.log('⚠️ [hasRequiredTool] No taskData or blockName')
+		console.log('⚠️ [hasRequiredTool] Нет taskData или blockName')
 		return false
 	}
 
@@ -23,7 +23,7 @@ export const hasRequiredTool = ({
 	const blockData = bot.registry.blocksByName[taskData.blockName]
 
 	if (!blockData) {
-		console.log(`⚠️ [hasRequiredTool] Unknown block: ${taskData.blockName}`)
+		console.log(`⚠️ [hasRequiredTool] Неизвестный блок: ${taskData.blockName}`)
 		return false
 	}
 
@@ -33,7 +33,7 @@ export const hasRequiredTool = ({
 	if (!harvestTools || Object.keys(harvestTools).length === 0) {
 		// Блок можно добывать руками
 		console.log(
-			`✅ [hasRequiredTool] ${taskData.blockName} doesn't require tool`
+			`✅ [hasRequiredTool] ${taskData.blockName} не требует использования инструмента`
 		)
 		return true
 	}
@@ -44,13 +44,17 @@ export const hasRequiredTool = ({
 
 	if (hasTool) {
 		console.log(
-			`✅ [hasRequiredTool] Found suitable tool for ${taskData.blockName}`
+			`✅ [hasRequiredTool] Найден подходящий инструмент для ${taskData.blockName}`
 		)
 		return true
 	}
 
-	console.log(`❌ [hasRequiredTool] No suitable tool for ${taskData.blockName}`)
-	console.log(`   Required tool IDs: ${Object.keys(harvestTools).join(', ')}`)
+	console.log(
+		`❌ [hasRequiredTool] Нет подходящего инструмента для ${taskData.blockName}`
+	)
+	console.log(
+		`  Необходимые инструмент IDs: ${Object.keys(harvestTools).join(', ')}`
+	)
 
 	return false
 }
@@ -69,7 +73,7 @@ export const hasInventorySpace = ({
 	const hasSpace = bot.utils.hasInventorySpace()
 
 	if (!hasSpace) {
-		console.log('❌ [hasInventorySpace] Inventory is full')
+		console.log('❌ [hasInventorySpace] Инвентарь полон')
 	}
 
 	return hasSpace
@@ -121,11 +125,11 @@ export const isBlockNearby = ({
 
 	if (isNearby) {
 		console.log(
-			`✅ [isBlockNearby] Block is nearby (XZ: ${distanceXZ.toFixed(2)}m, Y: ${distanceY})`
+			`✅ [isBlockNearby] Блок находится рядом (XZ: ${distanceXZ.toFixed(2)}m, Y: ${distanceY})`
 		)
 	} else {
 		console.log(
-			`❌ [isBlockNearby] Block is far (XZ: ${distanceXZ.toFixed(2)}m, Y: ${distanceY})`
+			`❌ [isBlockNearby] Блок находится далеко (XZ: ${distanceXZ.toFixed(2)}m, Y: ${distanceY})`
 		)
 	}
 

@@ -35,43 +35,43 @@ const exitMining = ({ context }: MachineActionParams) => {
 		timestamp: new Date().toISOString()
 	}
 
-	console.log(
-		`💾 [MINING] Прогресс сохранён: ${progress.collected}/${taskData.count || 1}`
-	)
+	// console.log(
+	// 	`💾 [MINING] Прогресс сохранён: ${progress.collected}/${taskData.count || 1}`
+	// )
 
-	// Обновить current goal с прогрессом
-	const currentGoal = bot.memory.getMemory().goals.current
+	// // Обновить current goal с прогрессом
+	// const currentGoal = bot.memory.getMemory().goals.current
 
-	if (currentGoal) {
-		// Обновляем существующую цель
-		bot.memory.setCurrentGoal({
-			...currentGoal,
-			progress
-		})
-	} else {
-		// Создаём новую цель с прогрессом
-		bot.memory.setCurrentGoal({
-			goal: `MINING ${taskData.blockName}`,
-			priority: 6,
-			startedAt: new Date().toISOString(),
-			tasks: [
-				{
-					type: 'MINING',
-					params: {
-						blockName: taskData.blockName,
-						count: taskData.count
-					}
-				}
-			],
-			currentTaskIndex: 0,
-			progress
-		})
-	}
+	// if (currentGoal) {
+	// 	// Обновляем существующую цель
+	// 	bot.memory.setCurrentGoal({
+	// 		...currentGoal,
+	// 		progress
+	// 	})
+	// } else {
+	// 	// Создаём новую цель с прогрессом
+	// 	bot.memory.setCurrentGoal({
+	// 		goal: `MINING ${taskData.blockName}`,
+	// 		priority: 6,
+	// 		startedAt: new Date().toISOString(),
+	// 		tasks: [
+	// 			{
+	// 				type: 'MINING',
+	// 				params: {
+	// 					blockName: taskData.blockName,
+	// 					count: taskData.count
+	// 				}
+	// 			}
+	// 		],
+	// 		currentTaskIndex: 0,
+	// 		progress
+	// 	})
+	// }
 
-	// Немедленное сохранение (не блокирующее)
-	bot.memory.save().catch((err) => {
-		console.error('❌ [exitMining] Ошибка сохранения памяти:', err)
-	})
+	// // Немедленное сохранение (не блокирующее)
+	// bot.memory.save().catch(err => {
+	// 	console.error('❌ [exitMining] Ошибка сохранения памяти:', err)
+	// })
 }
 
 export default {

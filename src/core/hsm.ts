@@ -20,7 +20,7 @@ class BotStateMachine extends EventEmitter {
 		this.bot = bot
 
 		this.antiLoopGuard = new AntiLoopGuard({
-			maxTransitionsPerSecond: 50,
+			maxTransitionsPerSecond: 20,
 			emergencyStopAfter: 100,
 			windowMs: 1000
 		})
@@ -41,7 +41,7 @@ class BotStateMachine extends EventEmitter {
 
 		this.bot.hsm = this
 
-		this.setupAntiLoopObserver()
+		// this.setupAntiLoopObserver()
 		this.setupBotEvents()
 		this.handlers()
 
@@ -197,7 +197,7 @@ class BotStateMachine extends EventEmitter {
 						taskData: {
 							blockName: options?.[0] || 'stone',
 							navigationAttempts: 0,
-							count: 3
+							count: +options?.[1]! || 3
 						}
 					})
 				}

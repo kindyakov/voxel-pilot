@@ -253,6 +253,7 @@ export async function isEnemyReachable(
  * @param maxDistance - Макс. дистанция (уровень 1)
  * @param maxPathLength - Макс. длина пути (уровень 3)
  * @param pathfindTimeout - Timeout для pathfinder
+ * @param isActiveTask - Активна ли задача (если задача активна то добавлять цель только при визуальном обнаружении)
  * @returns Promise<boolean> - можно ли атаковать врага
  */
 export async function canAttackEnemy(
@@ -260,7 +261,8 @@ export async function canAttackEnemy(
 	enemy: Entity,
 	maxDistance: number,
 	maxPathLength: number,
-	pathfindTimeout: number
+	pathfindTimeout: number,
+	isActiveTask: boolean
 ): Promise<boolean> {
 	if (!enemy || !enemy.isValid || !enemy.position || !bot.entity.position) {
 		return false
@@ -279,6 +281,8 @@ export async function canAttackEnemy(
 	if (canSeeEnemy(bot, enemy)) {
 		return true
 	}
+
+	if (isActiveTask) false
 
 	// УРОВЕНЬ 3: Pathfinder - есть ли путь обхода? (медленно, с кешем)
 	return await isEnemyReachable(bot, enemy, maxPathLength, pathfindTimeout)
