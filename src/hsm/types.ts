@@ -53,12 +53,12 @@ export type TaskEvents =
 	| { type: 'FOUND_FOOD' }
 	| { type: 'NOT_FOUND'; reason: string }
 	| { type: 'FOUND'; block?: Block; entity?: Entity }
+	| { type: 'START_MINING'; taskData: AnyTaskData }
 	| { type: 'SUCCESSFULLY' }
 	| { type: 'ARRIVED' }
 	| { type: 'NAVIGATION_FAILED' }
 	| { type: 'BROKEN' }
 	| { type: 'BREAKING_FAILED'; reason?: string }
-	| { type: 'START_MINING'; taskData: AnyTaskData }
 	// primitiveOpenContainer
 	| { type: 'OPENED'; container: any; block: Block }
 	| { type: 'OPEN_FAILED'; reason: string }
@@ -66,7 +66,12 @@ export type TaskEvents =
 	| { type: 'CRAFTED'; itemName: string; count: number }
 	| { type: 'CRAFT_FAILED'; reason: string }
 	// primitiveSmelt
-	| { type: 'SMELTED'; inputItemName: string; count: number; outputItem: string | null }
+	| {
+			type: 'SMELTED'
+			inputItemName: string
+			count: number
+			outputItem: string | null
+	  }
 	| { type: 'SMELT_FAILED'; reason: string }
 	// primitivePlacing
 	| { type: 'PLACED'; blockName: string; position: Vec3 }

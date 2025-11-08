@@ -34,14 +34,14 @@ export const primitiveSmelt = createStatefulService<SmeltState, SmeltOptions>({
 		const { inputItemName, fuelItemName = 'coal', furnace, count = 1 } = input
 
 		if (!inputItemName) {
-			console.error('❌ [primitiveSmelt] No inputItemName provided')
-			sendBack({ type: 'SMELT_FAILED', reason: 'No inputItemName provided' })
+			console.error('❌ [primitiveSmelt] Не указано inputItemName')
+			sendBack({ type: 'SMELT_FAILED', reason: 'Не указано inputItemName' })
 			return
 		}
 
 		if (!furnace) {
-			console.error('❌ [primitiveSmelt] No furnace provided')
-			sendBack({ type: 'SMELT_FAILED', reason: 'No furnace provided' })
+			console.error('❌ [primitiveSmelt] Нет передона печь')
+			sendBack({ type: 'SMELT_FAILED', reason: 'Нет передона печь' })
 			return
 		}
 
@@ -59,11 +59,11 @@ export const primitiveSmelt = createStatefulService<SmeltState, SmeltOptions>({
 			const distance = bot.entity.position.distanceTo(furnace.position)
 			if (distance > 4) {
 				console.error(
-					`❌ [primitiveSmelt] Furnace too far away (${distance.toFixed(1)}m)`
+					`❌ [primitiveSmelt] Печь слишком далеко (${distance.toFixed(1)}m)`
 				)
 				sendBack({
 					type: 'SMELT_FAILED',
-					reason: `Furnace too far away (${distance.toFixed(1)}m)`
+					reason: `Печь слишком далеко (${distance.toFixed(1)}m)`
 				})
 				return
 			}
@@ -73,19 +73,23 @@ export const primitiveSmelt = createStatefulService<SmeltState, SmeltOptions>({
 			const fuelItem = bot.registry.itemsByName[fuelItemName]
 
 			if (!inputItem) {
-				console.error(`❌ [primitiveSmelt] Unknown input item: ${inputItemName}`)
+				console.error(
+					`❌ [primitiveSmelt] Неизвестный элемент ввода: ${inputItemName}`
+				)
 				sendBack({
 					type: 'SMELT_FAILED',
-					reason: `Unknown input item: ${inputItemName}`
+					reason: `Неизвестный элемент ввода: ${inputItemName}`
 				})
 				return
 			}
 
 			if (!fuelItem) {
-				console.error(`❌ [primitiveSmelt] Unknown fuel item: ${fuelItemName}`)
+				console.error(
+					`❌ [primitiveSmelt] Неизвестный элемент топлива: ${fuelItemName}`
+				)
 				sendBack({
 					type: 'SMELT_FAILED',
-					reason: `Unknown fuel item: ${fuelItemName}`
+					reason: `Неизвестный элемент топлива: ${fuelItemName}`
 				})
 				return
 			}
@@ -96,22 +100,22 @@ export const primitiveSmelt = createStatefulService<SmeltState, SmeltOptions>({
 
 			if (inputCount < count) {
 				console.error(
-					`❌ [primitiveSmelt] Not enough ${inputItemName} in inventory (need: ${count}, have: ${inputCount})`
+					`❌ [primitiveSmelt] Недостаточно ${inputItemName} в инвентаре (нужно: ${count}, доступно: ${inputCount})`
 				)
 				sendBack({
 					type: 'SMELT_FAILED',
-					reason: `Not enough ${inputItemName} in inventory`
+					reason: `Недостаточно ${inputItemName} в инвентаре`
 				})
 				return
 			}
 
 			if (fuelCount < 1) {
 				console.error(
-					`❌ [primitiveSmelt] No ${fuelItemName} in inventory for fuel`
+					`❌ [primitiveSmelt] Нет ${fuelItemName} в инвентаре топлива`
 				)
 				sendBack({
 					type: 'SMELT_FAILED',
-					reason: `No ${fuelItemName} in inventory for fuel`
+					reason: `Нет ${fuelItemName} в инвентаре топлива`
 				})
 				return
 			}
@@ -139,10 +143,10 @@ export const primitiveSmelt = createStatefulService<SmeltState, SmeltOptions>({
 
 			if (!inputItemStack || !fuelItemStack) {
 				furnaceWindow.close()
-				console.error('❌ [primitiveSmelt] Items not found in inventory')
+				console.error('❌ [primitiveSmelt] Предметы, не найденные в инвентаре')
 				sendBack({
 					type: 'SMELT_FAILED',
-					reason: 'Items not found in inventory'
+					reason: 'Предметы, не найденные в инвентаре'
 				})
 				return
 			}
@@ -225,10 +229,10 @@ export const primitiveSmelt = createStatefulService<SmeltState, SmeltOptions>({
 		if (state.furnaceWindow) {
 			try {
 				state.furnaceWindow.close()
-				console.log(`🔒 [primitiveSmelt] Furnace window closed`)
+				console.log(`🔒 [primitiveSmelt] Окно печи закрыто`)
 			} catch (error) {
 				console.error(
-					`❌ [primitiveSmelt] Error closing furnace window:`,
+					`❌ [primitiveSmelt] Ошибка при закрытии окна печи:`,
 					error
 				)
 			}

@@ -12,6 +12,9 @@ type TaskType =
 	| 'SMELTING'
 	| 'CRAFTING'
 	| 'BUILDING'
+	| 'FOLLOWING'
+	| 'SLEEPING'
+	| 'FARMING'
 	| 'deposit_items'
 
 export interface Task {

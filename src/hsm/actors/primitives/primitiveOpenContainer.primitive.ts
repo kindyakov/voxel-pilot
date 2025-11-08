@@ -51,8 +51,8 @@ export const primitiveOpenContainer = createStatefulService<
 		const { block } = input
 
 		if (!block) {
-			console.error('❌ [primitiveOpenContainer] No block provided')
-			sendBack({ type: 'OPEN_FAILED', reason: 'No block provided' })
+			console.error('❌ [primitiveOpenContainer] Не предоставлен block')
+			sendBack({ type: 'OPEN_FAILED', reason: 'Не предоставлен block' })
 			return
 		}
 
@@ -65,11 +65,11 @@ export const primitiveOpenContainer = createStatefulService<
 
 		if (!isContainer) {
 			console.error(
-				`❌ [primitiveOpenContainer] Block ${block.name} is not a container`
+				`❌ [primitiveOpenContainer] Блок ${block.name} не является контейнером`
 			)
 			sendBack({
 				type: 'OPEN_FAILED',
-				reason: `Block ${block.name} is not a container`
+				reason: `Блок ${block.name} не является контейнером`
 			})
 			return
 		}
@@ -79,18 +79,18 @@ export const primitiveOpenContainer = createStatefulService<
 			if (abortSignal.aborted) return
 
 			console.log(
-				`📦 [primitiveOpenContainer] Opening ${block.name} at ${block.position}`
+				`📦 [primitiveOpenContainer] Открытие ${block.name} в ${block.position}`
 			)
 
 			// Проверяем расстояние до блока
 			const distance = bot.entity.position.distanceTo(block.position)
 			if (distance > 4) {
 				console.error(
-					`❌ [primitiveOpenContainer] Block too far away (${distance.toFixed(1)}m)`
+					`❌ [primitiveOpenContainer] Блок находится слишком далеко (${distance.toFixed(1)}m)`
 				)
 				sendBack({
 					type: 'OPEN_FAILED',
-					reason: `Block too far away (${distance.toFixed(1)}m)`
+					reason: `Блок находится слишком далеко (${distance.toFixed(1)}m)`
 				})
 				return
 			}
@@ -131,7 +131,9 @@ export const primitiveOpenContainer = createStatefulService<
 				return
 			}
 
-			console.log(`✅ [primitiveOpenContainer] Container opened: ${block.name}`)
+			console.log(
+				`✅ [primitiveOpenContainer] Открытый контейнер: ${block.name}`
+			)
 
 			setState({ containerWindow })
 
@@ -162,7 +164,7 @@ export const primitiveOpenContainer = createStatefulService<
 		if (state.containerWindow) {
 			try {
 				state.containerWindow.close()
-				console.log(`🔒 [primitiveOpenContainer] Container closed`)
+				console.log(`🔒 [primitiveOpenContainer] Закрытый контейнер`)
 			} catch (error) {
 				console.error(
 					`❌ [primitiveOpenContainer] Error closing container:`,

@@ -43,11 +43,11 @@ export const primitiveSearchEntity = createStatefulService<
 
 		if (!entityType && !entityName) {
 			console.error(
-				'[primitiveSearchEntity] ❌ Missing entityType or entityName'
+				'[primitiveSearchEntity] ❌ Отсутсвует entityType или entityName'
 			)
 			api.sendBack({
 				type: 'NOT_FOUND',
-				reason: 'Missing required parameter: entityType or entityName'
+				reason: 'Отсутствует обязательный параметр: entityType или entityName'
 			})
 			return
 		}
@@ -117,11 +117,11 @@ export const primitiveSearchEntity = createStatefulService<
 
 		// Берём ближайшую сущность
 		const foundEntity = candidates[0]
-		const distance = botPos.distanceTo(foundEntity.position)
+		const distance = botPos.distanceTo(foundEntity!.position)
 
 		console.log(
-			`✅ [primitiveSearchEntity] Найдена сущность ${foundEntity.name || foundEntity.type} ` +
-				`на расстоянии ${distance.toFixed(1)}m в позиции ${foundEntity.position}`
+			`✅ [primitiveSearchEntity] Найдена сущность ${foundEntity!.name || foundEntity!.type} ` +
+				`на расстоянии ${distance.toFixed(1)}m в позиции ${foundEntity!.position}`
 		)
 
 		// Останавливаем поиск

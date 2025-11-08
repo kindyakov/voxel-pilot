@@ -32,14 +32,14 @@ export const primitivePlacing = createStatefulService<
 		const { blockName, position, faceVector = new Vec3Class(0, 1, 0) } = input
 
 		if (!blockName) {
-			console.error('❌ [primitivePlacing] No blockName provided')
-			sendBack({ type: 'PLACING_FAILED', reason: 'No blockName provided' })
+			console.error('❌ [primitivePlacing] Не предоставлен blockName')
+			sendBack({ type: 'PLACING_FAILED', reason: 'Не предоставлен blockName' })
 			return
 		}
 
 		if (!position) {
-			console.error('❌ [primitivePlacing] No position provided')
-			sendBack({ type: 'PLACING_FAILED', reason: 'No position provided' })
+			console.error('❌ [primitivePlacing] Не предоставлен position')
+			sendBack({ type: 'PLACING_FAILED', reason: 'Не предоставлен position' })
 			return
 		}
 
@@ -57,10 +57,10 @@ export const primitivePlacing = createStatefulService<
 			const blockData = bot.registry.blocksByName[blockName]
 
 			if (!blockData) {
-				console.error(`❌ [primitivePlacing] Unknown block: ${blockName}`)
+				console.error(`❌ [primitivePlacing] Неизвестный блок: ${blockName}`)
 				sendBack({
 					type: 'PLACING_FAILED',
-					reason: `Unknown block: ${blockName}`
+					reason: `Неизвестный блок: ${blockName}`
 				})
 				return
 			}
@@ -70,11 +70,11 @@ export const primitivePlacing = createStatefulService<
 
 			if (blockCount < 1) {
 				console.error(
-					`❌ [primitivePlacing] No ${blockName} in inventory to place`
+					`❌ [primitivePlacing] Нет ${blockName} в инвентаре для строительства`
 				)
 				sendBack({
 					type: 'PLACING_FAILED',
-					reason: `No ${blockName} in inventory`
+					reason: `Нет ${blockName} в инвентаре`
 				})
 				return
 			}
@@ -86,11 +86,11 @@ export const primitivePlacing = createStatefulService<
 
 			if (!referenceBlock) {
 				console.error(
-					`❌ [primitivePlacing] No reference block found at ${referencePos}`
+					`❌ [primitivePlacing] Ни один опорный блок не найден по ${referencePos}`
 				)
 				sendBack({
 					type: 'PLACING_FAILED',
-					reason: 'No reference block found'
+					reason: 'Не найден опорный блок'
 				})
 				return
 			}
@@ -101,11 +101,11 @@ export const primitivePlacing = createStatefulService<
 			const distance = bot.entity.position.distanceTo(position)
 			if (distance > 4.5) {
 				console.error(
-					`❌ [primitivePlacing] Position too far away (${distance.toFixed(1)}m)`
+					`❌ [primitivePlacing] Позиция слишком далеко (${distance.toFixed(1)}m)`
 				)
 				sendBack({
 					type: 'PLACING_FAILED',
-					reason: `Position too far away (${distance.toFixed(1)}m)`
+					reason: `Позиция слишком далеко (${distance.toFixed(1)}m)`
 				})
 				return
 			}
@@ -119,10 +119,10 @@ export const primitivePlacing = createStatefulService<
 				.find((item: any) => item.type === blockData.id)
 
 			if (!blockItem) {
-				console.error(`❌ [primitivePlacing] Block item not found in inventory`)
+				console.error(`❌ [primitivePlacing] blockItem не найден в инвентаре`)
 				sendBack({
 					type: 'PLACING_FAILED',
-					reason: 'Block item not found in inventory'
+					reason: 'blockItem не найден в инвентаре'
 				})
 				return
 			}
@@ -135,7 +135,9 @@ export const primitivePlacing = createStatefulService<
 			// Размещаем блок
 			await bot.placeBlock(referenceBlock, faceVector as any)
 
-			console.log(`✅ [primitivePlacing] Блок ${blockName} размещён на ${position}`)
+			console.log(
+				`✅ [primitivePlacing] Блок ${blockName} размещён на ${position}`
+			)
 
 			sendBack({
 				type: 'PLACED',

@@ -1,8 +1,5 @@
 import type { PrimitiveType } from '@/hsm/actors/primitives/index.primitive'
 
-type RequiredParamsType = 'blockName' | 'entityName' | 'target'
-type OptionalParamsType = 'maxDistance' | 'count' | 'distance'
-
 interface PrimitiveDefinition {
 	name: PrimitiveType // Имя service
 	description: string // Описание

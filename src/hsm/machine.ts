@@ -401,8 +401,13 @@ export const machine = createMachine(
 								}
 							},
 
+							FOLLOWING: {},
+
 							SMELTING: {},
-							CRAFTING: {}
+							CRAFTING: {},
+							BUILDING: {},
+							SLEEPING: {},
+							FARMING: {}
 						}
 					}
 				}
