@@ -32,5 +32,19 @@ export const PRIMITIVE_REGISTRY: Record<string, PrimitiveDefinition> = {
 		required_params: ['target'],
 		optional_params: ['distance'],
 		events_emitted: ['ARRIVED', 'NAVIGATION_FAILED']
+	},
+	breaking: {
+		name: 'primitiveBreaking',
+		description: 'Ломает блок и собирает дроп',
+		required_params: ['block'],
+		optional_params: [],
+		events_emitted: ['BROKEN', 'BREAKING_FAILED']
+	},
+	openContainer: {
+		name: 'primitiveOpenContainer',
+		description: 'Открытие контейнеров (сундуки, печи, верстаки и т.д.)',
+		required_params: ['block'],
+		optional_params: [],
+		events_emitted: ['OPENED', 'OPEN_FAILED']
 	}
 } as const
