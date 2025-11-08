@@ -46,6 +46,10 @@ export interface Bot {
 	blockAt: (point: any, extraInfos?: boolean) => Block | null
 	findBlocks: (options: any) => any[]
 	nearestEntity: (match?: (entity: Entity) => boolean) => Entity | null
+	setControlState: (
+		control: 'forward' | 'back' | 'left' | 'right' | 'jump' | 'sprint' | 'sneak',
+		state: boolean
+	) => void
 
 	// Plugins
 	autoEat: EatUtil
