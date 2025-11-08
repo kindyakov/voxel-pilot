@@ -71,31 +71,52 @@ export const primitiveSearchEntity = createStatefulService<
 
 		const botPos = api.bot.entity.position
 
-		// Создаём фильтр для поиска сущности
-		const filter = (entity: Entity): boolean => {
-			// Пропускаем самого бота
-			if (entity.id === api.bot.entity.id) return false
+		// Получаем уже отфильтрованные сущности из контекста
+		const { entities, enemies, players } = api.context
 
-			// Проверяем расстояние
-			const distance = botPos.distanceTo(entity.position)
-			if (distance > maxDistance) return false
+		// Объединяем все сущности в один массив в зависимости от фильтров
+		let searchPool: Entity[] = []
 
-			// Фильтр по имени (если указан)
-			if (entityName && entity.name !== entityName) return false
-
-			// Фильтр по типу (если указан)
-			if (entityType && entity.type !== entityType) return false
-
-			return true
+		if (entityType) {
+			// Если указан тип - выбираем из соответствующего массива
+			if (entityType === 'hostile') {
+				searchPool = enemies
+			} else if (entityType === 'player') {
+				searchPool = players
+			} else {
+				// Для других типов (animal, mob и т.д.) используем entities
+				searchPool = entities.filter(e => e.type === entityType)
+			}
+		} else {
+			// Если тип не указан - ищем по всем категориям
+			searchPool = [...entities, ...enemies, ...players]
 		}
 
-		// Ищем ближайшую подходящую сущность
-		const foundEntity = api.bot.nearestEntity(filter)
+		// Фильтруем по имени и расстоянию
+		const candidates = searchPool
+			.filter(entity => {
+				// Фильтр по имени (если указан)
+				if (entityName && entity.name !== entityName) return false
 
-		if (!foundEntity) {
+				// Проверяем расстояние
+				const distance = botPos.distanceTo(entity.position)
+				if (distance > maxDistance) return false
+
+				return true
+			})
+			.sort((a, b) => {
+				// Сортируем по расстоянию (ближайший первый)
+				const distA = botPos.distanceTo(a.position)
+				const distB = botPos.distanceTo(b.position)
+				return distA - distB
+			})
+
+		if (candidates.length === 0) {
 			return
 		}
 
+		// Берём ближайшую сущность
+		const foundEntity = candidates[0]
 		const distance = botPos.distanceTo(foundEntity.position)
 
 		console.log(
