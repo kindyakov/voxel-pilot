@@ -80,6 +80,6 @@ export const PRIMITIVE_REGISTRY: Record<string, PrimitiveDefinition> = {
 		description: 'Следование за целью (сущность/игрок/позиция) используя movement',
 		required_params: ['target'],
 		optional_params: ['distance'],
-		events_emitted: ['FOLLOWING_REACHED', 'FOLLOWING_STOPPED', 'FOLLOWING_FAILED']
+		events_emitted: ['FOLLOWING_STOPPED', 'FOLLOWING_FAILED']
 	}
 } as const

@@ -72,7 +72,6 @@ export type TaskEvents =
 	| { type: 'PLACED'; blockName: string; position: Vec3 }
 	| { type: 'PLACING_FAILED'; reason: string }
 	// primitiveFollowing
-	| { type: 'FOLLOWING_REACHED'; position?: Vec3 }
 	| { type: 'FOLLOWING_STOPPED'; reason: string }
 	| { type: 'FOLLOWING_FAILED'; reason: string }
 

@@ -86,8 +86,6 @@ export const primitiveFollowing = createStatefulService<
 
 		if (!isFollowing) return
 
-		const botPos = api.bot.entity.position
-
 		// Проверяем, существует ли еще цель (если это сущность)
 		if (target && (target as Entity).id) {
 			const entity = target as Entity
@@ -104,55 +102,15 @@ export const primitiveFollowing = createStatefulService<
 				return
 			}
 
-			// Проверяем дистанцию до цели
-			const currentDistance = botPos.distanceTo(entity.position)
-
-			// Если достигли дистанции следования
-			if (currentDistance <= distance) {
-				// Продолжаем следовать, но можем отправить событие о том, что мы близко
-				// console.log(`✅ [primitiveFollowing] В пределах дистанции: ${currentDistance.toFixed(1)}m`)
-			}
-
 			// Обновляем цель в movement (на случай если она движется)
 			api.bot.movement.setGoal({
 				entity: entity,
 				distance
 			})
-		} else if (target) {
-			// Статичная позиция
-			const targetPos = target as Vec3
-			const currentDistance = botPos.distanceTo(targetPos)
-
-			// Если достигли цели
-			if (currentDistance <= distance) {
-				console.log(
-					`✅ [primitiveFollowing] Достигнута позиция ${targetPos} (дистанция: ${currentDistance.toFixed(1)}m)`
-				)
-				api.bot.movement.clearGoal()
-				api.setState({ isFollowing: false })
-				api.sendBack({
-					type: 'FOLLOWING_REACHED',
-					position: targetPos
-				})
-				return
-			}
 		}
+		// Для статичной позиции (Vec3) просто продолжаем следовать
+		// movement сам будет поддерживать дистанцию
 	},
-
-	onEvents: () => ({
-		// Можно добавить обработчики событий от movement плагина, если они есть
-		goal_reached: api => {
-			console.log('✅ [primitiveFollowing] Цель достигнута')
-			api.setState({ isFollowing: false })
-			api.sendBack({ type: 'FOLLOWING_REACHED' })
-		},
-		goal_updated: api => {
-			console.log('🔄 [primitiveFollowing] Цель обновлена')
-		},
-		path_reset: api => {
-			console.log('⚠️ [primitiveFollowing] Путь сброшен')
-		}
-	}),
 
 	onCleanup: ({ bot, setState }) => {
 		console.log('🧹 [primitiveFollowing] Cleanup')
