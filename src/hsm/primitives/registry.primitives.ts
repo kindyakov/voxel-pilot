@@ -46,5 +46,33 @@ export const PRIMITIVE_REGISTRY: Record<string, PrimitiveDefinition> = {
 		required_params: ['block'],
 		optional_params: [],
 		events_emitted: ['OPENED', 'OPEN_FAILED']
+	},
+	craft: {
+		name: 'primitiveCraft',
+		description: 'Крафт предметов в инвентаре (2x2 сетка)',
+		required_params: ['itemName'],
+		optional_params: ['count'],
+		events_emitted: ['CRAFTED', 'CRAFT_FAILED']
+	},
+	craftInWorkbench: {
+		name: 'primitiveCraftInWorkbench',
+		description: 'Крафт предметов в верстаке (3x3 сетка)',
+		required_params: ['itemName', 'craftingTable'],
+		optional_params: ['count'],
+		events_emitted: ['CRAFTED', 'CRAFT_FAILED']
+	},
+	smelt: {
+		name: 'primitiveSmelt',
+		description: 'Плавка ресурсов в печи',
+		required_params: ['inputItemName', 'furnace'],
+		optional_params: ['fuelItemName', 'count'],
+		events_emitted: ['SMELTED', 'SMELT_FAILED']
+	},
+	placing: {
+		name: 'primitivePlacing',
+		description: 'Размещение блоков в мире',
+		required_params: ['blockName', 'position'],
+		optional_params: ['faceVector'],
+		events_emitted: ['PLACED', 'PLACING_FAILED']
 	}
 } as const
