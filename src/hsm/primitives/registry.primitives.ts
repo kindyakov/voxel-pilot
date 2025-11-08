@@ -74,5 +74,12 @@ export const PRIMITIVE_REGISTRY: Record<string, PrimitiveDefinition> = {
 		required_params: ['blockName', 'position'],
 		optional_params: ['faceVector'],
 		events_emitted: ['PLACED', 'PLACING_FAILED']
+	},
+	following: {
+		name: 'primitiveFollowing',
+		description: 'Следование за целью (сущность/игрок/позиция) используя movement',
+		required_params: ['target'],
+		optional_params: ['distance'],
+		events_emitted: ['FOLLOWING_REACHED', 'FOLLOWING_STOPPED', 'FOLLOWING_FAILED']
 	}
 } as const

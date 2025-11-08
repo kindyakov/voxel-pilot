@@ -7,6 +7,7 @@ import { primitiveCraft } from './primitiveCraft.primitive'
 import { primitiveCraftInWorkbench } from './primitiveCraftInWorkbench.primitive'
 import { primitiveSmelt } from './primitiveSmelt.primitive'
 import { primitivePlacing } from './primitivePlacing.primitive'
+import { primitiveFollowing } from './primitiveFollowing.primitive'
 
 export type PrimitiveType =
 	| 'primitiveSearchBlock'
@@ -18,6 +19,7 @@ export type PrimitiveType =
 	| 'primitiveCraftInWorkbench'
 	| 'primitiveSmelt'
 	| 'primitivePlacing'
+	| 'primitiveFollowing'
 
 export default {
 	primitiveSearchBlock,
@@ -28,5 +30,6 @@ export default {
 	primitiveCraft,
 	primitiveCraftInWorkbench,
 	primitiveSmelt,
-	primitivePlacing
+	primitivePlacing,
+	primitiveFollowing
 }
