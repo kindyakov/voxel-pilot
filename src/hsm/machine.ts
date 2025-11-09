@@ -427,18 +427,7 @@ export const machine = createMachine(
 								},
 								states: {
 									SEARCHING_TARGET: {
-										entry: [
-											'entrySearchingTarget',
-											assign({
-												taskData: ({ context }) => {
-													const data = context.taskData as FollowingTaskData
-													return {
-														...data,
-														searchAttempts: (data.searchAttempts || 0) + 1
-													}
-												}
-											})
-										],
+										entry: 'entrySearchingTarget',
 										invoke: {
 											id: 'followingSearching',
 											src: 'primitiveSearchEntity',
@@ -472,21 +461,9 @@ export const machine = createMachine(
 													})
 												})
 											},
-											NOT_FOUND: [
-												{
-													guard: ({ context }) => {
-														const data = context.taskData as FollowingTaskData
-														return (
-															data.searchAttempts >=
-															(data.maxSearchAttempts || 5)
-														)
-													},
-													target: 'TASK_FAILED'
-												},
-												{
-													target: 'SEARCHING_TARGET'
-												}
-											]
+											NOT_FOUND: {
+												target: 'TASK_FAILED'
+											}
 										}
 									},
 									FOLLOWING_TARGET: {
@@ -507,21 +484,9 @@ export const machine = createMachine(
 											}
 										},
 										on: {
-											FOLLOWING_STOPPED: [
-												{
-													guard: ({ context }) => {
-														const data = context.taskData as FollowingTaskData
-														return (
-															data.searchAttempts >=
-															(data.maxSearchAttempts || 5)
-														)
-													},
-													target: 'TASK_FAILED'
-												},
-												{
-													target: 'SEARCHING_TARGET'
-												}
-											],
+											FOLLOWING_STOPPED: {
+												target: 'TASK_COMPLETED'
+											},
 											FOLLOWING_FAILED: 'TASK_FAILED'
 										}
 									},

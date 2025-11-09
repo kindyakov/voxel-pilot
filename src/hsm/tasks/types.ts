@@ -81,8 +81,6 @@ export interface FollowingTaskData {
 	distance?: number // Дистанция следования (по умолчанию 3)
 	maxDistance?: number // Максимальная дистанция поиска (по умолчанию 32)
 	targetEntity?: Entity // Найденная цель для следования
-	searchAttempts: number // Текущий счетчик попыток поиска
-	maxSearchAttempts: number // Максимальное количество попыток поиска (по умолчанию 5)
 }
 
 // ============================================

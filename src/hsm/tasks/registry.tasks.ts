@@ -93,8 +93,7 @@ export const TASK_REGISTRY: Record<TaskType, TaskRegistryItem> = {
 			'entityName',
 			'entityType',
 			'distance',
-			'maxDistance',
-			'maxSearchAttempts'
+			'maxDistance'
 		],
 		primitives_used: ['primitiveSearchEntity', 'primitiveFollowing'],
 		preconditions: {} // Нет особых требований

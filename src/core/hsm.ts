@@ -203,9 +203,7 @@ class BotStateMachine extends EventEmitter {
 					this.actor.send({
 						type: 'START_FOLLOWING',
 						taskData: {
-							entityName: 'Smidvard',
-							searchAttempts: 0,
-							maxSearchAttempts: 5
+							entityName: 'Smidvard'
 						}
 					})
 				}

@@ -32,8 +32,6 @@ const entrySearchingTarget = ({ context }: MachineActionParams) => {
 	}
 
 	const taskData = context.taskData as FollowingTaskData
-	const attempt = taskData.searchAttempts + 1
-	const maxAttempts = taskData.maxSearchAttempts
 
 	const targetInfo = taskData.entityName
 		? `существо ${taskData.entityName}`
@@ -41,9 +39,7 @@ const entrySearchingTarget = ({ context }: MachineActionParams) => {
 			? `существо типа ${taskData.entityType}`
 			: 'неизвестную цель'
 
-	console.log(
-		`🔍 [FOLLOWING] Поиск цели: ${targetInfo} (попытка ${attempt}/${maxAttempts})`
-	)
+	console.log(`🔍 [FOLLOWING] Поиск цели: ${targetInfo}`)
 }
 
 /**
@@ -102,11 +98,11 @@ const taskFollowingFailed = ({ context }: MachineActionParams) => {
 	}
 
 	const taskData = context.taskData as FollowingTaskData | null
-	const reason = taskData
-		? `Не удалось найти/следовать за целью (попыток: ${taskData.searchAttempts}/${taskData.maxSearchAttempts})`
-		: 'Неизвестная причина'
+	const targetInfo = taskData
+		? taskData.entityName || taskData.entityType || 'неизвестная цель'
+		: 'неизвестная цель'
 
-	console.log(`❌ [FOLLOWING] Задача провалена: ${reason}`)
+	console.log(`❌ [FOLLOWING] Задача провалена: не удалось найти/следовать за ${targetInfo}`)
 
 	// Очистить context.taskData
 	context.taskData = null

@@ -8,6 +8,8 @@ interface SearchEntityState extends BaseServiceState {
 	entityType?: string
 	entityName?: string
 	maxDistance: number
+	maxSearchTicks: number
+	tickCount: number
 	searching: boolean
 	foundEntity?: Entity | null
 }
@@ -16,10 +18,12 @@ interface SearchEntityOptions {
 	entityType?: string | undefined // Тип сущности: 'hostile', 'player', 'animal', 'mob'
 	entityName?: string | undefined // Конкретное имя сущности: 'zombie', 'skeleton', 'cow' и т.д.
 	maxDistance?: number | undefined
+	maxSearchTicks?: number | undefined // Максимальное количество тиков до NOT_FOUND (по умолчанию 20)
 }
 
 const optDefault = {
-	maxDistance: 32
+	maxDistance: 32,
+	maxSearchTicks: 20
 }
 
 export const primitiveSearchEntity = createStatefulService<
@@ -30,6 +34,8 @@ export const primitiveSearchEntity = createStatefulService<
 	tickInterval: 500,
 	initialState: {
 		maxDistance: optDefault.maxDistance,
+		maxSearchTicks: optDefault.maxSearchTicks,
+		tickCount: 0,
 		searching: false,
 		foundEntity: null
 	},
@@ -38,7 +44,8 @@ export const primitiveSearchEntity = createStatefulService<
 		const {
 			entityType,
 			entityName,
-			maxDistance = optDefault.maxDistance
+			maxDistance = optDefault.maxDistance,
+			maxSearchTicks = optDefault.maxSearchTicks
 		} = api.input
 
 		if (!entityType && !entityName) {
@@ -56,18 +63,23 @@ export const primitiveSearchEntity = createStatefulService<
 			entityType,
 			entityName,
 			maxDistance,
+			maxSearchTicks,
+			tickCount: 0,
 			searching: true
 		})
 
 		console.log(
-			`🔍 [primitiveSearchEntity] Ищу ${entityName || entityType} в радиусе ${maxDistance}m`
+			`🔍 [primitiveSearchEntity] Ищу ${entityName || entityType} в радиусе ${maxDistance}m (таймаут: ${maxSearchTicks} тиков)`
 		)
 	},
 
 	onTick: api => {
-		const { entityType, entityName, maxDistance, searching } = api.state
+		const { entityType, entityName, maxDistance, maxSearchTicks, tickCount, searching } = api.state
 
 		if (!searching) return
+
+		// Инкрементируем счетчик тиков
+		api.setState({ tickCount: tickCount + 1 })
 
 		const botPos = api.bot.entity.position
 
@@ -114,6 +126,17 @@ export const primitiveSearchEntity = createStatefulService<
 			})
 
 		if (candidates.length === 0) {
+			// Проверяем таймаут
+			if (tickCount >= maxSearchTicks) {
+				console.warn(
+					`⏰ [primitiveSearchEntity] Таймаут поиска ${entityName || entityType} после ${tickCount} тиков`
+				)
+				api.setState({ searching: false })
+				api.sendBack({
+					type: 'NOT_FOUND',
+					reason: `Таймаут поиска: ${entityName || entityType} не найден за ${tickCount} тиков`
+				})
+			}
 			return
 		}
 
@@ -138,6 +161,6 @@ export const primitiveSearchEntity = createStatefulService<
 
 	onCleanup: ({ setState }) => {
 		console.log(`🧹 [primitiveSearchEntity] Cleanup`)
-		setState({ searching: false, foundEntity: null })
+		setState({ searching: false, foundEntity: null, tickCount: 0 })
 	}
 })
