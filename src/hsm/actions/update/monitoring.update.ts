@@ -16,6 +16,8 @@ const updateEntities = assign({
 		event.type === 'UPDATE_ENTITIES' ? event.entities : [],
 	enemies: ({ event }: MachineActionParams) =>
 		event.type === 'UPDATE_ENTITIES' ? event.enemies : [],
+	players: ({ event }: MachineActionParams) =>
+		event.type === 'UPDATE_ENTITIES' ? event.players : [],
 	nearestEnemy: ({ event }: MachineActionParams) =>
 		event.type === 'UPDATE_ENTITIES'
 			? event.nearestEnemy

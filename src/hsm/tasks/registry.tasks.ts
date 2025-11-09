@@ -1,6 +1,12 @@
 import type { PrimitiveType } from '@/hsm/actors/primitives/index.primitive'
 
-type TaskType = 'MINING' | 'SMELTING' | 'CRAFTING' | 'BUILDING' | 'FARMING'
+type TaskType =
+	| 'MINING'
+	| 'SMELTING'
+	| 'CRAFTING'
+	| 'BUILDING'
+	| 'FARMING'
+	| 'FOLLOWING'
 
 type RequiredParamsType =
 	| 'blockName'
@@ -78,5 +84,19 @@ export const TASK_REGISTRY: Record<TaskType, TaskRegistryItem> = {
 		preconditions: {
 			inventory_space: true
 		}
+	},
+	FOLLOWING: {
+		name: 'FOLLOWING',
+		description: 'Следование за игроком или сущностью',
+		required_params: [], // Хотя бы один из targetPlayerName, entityName, entityType должен быть указан
+		optional_params: [
+			'entityName',
+			'entityType',
+			'distance',
+			'maxDistance',
+			'maxSearchAttempts'
+		],
+		primitives_used: ['primitiveSearchEntity', 'primitiveFollowing'],
+		preconditions: {} // Нет особых требований
 	}
 } as const

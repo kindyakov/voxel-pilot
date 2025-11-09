@@ -1,17 +1,18 @@
-import type { Entity, Block, Vec3 } from '@types'
+import type { Entity } from '@types'
 import {
 	createStatefulService,
 	type BaseServiceState
 } from '@/hsm/helpers/createStatefulService'
+import { GoalFollow } from '@/modules/plugins/goals'
 
 interface FollowingState extends BaseServiceState {
-	target: Entity | Vec3 | null
+	target: Entity | null
 	distance: number
 	isFollowing: boolean
 }
 
 interface FollowingOptions {
-	target: Entity | Block | Vec3 // Цель для следования (сущность, блок или координаты)
+	target: Entity // Цель для следования (сущность, блок или координаты)
 	distance?: number // Дистанция следования (по умолчанию 3 блока)
 }
 
@@ -39,61 +40,53 @@ export const primitiveFollowing = createStatefulService<
 			return
 		}
 
-		// Определяем целевую позицию
+		// Определяем целевую сущность
 		let targetEntity: Entity | null = null
-		let targetPos: Vec3
 
 		if ((target as Entity).position) {
 			// Это сущность
 			targetEntity = target as Entity
-			targetPos = (target as Entity).position
-		} else if ((target as Block).position) {
-			// Это блок
-			targetPos = (target as Block).position
 		} else {
-			// Это Vec3
-			targetPos = target as Vec3
+			console.error(
+				'❌ [primitiveFollowing] GoalFollow работает только с Entity'
+			)
+			api.sendBack({
+				type: 'FOLLOWING_FAILED',
+				reason: 'Цель должна быть Entity (не Vec3 или Block)'
+			})
+			return
 		}
 
 		api.setState({
-			target: targetEntity || targetPos,
+			target: targetEntity,
 			distance,
 			isFollowing: true
 		})
 
 		console.log(
-			`🏃 [primitiveFollowing] Начинаю следование ${targetEntity ? `за ${targetEntity.name || targetEntity.type}` : `к позиции ${targetPos}`} на дистанции ${distance} блоков`
+			`🏃 [primitiveFollowing] Начинаю следование за ${targetEntity.name || targetEntity.type} на дистанции ${distance} блоков`
 		)
 
-		// Запускаем следование через movement плагин
-		if (targetEntity) {
-			// Следуем за сущностью
-			api.bot.movement.setGoal({
-				entity: targetEntity,
-				distance
-			})
-		} else {
-			// Следуем к статичной позиции
-			api.bot.movement.setGoal({
-				position: targetPos,
-				distance
-			})
-		}
+		// Создаем GoalFollow и запускаем pathfinder
+		const followGoal = new GoalFollow(targetEntity, distance)
+		api.bot.pathfinder.setGoal(followGoal, true) // true = dynamic goal
+
+		console.log('🗺️ [primitiveFollowing] Pathfinder запущен с GoalFollow')
 	},
 
 	onTick: api => {
-		const { target, distance, isFollowing } = api.state
+		const { target, isFollowing } = api.state
 
 		if (!isFollowing) return
 
-		// Проверяем, существует ли еще цель (если это сущность)
+		// Только проверяем существует ли цель
 		if (target && (target as Entity).id) {
 			const entity = target as Entity
 			const stillExists = api.bot.entities[entity.id]
 
 			if (!stillExists) {
 				console.log('⚠️ [primitiveFollowing] Цель исчезла')
-				api.bot.movement.clearGoal()
+				api.bot.pathfinder.setGoal(null)
 				api.setState({ isFollowing: false })
 				api.sendBack({
 					type: 'FOLLOWING_STOPPED',
@@ -102,25 +95,22 @@ export const primitiveFollowing = createStatefulService<
 				return
 			}
 
-			// Обновляем цель в movement (на случай если она движется)
-			api.bot.movement.setGoal({
-				entity: entity,
-				distance
-			})
+			// Все остальное pathfinder делает сам!
+			// - Обновляет путь к движущейся цели (GoalFollow.dynamic)
+			// - Управляет движением (forward, sprint, jump)
+			// - Останавливается на distance
 		}
-		// Для статичной позиции (Vec3) просто продолжаем следовать
-		// movement сам будет поддерживать дистанцию
 	},
 
 	onCleanup: ({ bot, setState }) => {
 		console.log('🧹 [primitiveFollowing] Cleanup')
 
-		// Останавливаем следование
+		// Останавливаем pathfinder
 		try {
-			bot.movement.clearGoal()
-			console.log('🛑 [primitiveFollowing] Следование остановлено')
+			bot.pathfinder.setGoal(null)
+			console.log('🛑 [primitiveFollowing] Pathfinder остановлен')
 		} catch (error) {
-			console.error('❌ [primitiveFollowing] Ошибка при остановке следования:', error)
+			console.error('❌ [primitiveFollowing] Ошибка при остановке:', error)
 		}
 
 		setState({ isFollowing: false, target: null })

@@ -33,6 +33,7 @@ export const serviceEntitiesTracking = createStatefulService({
 		// 2. Разделяем на дружественные и враждебные
 		const entities: Entity[] = allEntities.filter(e => !isEntityOfType(e))
 		const enemies: Entity[] = allEntities.filter(e => isEntityOfType(e))
+		const players: Entity[] = allEntities.filter(e => e.type === 'player')
 
 		// 3. Фильтруем врагов для атаки (≤ maxDistToEnemy)
 		const attackCandidates = enemies.filter(
@@ -79,6 +80,7 @@ export const serviceEntitiesTracking = createStatefulService({
 			type: 'UPDATE_ENTITIES',
 			entities,
 			enemies, // Все враги ≤ maxObservDist
+			players,
 			nearestEnemy // Ближайший достижимый враг (цель для атаки)
 		})
 	}

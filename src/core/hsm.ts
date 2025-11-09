@@ -192,12 +192,20 @@ class BotStateMachine extends EventEmitter {
 			) => {
 				if (commandName === 'stop') {
 				} else {
+					// this.actor.send({
+					// 	type: 'START_MINING',
+					// 	taskData: {
+					// 		blockName: options?.[0] || 'stone',
+					// 		navigationAttempts: 0,
+					// 		count: +options?.[1]! || 3
+					// 	}
+					// })
 					this.actor.send({
-						type: 'START_MINING',
+						type: 'START_FOLLOWING',
 						taskData: {
-							blockName: options?.[0] || 'stone',
-							navigationAttempts: 0,
-							count: +options?.[1]! || 3
+							entityName: 'Smidvard',
+							searchAttempts: 0,
+							maxSearchAttempts: 5
 						}
 					})
 				}

@@ -13,9 +13,9 @@ interface SearchEntityState extends BaseServiceState {
 }
 
 interface SearchEntityOptions {
-	entityType?: string // Тип сущности: 'hostile', 'player', 'animal', 'mob'
-	entityName?: string // Конкретное имя сущности: 'zombie', 'skeleton', 'cow' и т.д.
-	maxDistance?: number
+	entityType?: string | undefined // Тип сущности: 'hostile', 'player', 'animal', 'mob'
+	entityName?: string | undefined // Конкретное имя сущности: 'zombie', 'skeleton', 'cow' и т.д.
+	maxDistance?: number | undefined
 }
 
 const optDefault = {
@@ -43,11 +43,11 @@ export const primitiveSearchEntity = createStatefulService<
 
 		if (!entityType && !entityName) {
 			console.error(
-				'[primitiveSearchEntity] ❌ Отсутсвует entityType или entityName'
+				'[primitiveSearchEntity] ❌ Отсутсвует entityType и entityName'
 			)
 			api.sendBack({
 				type: 'NOT_FOUND',
-				reason: 'Отсутствует обязательный параметр: entityType или entityName'
+				reason: 'Отсутствуют обязательные параметры: entityType и entityName'
 			})
 			return
 		}
@@ -95,6 +95,8 @@ export const primitiveSearchEntity = createStatefulService<
 		// Фильтруем по имени и расстоянию
 		const candidates = searchPool
 			.filter(entity => {
+				// Если это имя игрока фильтруем без дистанции
+				if (entity.username === entityName) return true
 				// Фильтр по имени (если указан)
 				if (entityName && entity.name !== entityName) return false
 

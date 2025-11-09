@@ -1,4 +1,4 @@
-import type { Vec3, Item, Block } from '@types'
+import type { Vec3, Item, Block, Entity } from '@types'
 
 export interface Plan {
 	goal: string
@@ -73,6 +73,19 @@ export interface DepositItemsTaskData {
 }
 
 // ============================================
+// FOLLOWING
+// ============================================
+export interface FollowingTaskData {
+	entityName?: string // Название существа (cow, zombie) - найдет ближайшее
+	entityType?: string // Тип существа (hostile, animal, mob) - найдет ближайшее
+	distance?: number // Дистанция следования (по умолчанию 3)
+	maxDistance?: number // Максимальная дистанция поиска (по умолчанию 32)
+	targetEntity?: Entity // Найденная цель для следования
+	searchAttempts: number // Текущий счетчик попыток поиска
+	maxSearchAttempts: number // Максимальное количество попыток поиска (по умолчанию 5)
+}
+
+// ============================================
 // UNIONS
 // ============================================
 
@@ -83,3 +96,4 @@ export type AnyTaskData =
 	| CraftingTaskData
 	| BuildingTaskData
 	| DepositItemsTaskData
+	| FollowingTaskData

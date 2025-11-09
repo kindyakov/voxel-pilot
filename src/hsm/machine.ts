@@ -2,7 +2,11 @@ import { createMachine, assign } from 'xstate'
 import type { Bot } from '@types'
 import type { MachineActionParams, MachineEvent } from '@hsm/types'
 import { context, type MachineContext } from '@hsm/context'
-import type { AnyTaskData, MiningTaskData } from '@hsm/tasks/index'
+import type {
+	AnyTaskData,
+	MiningTaskData,
+	FollowingTaskData
+} from '@hsm/tasks/index'
 import { actions } from '@hsm/actions/index.actions'
 import { guards } from '@hsm/guards/index.guards'
 import { actors } from '@hsm/actors/index.actors'
@@ -49,6 +53,16 @@ export const machine = createMachine(
 										event
 									}: {
 										event: MachineEvent & { type: 'START_MINING' }
+									}) => event.taskData
+								})
+							},
+							START_FOLLOWING: {
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.FOLLOWING',
+								actions: assign({
+									taskData: ({
+										event
+									}: {
+										event: MachineEvent & { type: 'START_FOLLOWING' }
 									}) => event.taskData
 								})
 							}
@@ -401,7 +415,126 @@ export const machine = createMachine(
 								}
 							},
 
-							FOLLOWING: {},
+							FOLLOWING: {
+								initial: 'SEARCHING_TARGET',
+								entry: 'entryFollowing',
+								exit: 'exitFollowing',
+								onDone: {
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: assign({
+										taskData: () => null
+									})
+								},
+								states: {
+									SEARCHING_TARGET: {
+										entry: [
+											'entrySearchingTarget',
+											assign({
+												taskData: ({ context }) => {
+													const data = context.taskData as FollowingTaskData
+													return {
+														...data,
+														searchAttempts: (data.searchAttempts || 0) + 1
+													}
+												}
+											})
+										],
+										invoke: {
+											id: 'followingSearching',
+											src: 'primitiveSearchEntity',
+											input: ({ context }: { context: MachineContext }) => {
+												const { entityName, entityType, maxDistance } =
+													context.taskData as FollowingTaskData
+
+												return {
+													bot: context.bot,
+													options: {
+														entityName,
+														entityType,
+														maxDistance
+													}
+												}
+											}
+										},
+										on: {
+											FOUND: {
+												target: 'FOLLOWING_TARGET',
+												actions: assign({
+													taskData: ({
+														context,
+														event
+													}: {
+														context: MachineContext
+														event: Extract<MachineEvent, { type: 'FOUND' }>
+													}) => ({
+														...(context.taskData as FollowingTaskData),
+														targetEntity: event.entity
+													})
+												})
+											},
+											NOT_FOUND: [
+												{
+													guard: ({ context }) => {
+														const data = context.taskData as FollowingTaskData
+														return (
+															data.searchAttempts >=
+															(data.maxSearchAttempts || 5)
+														)
+													},
+													target: 'TASK_FAILED'
+												},
+												{
+													target: 'SEARCHING_TARGET'
+												}
+											]
+										}
+									},
+									FOLLOWING_TARGET: {
+										entry: 'entryFollowingTarget',
+										exit: 'exitFollowingTarget',
+										invoke: {
+											id: 'followingTarget',
+											src: 'primitiveFollowing',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as FollowingTaskData
+												return {
+													bot: context.bot,
+													options: {
+														target: taskData.targetEntity,
+														distance: taskData.distance || 3
+													}
+												}
+											}
+										},
+										on: {
+											FOLLOWING_STOPPED: [
+												{
+													guard: ({ context }) => {
+														const data = context.taskData as FollowingTaskData
+														return (
+															data.searchAttempts >=
+															(data.maxSearchAttempts || 5)
+														)
+													},
+													target: 'TASK_FAILED'
+												},
+												{
+													target: 'SEARCHING_TARGET'
+												}
+											],
+											FOLLOWING_FAILED: 'TASK_FAILED'
+										}
+									},
+									TASK_COMPLETED: {
+										type: 'final',
+										entry: 'taskFollowingCompleted'
+									},
+									TASK_FAILED: {
+										type: 'final',
+										entry: 'taskFollowingFailed'
+									}
+								}
+							},
 
 							SMELTING: {},
 							CRAFTING: {},

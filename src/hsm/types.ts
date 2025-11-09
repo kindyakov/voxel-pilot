@@ -31,6 +31,7 @@ export type UpdateEvents =
 			type: 'UPDATE_ENTITIES'
 			entities: Entity[]
 			enemies: Entity[]
+			players: Entity[]
 			nearestEnemy: { entity: Entity | null; distance: number }
 	  }
 
@@ -54,6 +55,7 @@ export type TaskEvents =
 	| { type: 'NOT_FOUND'; reason: string }
 	| { type: 'FOUND'; block?: Block; entity?: Entity }
 	| { type: 'START_MINING'; taskData: AnyTaskData }
+	| { type: 'START_FOLLOWING'; taskData: AnyTaskData }
 	| { type: 'SUCCESSFULLY' }
 	| { type: 'ARRIVED' }
 	| { type: 'NAVIGATION_FAILED' }
