@@ -5,6 +5,9 @@ import urgentNeedsEntry from './urgentNeeds.entry'
 import tasksEntry from './tasks.entry'
 import followingEntry from './following.entry'
 import smeltingEntry from './smelting.entry'
+import craftingEntry from './crafting.entry'
+import sleepingEntry from './sleeping.entry'
+import farmingEntry from './farming.entry'
 
 export default {
 	...monitoringEntry,
@@ -13,5 +16,8 @@ export default {
 	...urgentNeedsEntry,
 	...tasksEntry,
 	...followingEntry,
-	...smeltingEntry
+	...smeltingEntry,
+	...craftingEntry,
+	...sleepingEntry,
+	...farmingEntry
 }

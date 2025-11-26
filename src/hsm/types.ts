@@ -57,6 +57,9 @@ export type TaskEvents =
 	| { type: 'START_MINING'; taskData: AnyTaskData }
 	| { type: 'START_FOLLOWING'; taskData: AnyTaskData }
 	| { type: 'START_SMELTING'; taskData: AnyTaskData }
+	| { type: 'START_CRAFTING'; taskData: AnyTaskData }
+	| { type: 'START_SLEEPING'; taskData: AnyTaskData }
+	| { type: 'START_FARMING'; taskData: AnyTaskData }
 	| { type: 'SUCCESSFULLY' }
 	| { type: 'ARRIVED' }
 	| { type: 'NAVIGATION_FAILED' }
@@ -82,6 +85,9 @@ export type TaskEvents =
 	// primitiveFollowing
 	| { type: 'FOLLOWING_STOPPED'; reason: string }
 	| { type: 'FOLLOWING_FAILED'; reason: string }
+	// Sleeping
+	| { type: 'WOKE_UP' }
+	| { type: 'SLEEP_FAILED'; reason: string }
 
 export type SystemEvents = { type: 'ERROR'; error: string }
 

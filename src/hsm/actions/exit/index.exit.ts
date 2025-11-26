@@ -4,6 +4,9 @@ import miningExit from './mining.exit'
 import tasksExit from './tasks.exit'
 import followingExit from './following.exit'
 import smeltingExit from './smelting.exit'
+import craftingExit from './crafting.exit'
+import sleepingExit from './sleeping.exit'
+import farmingExit from './farming.exit'
 
 export default {
 	...combatExit,
@@ -11,5 +14,8 @@ export default {
 	...miningExit,
 	...tasksExit,
 	...followingExit,
-	...smeltingExit
+	...smeltingExit,
+	...craftingExit,
+	...sleepingExit,
+	...farmingExit
 }
