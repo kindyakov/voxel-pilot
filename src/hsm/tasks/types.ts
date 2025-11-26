@@ -84,6 +84,26 @@ export interface FollowingTaskData {
 }
 
 // ============================================
+// SLEEPING
+// ============================================
+export interface SleepingTaskData {
+	targetBed?: Block // Найденная кровать
+	maxDistance?: number // Максимальная дистанция поиска (по умолчанию 32)
+}
+
+// ============================================
+// FARMING
+// ============================================
+export interface FarmingTaskData {
+	cropName: string // Название культуры (wheat, carrot, potato, etc.)
+	count?: number // Количество для сбора (по умолчанию 1)
+	collected?: number // Собрано
+	targetCrop?: Block // Текущая цель для сбора
+	maxDistance?: number // Максимальная дистанция поиска (по умолчанию 32)
+	replant?: boolean // Пересаживать после сбора (по умолчанию true)
+}
+
+// ============================================
 // UNIONS
 // ============================================
 
@@ -95,3 +115,5 @@ export type AnyTaskData =
 	| BuildingTaskData
 	| DepositItemsTaskData
 	| FollowingTaskData
+	| SleepingTaskData
+	| FarmingTaskData

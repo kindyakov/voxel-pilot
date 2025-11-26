@@ -5,7 +5,11 @@ import { context, type MachineContext } from '@hsm/context'
 import type {
 	AnyTaskData,
 	MiningTaskData,
-	FollowingTaskData
+	FollowingTaskData,
+	SmeltingTaskData,
+	CraftingTaskData,
+	SleepingTaskData,
+	FarmingTaskData
 } from '@hsm/tasks/index'
 import { actions } from '@hsm/actions/index.actions'
 import { guards } from '@hsm/guards/index.guards'
@@ -63,6 +67,46 @@ export const machine = createMachine(
 										event
 									}: {
 										event: MachineEvent & { type: 'START_FOLLOWING' }
+									}) => event.taskData
+								})
+							},
+							START_SMELTING: {
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.SMELTING',
+								actions: assign({
+									taskData: ({
+										event
+									}: {
+										event: MachineEvent & { type: 'START_SMELTING' }
+									}) => event.taskData
+								})
+							},
+							START_CRAFTING: {
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.CRAFTING',
+								actions: assign({
+									taskData: ({
+										event
+									}: {
+										event: MachineEvent & { type: 'START_CRAFTING' }
+									}) => event.taskData
+								})
+							},
+							START_SLEEPING: {
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.SLEEPING',
+								actions: assign({
+									taskData: ({
+										event
+									}: {
+										event: MachineEvent & { type: 'START_SLEEPING' }
+									}) => event.taskData
+								})
+							},
+							START_FARMING: {
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.FARMING',
+								actions: assign({
+									taskData: ({
+										event
+									}: {
+										event: MachineEvent & { type: 'START_FARMING' }
 									}) => event.taskData
 								})
 							}
@@ -501,11 +545,583 @@ export const machine = createMachine(
 								}
 							},
 
-							SMELTING: {},
-							CRAFTING: {},
+							SMELTING: {
+								initial: 'CHECKING_PRECONDITIONS',
+								entry: 'entrySmelting',
+								exit: 'exitSmelting',
+								onDone: {
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: assign({
+										taskData: () => null
+									})
+								},
+								states: {
+									CHECKING_PRECONDITIONS: {
+										entry: 'entryCheckingSmeltingPreconditions',
+										always: [
+											{
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as SmeltingTaskData
+													const bot = context.bot
+													if (!bot || !taskData) return false
+
+													// Проверяем наличие входного материала и топлива в инвентаре
+													const inputItem = bot.registry.itemsByName[taskData.inputItem]
+													const fuelItem = bot.registry.itemsByName[taskData.fuel]
+
+													if (!inputItem || !fuelItem) return false
+
+													const inputCount = bot.utils.countItemInInventory(inputItem.id)
+													const fuelCount = bot.utils.countItemInInventory(fuelItem.id)
+
+													return inputCount >= (taskData.count - taskData.smelted) && fuelCount >= 1
+												},
+												target: 'SEARCHING_FURNACE'
+											},
+											{
+												target: 'TASK_FAILED'
+											}
+										]
+									},
+									SEARCHING_FURNACE: {
+										entry: 'entrySearchingFurnace',
+										invoke: {
+											id: 'smeltingSearchingFurnace',
+											src: 'primitiveSearchBlock',
+											input: ({ context }: { context: MachineContext }) => ({
+												bot: context.bot,
+												options: {
+													blockName: 'furnace',
+													maxDistance: 32
+												}
+											})
+										},
+										on: {
+											FOUND: {
+												target: 'CHECKING_DISTANCE',
+												actions: assign({
+													taskData: ({
+														context,
+														event
+													}: {
+														context: MachineContext
+														event: Extract<MachineEvent, { type: 'FOUND' }>
+													}) => ({
+														...(context.taskData as SmeltingTaskData),
+														furnace: event.block
+													})
+												})
+											},
+											NOT_FOUND: 'TASK_FAILED'
+										}
+									},
+									CHECKING_DISTANCE: {
+										always: [
+											{
+												target: 'SMELTING_ITEMS',
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as SmeltingTaskData & { furnace?: any }
+													const bot = context.bot
+													if (!bot || !taskData.furnace) return false
+
+													const distance = bot.entity.position.distanceTo(taskData.furnace.position)
+													return distance <= 4
+												}
+											},
+											{
+												target: 'NAVIGATING'
+											}
+										]
+									},
+									NAVIGATING: {
+										entry: 'entrySmeltingNavigating',
+										invoke: {
+											id: 'smeltingNavigating',
+											src: 'primitiveNavigating',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as SmeltingTaskData & { furnace?: any }
+												return {
+													bot: context.bot,
+													options: {
+														target: taskData.furnace
+													}
+												}
+											}
+										},
+										on: {
+											ARRIVED: {
+												target: 'SMELTING_ITEMS'
+											},
+											NAVIGATION_FAILED: 'TASK_FAILED'
+										}
+									},
+									SMELTING_ITEMS: {
+										invoke: {
+											id: 'smeltingItems',
+											src: 'primitiveSmelt',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as SmeltingTaskData & { furnace?: any }
+												const remainingCount = taskData.count - taskData.smelted
+												return {
+													bot: context.bot,
+													options: {
+														inputItemName: taskData.inputItem,
+														fuelItemName: taskData.fuel,
+														furnace: taskData.furnace,
+														count: remainingCount > 0 ? remainingCount : 1
+													}
+												}
+											}
+										},
+										on: {
+											SMELTED: {
+												target: 'CHECKING_GOAL',
+												actions: assign({
+													taskData: ({ context, event }) => {
+														const currentData = context.taskData as SmeltingTaskData
+														const smeltedEvent = event as Extract<MachineEvent, { type: 'SMELTED' }>
+														return {
+															...currentData,
+															smelted: currentData.smelted + smeltedEvent.count
+														}
+													}
+												})
+											},
+											SMELT_FAILED: 'TASK_FAILED'
+										}
+									},
+									CHECKING_GOAL: {
+										always: [
+											{
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as SmeltingTaskData
+													return taskData.smelted >= taskData.count
+												},
+												target: 'TASK_COMPLETED'
+											},
+											{
+												target: 'SEARCHING_FURNACE'
+											}
+										]
+									},
+									TASK_COMPLETED: {
+										type: 'final',
+										entry: 'taskSmeltingCompleted'
+									},
+									TASK_FAILED: {
+										type: 'final',
+										entry: 'taskSmeltingFailed'
+									}
+								}
+							},
+							CRAFTING: {
+								initial: 'CHECKING_RECIPE',
+								entry: 'entryCrafting',
+								exit: 'exitCrafting',
+								onDone: {
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: assign({
+										taskData: () => null
+									})
+								},
+								states: {
+									CHECKING_RECIPE: {
+										entry: 'entryCheckingRecipe',
+										always: [
+											{
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as CraftingTaskData
+													const bot = context.bot
+													if (!bot || !taskData) return false
+
+													// Проверяем существование рецепта
+													const recipe = bot.registry.recipesFor(
+														bot.registry.itemsByName[taskData.recipe]?.id,
+														null,
+														1,
+														null
+													)
+
+													return recipe && recipe.length > 0
+												},
+												target: 'CRAFTING_ITEMS'
+											},
+											{
+												target: 'TASK_FAILED'
+											}
+										]
+									},
+									CRAFTING_ITEMS: {
+										invoke: {
+											id: 'craftingItems',
+											src: 'primitiveCraft',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as CraftingTaskData
+												const remainingCount = taskData.count - taskData.crafted
+												return {
+													bot: context.bot,
+													options: {
+														recipe: taskData.recipe,
+														count: remainingCount > 0 ? remainingCount : 1
+													}
+												}
+											}
+										},
+										on: {
+											CRAFTED: {
+												target: 'CHECKING_GOAL',
+												actions: assign({
+													taskData: ({ context, event }) => {
+														const currentData = context.taskData as CraftingTaskData
+														const craftedEvent = event as Extract<
+															MachineEvent,
+															{ type: 'CRAFTED' }
+														>
+														return {
+															...currentData,
+															crafted: currentData.crafted + craftedEvent.count
+														}
+													}
+												})
+											},
+											CRAFT_FAILED: 'TASK_FAILED'
+										}
+									},
+									CHECKING_GOAL: {
+										always: [
+											{
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as CraftingTaskData
+													return taskData.crafted >= taskData.count
+												},
+												target: 'TASK_COMPLETED'
+											},
+											{
+												target: 'CRAFTING_ITEMS'
+											}
+										]
+									},
+									TASK_COMPLETED: {
+										type: 'final',
+										entry: 'taskCraftingCompleted'
+									},
+									TASK_FAILED: {
+										type: 'final',
+										entry: 'taskCraftingFailed'
+									}
+								}
+							},
 							BUILDING: {},
-							SLEEPING: {},
-							FARMING: {}
+							SLEEPING: {
+								initial: 'SEARCHING_BED',
+								entry: 'entrySleeping',
+								exit: 'exitSleeping',
+								onDone: {
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: assign({
+										taskData: () => null
+									})
+								},
+								states: {
+									SEARCHING_BED: {
+										entry: 'entrySearchingBed',
+										invoke: {
+											id: 'sleepingSearchingBed',
+											src: 'primitiveSearchBlock',
+											input: ({ context }: { context: MachineContext }) => ({
+												bot: context.bot,
+												options: {
+													blockName: 'bed',
+													maxDistance: 32
+												}
+											})
+										},
+										on: {
+											FOUND: {
+												target: 'CHECKING_DISTANCE',
+												actions: assign({
+													taskData: ({
+														context,
+														event
+													}: {
+														context: MachineContext
+														event: Extract<MachineEvent, { type: 'FOUND' }>
+													}) => ({
+														...(context.taskData as SleepingTaskData),
+														targetBed: event.block
+													})
+												})
+											},
+											NOT_FOUND: 'TASK_FAILED'
+										}
+									},
+									CHECKING_DISTANCE: {
+										always: [
+											{
+												target: 'SLEEPING_IN_BED',
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as SleepingTaskData & {
+														targetBed?: any
+													}
+													const bot = context.bot
+													if (!bot || !taskData.targetBed) return false
+
+													const distance = bot.entity.position.distanceTo(
+														taskData.targetBed.position
+													)
+													return distance <= 4
+												}
+											},
+											{
+												target: 'NAVIGATING'
+											}
+										]
+									},
+									NAVIGATING: {
+										invoke: {
+											id: 'sleepingNavigating',
+											src: 'primitiveNavigating',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as SleepingTaskData & {
+													targetBed?: any
+												}
+												return {
+													bot: context.bot,
+													options: {
+														target: taskData.targetBed
+													}
+												}
+											}
+										},
+										on: {
+											ARRIVED: {
+												target: 'SLEEPING_IN_BED'
+											},
+											NAVIGATION_FAILED: 'TASK_FAILED'
+										}
+									},
+									SLEEPING_IN_BED: {
+										entry: async ({ context }: MachineActionParams) => {
+											const bot = context.bot
+											if (!bot) return
+
+											const taskData = context.taskData as SleepingTaskData & {
+												targetBed?: any
+											}
+											if (!taskData.targetBed) return
+
+											try {
+												console.log(
+													`🛏️ [SLEEPING] Сон в кровати на ${taskData.targetBed.position}`
+												)
+												await bot.sleep(taskData.targetBed)
+												console.log('✅ [SLEEPING] Проснулся!')
+											} catch (error) {
+												console.error('❌ [SLEEPING] Ошибка сна:', error)
+											}
+										},
+										after: {
+											1000: 'TASK_COMPLETED'
+										}
+									},
+									TASK_COMPLETED: {
+										type: 'final',
+										entry: 'taskSleepingCompleted'
+									},
+									TASK_FAILED: {
+										type: 'final',
+										entry: 'taskSleepingFailed'
+									}
+								}
+							},
+							FARMING: {
+								initial: 'SEARCHING_CROP',
+								entry: 'entryFarming',
+								exit: 'exitFarming',
+								onDone: {
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: assign({
+										taskData: () => null
+									})
+								},
+								states: {
+									SEARCHING_CROP: {
+										entry: 'entrySearchingCrop',
+										invoke: {
+											id: 'farmingSearchingCrop',
+											src: 'primitiveSearchBlock',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as FarmingTaskData
+												// Ищем полностью выросшие культуры (возраст 7)
+												const cropNameWithAge = `${taskData.cropName}_7`
+												return {
+													bot: context.bot,
+													options: {
+														blockName: cropNameWithAge,
+														maxDistance: taskData.maxDistance || 32
+													}
+												}
+											}
+										},
+										on: {
+											FOUND: {
+												target: 'CHECKING_DISTANCE',
+												actions: assign({
+													taskData: ({
+														context,
+														event
+													}: {
+														context: MachineContext
+														event: Extract<MachineEvent, { type: 'FOUND' }>
+													}) => ({
+														...(context.taskData as FarmingTaskData),
+														targetCrop: event.block
+													})
+												})
+											},
+											NOT_FOUND: 'TASK_FAILED'
+										}
+									},
+									CHECKING_DISTANCE: {
+										always: [
+											{
+												target: 'HARVESTING',
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as FarmingTaskData & {
+														targetCrop?: any
+													}
+													const bot = context.bot
+													if (!bot || !taskData.targetCrop) return false
+
+													const distance = bot.entity.position.distanceTo(
+														taskData.targetCrop.position
+													)
+													return distance <= 4
+												}
+											},
+											{
+												target: 'NAVIGATING'
+											}
+										]
+									},
+									NAVIGATING: {
+										invoke: {
+											id: 'farmingNavigating',
+											src: 'primitiveNavigating',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as FarmingTaskData & {
+													targetCrop?: any
+												}
+												return {
+													bot: context.bot,
+													options: {
+														target: taskData.targetCrop
+													}
+												}
+											}
+										},
+										on: {
+											ARRIVED: {
+												target: 'HARVESTING'
+											},
+											NAVIGATION_FAILED: 'TASK_FAILED'
+										}
+									},
+									HARVESTING: {
+										entry: 'entryHarvesting',
+										invoke: {
+											id: 'farmingHarvesting',
+											src: 'primitiveBreaking',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as FarmingTaskData & {
+													targetCrop?: any
+												}
+												return {
+													bot: context.bot,
+													options: {
+														block: taskData.targetCrop
+													}
+												}
+											}
+										},
+										on: {
+											BROKEN: {
+												target: 'CHECKING_REPLANT',
+												actions: assign({
+													taskData: ({ context }) => ({
+														...(context.taskData as FarmingTaskData),
+														collected:
+															((context.taskData as FarmingTaskData).collected ||
+																0) + 1
+													})
+												})
+											},
+											BREAKING_FAILED: 'SEARCHING_CROP'
+										}
+									},
+									CHECKING_REPLANT: {
+										always: [
+											{
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as FarmingTaskData
+													return taskData.replant !== false
+												},
+												target: 'REPLANTING'
+											},
+											{
+												target: 'CHECKING_GOAL'
+											}
+										]
+									},
+									REPLANTING: {
+										invoke: {
+											id: 'farmingReplanting',
+											src: 'primitivePlacing',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as FarmingTaskData & {
+													targetCrop?: any
+												}
+												return {
+													bot: context.bot,
+													options: {
+														blockName: taskData.cropName,
+														position: taskData.targetCrop?.position,
+														faceVector: { x: 0, y: 1, z: 0 }
+													}
+												}
+											}
+										},
+										on: {
+											PLACED: 'CHECKING_GOAL',
+											PLACING_FAILED: 'CHECKING_GOAL'
+										}
+									},
+									CHECKING_GOAL: {
+										always: [
+											{
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as FarmingTaskData
+													return (
+														(taskData.collected || 0) >= (taskData.count || 1)
+													)
+												},
+												target: 'TASK_COMPLETED'
+											},
+											{
+												target: 'SEARCHING_CROP'
+											}
+										]
+									},
+									TASK_COMPLETED: {
+										type: 'final',
+										entry: 'taskFarmingCompleted'
+									},
+									TASK_FAILED: {
+										type: 'final',
+										entry: 'taskFarmingFailed'
+									}
+								}
+							}
 						}
 					}
 				}
