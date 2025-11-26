@@ -5,7 +5,8 @@ import { context, type MachineContext } from '@hsm/context'
 import type {
 	AnyTaskData,
 	MiningTaskData,
-	FollowingTaskData
+	FollowingTaskData,
+	SmeltingTaskData
 } from '@hsm/tasks/index'
 import { actions } from '@hsm/actions/index.actions'
 import { guards } from '@hsm/guards/index.guards'
@@ -63,6 +64,16 @@ export const machine = createMachine(
 										event
 									}: {
 										event: MachineEvent & { type: 'START_FOLLOWING' }
+									}) => event.taskData
+								})
+							},
+							START_SMELTING: {
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.SMELTING',
+								actions: assign({
+									taskData: ({
+										event
+									}: {
+										event: MachineEvent & { type: 'START_SMELTING' }
 									}) => event.taskData
 								})
 							}
@@ -501,7 +512,175 @@ export const machine = createMachine(
 								}
 							},
 
-							SMELTING: {},
+							SMELTING: {
+								initial: 'CHECKING_PRECONDITIONS',
+								entry: 'entrySmelting',
+								exit: 'exitSmelting',
+								onDone: {
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: assign({
+										taskData: () => null
+									})
+								},
+								states: {
+									CHECKING_PRECONDITIONS: {
+										entry: 'entryCheckingSmeltingPreconditions',
+										always: [
+											{
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as SmeltingTaskData
+													const bot = context.bot
+													if (!bot || !taskData) return false
+
+													// Проверяем наличие входного материала и топлива в инвентаре
+													const inputItem = bot.registry.itemsByName[taskData.inputItem]
+													const fuelItem = bot.registry.itemsByName[taskData.fuel]
+
+													if (!inputItem || !fuelItem) return false
+
+													const inputCount = bot.utils.countItemInInventory(inputItem.id)
+													const fuelCount = bot.utils.countItemInInventory(fuelItem.id)
+
+													return inputCount >= (taskData.count - taskData.smelted) && fuelCount >= 1
+												},
+												target: 'SEARCHING_FURNACE'
+											},
+											{
+												target: 'TASK_FAILED'
+											}
+										]
+									},
+									SEARCHING_FURNACE: {
+										entry: 'entrySearchingFurnace',
+										invoke: {
+											id: 'smeltingSearchingFurnace',
+											src: 'primitiveSearchBlock',
+											input: ({ context }: { context: MachineContext }) => ({
+												bot: context.bot,
+												options: {
+													blockName: 'furnace',
+													maxDistance: 32
+												}
+											})
+										},
+										on: {
+											FOUND: {
+												target: 'CHECKING_DISTANCE',
+												actions: assign({
+													taskData: ({
+														context,
+														event
+													}: {
+														context: MachineContext
+														event: Extract<MachineEvent, { type: 'FOUND' }>
+													}) => ({
+														...(context.taskData as SmeltingTaskData),
+														furnace: event.block
+													})
+												})
+											},
+											NOT_FOUND: 'TASK_FAILED'
+										}
+									},
+									CHECKING_DISTANCE: {
+										always: [
+											{
+												target: 'SMELTING_ITEMS',
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as SmeltingTaskData & { furnace?: any }
+													const bot = context.bot
+													if (!bot || !taskData.furnace) return false
+
+													const distance = bot.entity.position.distanceTo(taskData.furnace.position)
+													return distance <= 4
+												}
+											},
+											{
+												target: 'NAVIGATING'
+											}
+										]
+									},
+									NAVIGATING: {
+										entry: 'entrySmeltingNavigating',
+										invoke: {
+											id: 'smeltingNavigating',
+											src: 'primitiveNavigating',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as SmeltingTaskData & { furnace?: any }
+												return {
+													bot: context.bot,
+													options: {
+														target: taskData.furnace
+													}
+												}
+											}
+										},
+										on: {
+											ARRIVED: {
+												target: 'SMELTING_ITEMS'
+											},
+											NAVIGATION_FAILED: 'TASK_FAILED'
+										}
+									},
+									SMELTING_ITEMS: {
+										invoke: {
+											id: 'smeltingItems',
+											src: 'primitiveSmelt',
+											input: ({ context }: { context: MachineContext }) => {
+												const taskData = context.taskData as SmeltingTaskData & { furnace?: any }
+												const remainingCount = taskData.count - taskData.smelted
+												return {
+													bot: context.bot,
+													options: {
+														inputItemName: taskData.inputItem,
+														fuelItemName: taskData.fuel,
+														furnace: taskData.furnace,
+														count: remainingCount > 0 ? remainingCount : 1
+													}
+												}
+											}
+										},
+										on: {
+											SMELTED: {
+												target: 'CHECKING_GOAL',
+												actions: assign({
+													taskData: ({ context, event }) => {
+														const currentData = context.taskData as SmeltingTaskData
+														const smeltedEvent = event as Extract<MachineEvent, { type: 'SMELTED' }>
+														return {
+															...currentData,
+															smelted: currentData.smelted + smeltedEvent.count
+														}
+													}
+												})
+											},
+											SMELT_FAILED: 'TASK_FAILED'
+										}
+									},
+									CHECKING_GOAL: {
+										always: [
+											{
+												guard: ({ context }: { context: MachineContext }) => {
+													const taskData = context.taskData as SmeltingTaskData
+													return taskData.smelted >= taskData.count
+												},
+												target: 'TASK_COMPLETED'
+											},
+											{
+												target: 'SEARCHING_FURNACE'
+											}
+										]
+									},
+									TASK_COMPLETED: {
+										type: 'final',
+										entry: 'taskSmeltingCompleted'
+									},
+									TASK_FAILED: {
+										type: 'final',
+										entry: 'taskSmeltingFailed'
+									}
+								}
+							},
 							CRAFTING: {},
 							BUILDING: {},
 							SLEEPING: {},
