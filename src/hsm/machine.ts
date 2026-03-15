@@ -566,15 +566,24 @@ export const machine = createMachine(
 													if (!bot || !taskData) return false
 
 													// Проверяем наличие входного материала и топлива в инвентаре
-													const inputItem = bot.registry.itemsByName[taskData.inputItem]
-													const fuelItem = bot.registry.itemsByName[taskData.fuel]
+													const inputItem =
+														bot.registry.itemsByName[taskData.inputItem]
+													const fuelItem =
+														bot.registry.itemsByName[taskData.fuel]
 
 													if (!inputItem || !fuelItem) return false
 
-													const inputCount = bot.utils.countItemInInventory(inputItem.id)
-													const fuelCount = bot.utils.countItemInInventory(fuelItem.id)
+													const inputCount = bot.utils.countItemInInventory(
+														inputItem.id
+													)
+													const fuelCount = bot.utils.countItemInInventory(
+														fuelItem.id
+													)
 
-													return inputCount >= (taskData.count - taskData.smelted) && fuelCount >= 1
+													return (
+														inputCount >= taskData.count - taskData.smelted &&
+														fuelCount >= 1
+													)
 												},
 												target: 'SEARCHING_FURNACE'
 											},
@@ -620,11 +629,16 @@ export const machine = createMachine(
 											{
 												target: 'SMELTING_ITEMS',
 												guard: ({ context }: { context: MachineContext }) => {
-													const taskData = context.taskData as SmeltingTaskData & { furnace?: any }
+													const taskData =
+														context.taskData as SmeltingTaskData & {
+															furnace?: any
+														}
 													const bot = context.bot
 													if (!bot || !taskData.furnace) return false
 
-													const distance = bot.entity.position.distanceTo(taskData.furnace.position)
+													const distance = bot.entity.position.distanceTo(
+														taskData.furnace.position
+													)
 													return distance <= 4
 												}
 											},
@@ -639,7 +653,10 @@ export const machine = createMachine(
 											id: 'smeltingNavigating',
 											src: 'primitiveNavigating',
 											input: ({ context }: { context: MachineContext }) => {
-												const taskData = context.taskData as SmeltingTaskData & { furnace?: any }
+												const taskData =
+													context.taskData as SmeltingTaskData & {
+														furnace?: any
+													}
 												return {
 													bot: context.bot,
 													options: {
@@ -660,7 +677,10 @@ export const machine = createMachine(
 											id: 'smeltingItems',
 											src: 'primitiveSmelt',
 											input: ({ context }: { context: MachineContext }) => {
-												const taskData = context.taskData as SmeltingTaskData & { furnace?: any }
+												const taskData =
+													context.taskData as SmeltingTaskData & {
+														furnace?: any
+													}
 												const remainingCount = taskData.count - taskData.smelted
 												return {
 													bot: context.bot,
@@ -678,8 +698,12 @@ export const machine = createMachine(
 												target: 'CHECKING_GOAL',
 												actions: assign({
 													taskData: ({ context, event }) => {
-														const currentData = context.taskData as SmeltingTaskData
-														const smeltedEvent = event as Extract<MachineEvent, { type: 'SMELTED' }>
+														const currentData =
+															context.taskData as SmeltingTaskData
+														const smeltedEvent = event as Extract<
+															MachineEvent,
+															{ type: 'SMELTED' }
+														>
 														return {
 															...currentData,
 															smelted: currentData.smelted + smeltedEvent.count
@@ -772,7 +796,8 @@ export const machine = createMachine(
 												target: 'CHECKING_GOAL',
 												actions: assign({
 													taskData: ({ context, event }) => {
-														const currentData = context.taskData as CraftingTaskData
+														const currentData =
+															context.taskData as CraftingTaskData
 														const craftedEvent = event as Extract<
 															MachineEvent,
 															{ type: 'CRAFTED' }
@@ -860,9 +885,10 @@ export const machine = createMachine(
 											{
 												target: 'SLEEPING_IN_BED',
 												guard: ({ context }: { context: MachineContext }) => {
-													const taskData = context.taskData as SleepingTaskData & {
-														targetBed?: any
-													}
+													const taskData =
+														context.taskData as SleepingTaskData & {
+															targetBed?: any
+														}
 													const bot = context.bot
 													if (!bot || !taskData.targetBed) return false
 
@@ -882,9 +908,10 @@ export const machine = createMachine(
 											id: 'sleepingNavigating',
 											src: 'primitiveNavigating',
 											input: ({ context }: { context: MachineContext }) => {
-												const taskData = context.taskData as SleepingTaskData & {
-													targetBed?: any
-												}
+												const taskData =
+													context.taskData as SleepingTaskData & {
+														targetBed?: any
+													}
 												return {
 													bot: context.bot,
 													options: {
@@ -987,9 +1014,10 @@ export const machine = createMachine(
 											{
 												target: 'HARVESTING',
 												guard: ({ context }: { context: MachineContext }) => {
-													const taskData = context.taskData as FarmingTaskData & {
-														targetCrop?: any
-													}
+													const taskData =
+														context.taskData as FarmingTaskData & {
+															targetCrop?: any
+														}
 													const bot = context.bot
 													if (!bot || !taskData.targetCrop) return false
 
@@ -1051,8 +1079,8 @@ export const machine = createMachine(
 													taskData: ({ context }) => ({
 														...(context.taskData as FarmingTaskData),
 														collected:
-															((context.taskData as FarmingTaskData).collected ||
-																0) + 1
+															((context.taskData as FarmingTaskData)
+																.collected || 0) + 1
 													})
 												})
 											},
