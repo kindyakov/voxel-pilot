@@ -67,6 +67,17 @@ export const primitiveCraft = createStatefulService<CraftState, CraftOptions>({
 			// Берём первый подходящий рецепт
 			const recipe = recipes[0]
 
+			if (!recipe) {
+				console.error(
+					`❌ [primitiveCraft] No valid recipe found for ${itemName}`
+				)
+				sendBack({
+					type: 'CRAFT_FAILED',
+					reason: `No valid recipe found for ${itemName}`
+				})
+				return
+			}
+
 			// Проверяем, можно ли скрафтить без верстака (рецепт 2x2 или меньше)
 			if (recipe.requiresTable) {
 				console.error(

@@ -98,6 +98,17 @@ export const primitiveCraftInWorkbench = createStatefulService<
 			// Берём первый подходящий рецепт
 			const recipe = recipes[0]
 
+			if (!recipe) {
+				console.error(
+					`❌ [primitiveCraftInWorkbench] No valid recipe found for ${itemName}`
+				)
+				sendBack({
+					type: 'CRAFT_FAILED',
+					reason: `No valid recipe found for ${itemName}`
+				})
+				return
+			}
+
 			// Проверка отмены
 			if (abortSignal.aborted) return
 

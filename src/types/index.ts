@@ -1,10 +1,12 @@
 // Реэкспортируем типы из модулей для удобства
 import type * as Mineflayer from 'mineflayer'
+import type { Recipe } from 'prismarine-recipe'
 import type { EatUtil } from 'mineflayer-auto-eat/dist/new.js'
 import type { Pathfinder, Movements } from 'mineflayer-pathfinder'
 import type { HawkEye } from 'minecrafthawkeye'
 import type { Block } from 'prismarine-block'
 import type { Entity } from 'prismarine-entity'
+import type { Vec3 } from 'vec3'
 
 export type { Item } from 'prismarine-item'
 export type { Entity, EntityType } from 'prismarine-entity'
@@ -41,13 +43,33 @@ export interface Bot {
 		block: Block,
 		forceLook?: boolean | 'ignore' | 'raycast'
 	) => Promise<void>
+	placeBlock: (referenceBlock: Block, faceVector: Vec3) => Promise<void>
 	equip: (item: any, destination: string) => Promise<void>
 	consume: () => Promise<void>
+	craft: (
+		recipe: Recipe,
+		count: number,
+		craftingTable: Block | null
+	) => Promise<void>
+	recipesFor: (
+		itemId: number,
+		metadata: number | null,
+		minResultCount: number | null,
+		craftingTable: Block | null
+	) => Recipe[]
+	sleep: (bed: Block) => Promise<void>
 	blockAt: (point: any, extraInfos?: boolean) => Block | null
 	findBlocks: (options: any) => any[]
 	nearestEntity: (match?: (entity: Entity) => boolean) => Entity | null
 	setControlState: (
-		control: 'forward' | 'back' | 'left' | 'right' | 'jump' | 'sprint' | 'sneak',
+		control:
+			| 'forward'
+			| 'back'
+			| 'left'
+			| 'right'
+			| 'jump'
+			| 'sprint'
+			| 'sneak',
 		state: boolean
 	) => void
 
