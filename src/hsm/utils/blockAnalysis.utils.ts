@@ -22,7 +22,7 @@ export interface BlockSafetyCheck {
 /**
  * Детальный анализ безопасности блока
  */
-export interface BlockSafetyAnalysis {
+interface BlockSafetyAnalysis {
 	safetyScore: number // 0-100 (100 = максимально безопасно)
 	positionType: 'floor' | 'wall' | 'ceiling' | 'unknown'
 	hasGroundBelow: boolean

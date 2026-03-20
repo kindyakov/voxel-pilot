@@ -1,4 +1,4 @@
-export interface Priorities {
+interface Priorities {
 	// URGENT_NEEDS
 	EMERGENCY_HEALING: number
 	EMERGENCY_EATING: number

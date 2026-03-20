@@ -177,5 +177,15 @@ export const primitiveBreaking = createStatefulService<
 				reason: error instanceof Error ? error.message : 'Unknown error'
 			})
 		}
+	},
+
+	onCleanup: ({ bot }) => {
+		console.log('🧹 [primitiveBreaking] Cleanup')
+		try {
+			bot.pathfinder.setGoal(null)
+			console.log('🛑 [primitiveBreaking] Pathfinder остановлен')
+		} catch (error) {
+			console.error('❌ [primitiveBreaking] Ошибка при остановке:', error)
+		}
 	}
 })

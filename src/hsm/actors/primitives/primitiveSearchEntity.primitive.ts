@@ -83,38 +83,34 @@ export const primitiveSearchEntity = createStatefulService<
 
 		const botPos = api.bot.entity.position
 
-		// Получаем уже отфильтрованные сущности из контекста
-		const { entities, enemies, players } = api.context
+		// Объединяем все сущности в один массив
+		const searchPool = Object.values(api.bot.entities)
 
-		// Объединяем все сущности в один массив в зависимости от фильтров
-		let searchPool: Entity[] = []
-
-		if (entityType) {
-			// Если указан тип - выбираем из соответствующего массива
-			if (entityType === 'hostile') {
-				searchPool = enemies
-			} else if (entityType === 'player') {
-				searchPool = players
-			} else {
-				// Для других типов (animal, mob и т.д.) используем entities
-				searchPool = entities.filter(e => e.type === entityType)
-			}
-		} else {
-			// Если тип не указан - ищем по всем категориям
-			searchPool = [...entities, ...enemies, ...players]
-		}
-
-		// Фильтруем по имени и расстоянию
+		// Фильтруем по имени, типу и расстоянию
 		const candidates = searchPool
 			.filter(entity => {
-				// Если это имя игрока фильтруем без дистанции
-				if (entity.username === entityName) return true
-				// Фильтр по имени (если указан)
-				if (entityName && entity.name !== entityName) return false
-
-				// Проверяем расстояние
+				// 1. Сначала всегда проверяем расстояние (чтобы не байпасить радиус)
 				const distance = botPos.distanceTo(entity.position)
 				if (distance > maxDistance) return false
+
+				// 2. Фильтр по имени (если указано точное совпадение)
+				if (entityName) {
+					// Имя игрока или имя сущности
+					return entity.username === entityName || entity.name === entityName
+				}
+
+				// 3. Фильтр по типу (если указан)
+				if (entityType) {
+					if (entityType === 'hostile') {
+						// Простая проверка врагов по типу (в mineflayer type 'mob' и hostile name)
+						const hostileNames = ['zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'witch', 'slime']
+						return hostileNames.includes(entity.name!)
+					} else if (entityType === 'player') {
+						return entity.type === 'player'
+					} else {
+						return entity.type === entityType
+					}
+				}
 
 				return true
 			})

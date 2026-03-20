@@ -94,7 +94,16 @@ export function createStatefulService<
 			if (config.onStart) {
 				try {
 					api.context = getContext()
-					config.onStart(api)
+					const result = config.onStart(api)
+					if (result instanceof Promise) {
+						result.catch(error => {
+							console.error(`❌ [${config.name}] Async Error in onStart:`, error)
+							sendBack({
+								type: 'ERROR',
+								error: error instanceof Error ? error.message : String(error)
+							})
+						})
+					}
 				} catch (error) {
 					console.error(`❌ Error in ${config.name} onStart:`, error)
 				}

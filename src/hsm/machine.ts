@@ -3,7 +3,6 @@ import type { Bot } from '@types'
 import type { MachineActionParams, MachineEvent } from '@hsm/types'
 import { context, type MachineContext } from '@hsm/context'
 import type {
-	AnyTaskData,
 	MiningTaskData,
 	FollowingTaskData,
 	SmeltingTaskData,

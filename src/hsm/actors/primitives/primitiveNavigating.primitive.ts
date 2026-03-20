@@ -39,9 +39,19 @@ export const primitiveNavigating = createStatefulService<
 			console.log('✅ primitiveNavigating goal_reached to:', params)
 			sendBack({ type: 'ARRIVED' })
 		},
-		path_stop: (api, params) => {
+		path_stop: ({ sendBack }, params) => {
 			console.log('❌ primitiveNavigating path_stop:', params)
-			console.log('path_stop', params)
+			sendBack({ type: 'NAVIGATION_FAILED' })
 		}
-	})
+	}),
+
+	onCleanup: ({ bot }) => {
+		console.log('🧹 [primitiveNavigating] Cleanup')
+		try {
+			bot.pathfinder.setGoal(null)
+			console.log('🛑 [primitiveNavigating] Pathfinder остановлен')
+		} catch (error) {
+			console.error('❌ [primitiveNavigating] Ошибка при остановке:', error)
+		}
+	}
 })

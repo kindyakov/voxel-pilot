@@ -181,7 +181,20 @@ export const primitiveSmelt = createStatefulService<SmeltState, SmeltOptions>({
 				`⏳ [primitiveSmelt] Ожидание плавки (~${(waitTime / 1000).toFixed(1)}s)...`
 			)
 
-			await utils.sleep(waitTime)
+			// Прерываемое ожидание
+			await new Promise<void>(resolve => {
+				const timeoutId = setTimeout(resolve, waitTime)
+				const onAbort = () => {
+					clearTimeout(timeoutId)
+					resolve()
+				}
+				abortSignal.addEventListener('abort', onAbort)
+				
+				// Clean up listener when naturally resolved
+				setTimeout(() => {
+					abortSignal.removeEventListener('abort', onAbort)
+				}, waitTime)
+			})
 
 			// Проверка отмены
 			if (abortSignal.aborted) {

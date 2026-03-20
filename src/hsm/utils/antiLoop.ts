@@ -1,14 +1,14 @@
-export interface AntiLoopGuardConfig {
+interface AntiLoopGuardConfig {
 	maxTransitionsPerSecond: number
 	emergencyStopAfter: number
 	windowMs: number
 }
 
-export interface Update {
+interface Update {
 	timestamp: number
 }
 
-export interface AntiLoopGuardStats {
+interface AntiLoopGuardStats {
 	updatesInLastSecond: number
 	totalUpdates: number
 	loopDetected: boolean

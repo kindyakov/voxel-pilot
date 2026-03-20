@@ -14,6 +14,8 @@ interface SearchBlockState extends BaseServiceState {
 	blockName: string
 	maxDistance: number
 	count: number
+	maxSearchTicks: number
+	tickCount: number
 	blockId?: number
 	searching: boolean
 	lastMinedPosition?: Vec3 | null
@@ -22,11 +24,13 @@ interface SearchBlockState extends BaseServiceState {
 interface SearchBlockOptions {
 	blockName: string
 	maxDistance?: number
+	maxSearchTicks?: number
 	count?: number
 }
 
 const optDefault = {
-	maxDistance: 100,
+	maxDistance: 32,
+	maxSearchTicks: 20,
 	count: 1
 }
 
@@ -39,6 +43,8 @@ export const primitiveSearchBlock = createStatefulService<
 	initialState: {
 		blockName: '',
 		maxDistance: optDefault.maxDistance,
+		maxSearchTicks: optDefault.maxSearchTicks,
+		tickCount: 0,
 		count: optDefault.count,
 		searching: false,
 		lastMinedPosition: null
@@ -48,6 +54,7 @@ export const primitiveSearchBlock = createStatefulService<
 		const {
 			blockName,
 			maxDistance = optDefault.maxDistance,
+			maxSearchTicks = optDefault.maxSearchTicks,
 			count = optDefault.count
 		} = api.input
 
@@ -76,19 +83,24 @@ export const primitiveSearchBlock = createStatefulService<
 			blockName,
 			blockId: blockData.id,
 			maxDistance,
+			maxSearchTicks,
+			tickCount: 0,
 			count,
 			searching: true
 		})
 
 		console.log(
-			`🔍 [primitiveSearchBlock] В поисках ${blockName} (ID: ${blockData.id}, max: ${maxDistance}m, count: ${count})`
+			`🔍 [primitiveSearchBlock] В поисках ${blockName} (ID: ${blockData.id}, max: ${maxDistance}m, count: ${count}, timeout: ${maxSearchTicks} ticks)`
 		)
 	},
 
 	onTick: api => {
-		const { blockName, maxDistance, searching, blockId } = api.state
+		const { blockName, maxDistance, maxSearchTicks, tickCount, searching, blockId } = api.state
 
 		if (!searching || !blockId) return
+
+		const currentTick = tickCount + 1
+		api.setState({ tickCount: currentTick })
 
 		const botPos = api.bot.entity.position
 		const botY = botPos.y
@@ -97,10 +109,20 @@ export const primitiveSearchBlock = createStatefulService<
 		const blockPositions = api.bot.findBlocks({
 			matching: blockId,
 			maxDistance,
-			count: 100
+			count: 50
 		})
 
 		if (blockPositions.length === 0) {
+			if (currentTick >= maxSearchTicks) {
+				console.warn(
+					`⏰ [primitiveSearchBlock] Таймаут поиска ${blockName} после ${currentTick} тиков`
+				)
+				api.setState({ searching: false })
+				api.sendBack({
+					type: 'NOT_FOUND',
+					reason: `Таймаут поиска: ${blockName} не найден за ${currentTick} тиков`
+				})
+			}
 			return
 		}
 
