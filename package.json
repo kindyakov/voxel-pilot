@@ -10,6 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,js}\"",
+    "knip": "knip",
     "clean": "rm -rf dist"
   },
   "engines": {
@@ -37,7 +38,8 @@
     "xstate": "^5.22.0"
   },
   "devDependencies": {
-    "@types/node": "^24.6.2",
+    "@types/node": "^24.12.0",
+    "knip": "^6.0.0",
     "prettier": "^3.6.2",
     "tsc-alias": "^1.8.10",
     "tsx": "^4.20.6",

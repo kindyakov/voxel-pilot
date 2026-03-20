@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "xstate": {
+      "source": "seed-hypermedia/seed",
+      "sourceType": "github",
+      "computedHash": "c743411252fc09f07cda7bf01620337735397e5a607e93f4ba6560768c9aab72"
+    }
+  }
+}
