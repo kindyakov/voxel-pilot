@@ -6,6 +6,7 @@ interface AntiLoopGuardConfig {
 
 interface Update {
 	timestamp: number
+	signature: string
 }
 
 interface AntiLoopGuardStats {
@@ -21,35 +22,37 @@ export class AntiLoopGuard {
 	private updateHistory: Update[] = []
 	private totalUpdates: number = 0
 	private loopDetected: boolean = false
+	private lastSignature: string | null = null
 
 	constructor(options: AntiLoopGuardConfig) {
 		this.maxUpdatesPerSecond = options.maxTransitionsPerSecond
 		this.windowMs = options.windowMs
 	}
 
-	/**
-	 * Записывает факт обновления машины состояний и проверяет на зацикливание
-	 * @returns {boolean} true если обновление безопасно, false если обнаружено зацикливание
-	 */
-	recordUpdate(): boolean {
+	recordUpdate(signature: string = 'update'): boolean {
 		if (this.loopDetected) {
 			return false
 		}
 
+		if (this.lastSignature === signature) {
+			return true
+		}
+
+		this.lastSignature = signature
+
 		const now = Date.now()
 		const update: Update = {
-			timestamp: now
+			timestamp: now,
+			signature
 		}
 
 		this.updateHistory.push(update)
 		this.totalUpdates++
 
-		// Очищаем старые записи (старше 1 секунды)
 		this.updateHistory = this.updateHistory.filter(
 			u => now - u.timestamp < this.windowMs
 		)
 
-		// ЕДИНСТВЕННАЯ ПРОВЕРКА: слишком много обновлений за секунду → обнаружено зацикливание
 		if (this.updateHistory.length > this.maxUpdatesPerSecond) {
 			this.reportLoop(
 				`Too many updates: ${this.updateHistory.length} updates in ${this.windowMs}ms (limit: ${this.maxUpdatesPerSecond})`
@@ -60,9 +63,6 @@ export class AntiLoopGuard {
 		return true
 	}
 
-	/**
-	 * Сообщает об обнаружении зацикливания
-	 */
 	reportLoop(reason: string): void {
 		this.loopDetected = true
 		console.error('')
@@ -75,23 +75,18 @@ export class AntiLoopGuard {
 		console.error('Last 20 updates:')
 		this.updateHistory.slice(-20).forEach((u, i) => {
 			const time = new Date(u.timestamp).toISOString().split('T')[1]
-			console.error(`  ${i + 1}. [${time}] Update`)
+			console.error(`  ${i + 1}. [${time}] ${u.signature}`)
 		})
 		console.error('═'.repeat(60))
 	}
 
-	/**
-	 * Сброс счетчиков
-	 */
 	reset(): void {
 		this.updateHistory = []
 		this.totalUpdates = 0
 		this.loopDetected = false
+		this.lastSignature = null
 	}
 
-	/**
-	 * Получить статистику
-	 */
 	getStats(): AntiLoopGuardStats {
 		return {
 			updatesInLastSecond: this.updateHistory.length,

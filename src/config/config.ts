@@ -10,6 +10,7 @@ interface MinecraftConfig {
 
 interface AIConfig {
 	provider: string
+	baseUrl: string | undefined
 	model: string
 	apiKey: string | undefined
 	timeout: number
@@ -21,7 +22,7 @@ interface LoggingConfig {
 	file: string
 }
 
-class Config {
+export class Config {
 	private readonly _minecraft: MinecraftConfig
 	private readonly _ai: AIConfig
 	private readonly _logging: LoggingConfig
@@ -36,10 +37,11 @@ class Config {
 
 		this._ai = {
 			provider: process.env.AI_PROVIDER || 'openai',
-			model: process.env.AI_MODEL || 'gpt-4o-mini',
+			baseUrl: process.env.AI_BASE_URL || undefined,
+			model: process.env.AI_MODEL || 'gpt-5-mini',
 			apiKey: process.env.AI_API_KEY,
-			timeout: parseInt(process.env.AI_TIMEOUT_MS || '800', 10),
-			maxTokens: parseInt(process.env.AI_MAX_TOKENS || '300', 10)
+			timeout: parseInt(process.env.AI_TIMEOUT_MS || '15000', 10),
+			maxTokens: parseInt(process.env.AI_MAX_TOKENS || '800', 10)
 		}
 
 		this._logging = {
@@ -47,24 +49,19 @@ class Config {
 			file: process.env.LOG_FILE || 'logs/bot.log'
 		}
 	}
-	// Minecraft настройки
+
 	get minecraft(): MinecraftConfig {
 		return this._minecraft
 	}
 
-	// AI настройки
 	get ai(): AIConfig {
 		return this._ai
 	}
 
-	// Логирование
 	get logging(): LoggingConfig {
 		return this._logging
 	}
 
-	/**
-	 * Получение конфигурации для определенного окружения
-	 */
 	get isDevelopment(): boolean {
 		return process.env.NODE_ENV === 'development'
 	}
@@ -73,12 +70,14 @@ class Config {
 		return process.env.NODE_ENV === 'production'
 	}
 
-	private getRequiredEnv(key: string): string {
-		const value = process.env[key]
-		if (!value) {
-			throw new Error(`Missing required environment variable: ${key}`)
+	assertAIConfigured(): void {
+		if (this._ai.provider === 'disabled' || this._ai.provider === 'local') {
+			return
 		}
-		return value
+
+		if (!this._ai.apiKey) {
+			throw new Error('Missing required environment variable: AI_API_KEY')
+		}
 	}
 }
 

@@ -1,5 +1,3 @@
-// Реэкспортируем типы из модулей для удобства
-import type * as Mineflayer from 'mineflayer'
 import type { Recipe } from 'prismarine-recipe'
 import type { EatUtil } from 'mineflayer-auto-eat/dist/new.js'
 import type { Pathfinder, Movements } from 'mineflayer-pathfinder'
@@ -7,6 +5,7 @@ import type { HawkEye } from 'minecrafthawkeye'
 import type { Block } from 'prismarine-block'
 import type { Entity } from 'prismarine-entity'
 import type { Vec3 } from 'vec3'
+import type { MemoryManager } from '@core/memory/index.js'
 
 export type { Item } from 'prismarine-item'
 export type { Entity, EntityType } from 'prismarine-entity'
@@ -16,9 +15,7 @@ export type { Pathfinder } from 'mineflayer-pathfinder'
 
 export type WinstonLogLevel = 'debug' | 'info' | 'warn' | 'error'
 
-// Extend Bot type with custom properties
 export interface Bot {
-	// Base mineflayer properties (essential ones)
 	username: string
 	entity: any
 	entities: { [id: string]: Entity }
@@ -26,12 +23,21 @@ export interface Bot {
 	food: number
 	foodSaturation: number
 	oxygenLevel: number
-	inventory: any
+	inventory: {
+		slots: any[]
+		items(): any[]
+	}
 	heldItem: any
 	registry: any
 	movement: any
+	game?: {
+		dimension?: string
+	}
+	time?: {
+		timeOfDay?: number
+		isDay?: boolean
+	}
 
-	// Methods
 	on: (event: string, listener: (...args: any[]) => void) => this
 	once: (event: string, listener: (...args: any[]) => void) => this
 	off: (event: string, listener: (...args: any[]) => void) => this
@@ -72,21 +78,24 @@ export interface Bot {
 			| 'sneak',
 		state: boolean
 	) => void
+	getEquipmentDestSlot: (
+		destination: 'hand' | 'off-hand' | 'head' | 'torso' | 'legs' | 'feet'
+	) => number
+	openChest: (block: Block) => Promise<any>
+	openContainer: (block: Block) => Promise<any>
+	openFurnace: (block: Block) => Promise<any>
+	openBlock: (block: Block) => Promise<any>
+	closeWindow: (window: any) => void
 
-	// Plugins
 	autoEat: EatUtil
 	pathfinder: Pathfinder
 	movements: Movements
 	hawkEye: HawkEye
-
 	tool: any
-
 	armorManager: any
-
 	pvp: any
 
-	// Custom utilities
 	utils: import('../utils/minecraft/botUtils').BotUtils
 	hsm: import('../core/hsm').default
-	memory: import('../core/memory').default
+	memory: MemoryManager
 }

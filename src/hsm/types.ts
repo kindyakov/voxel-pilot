@@ -1,21 +1,17 @@
 import type { MachineContext } from '@hsm/context'
 import type { Bot, Entity, Vec3, Block } from '@types'
-import type { Plan, Task, AnyTaskData } from '@hsm/tasks/index'
-// ============================================
-// СОБЫТИЯ
-// ============================================
 
 export type HealthEvents =
 	| { type: 'UPDATE_HEALTH'; health: number }
 	| { type: 'UPDATE_FOOD'; food: number }
 	| { type: 'UPDATE_SATURATION'; foodSaturation: number }
 	| { type: 'UPDATE_OXYGEN'; oxygenLevel: number }
-	| { type: 'HEALTH_RESTORED' }
 	| { type: 'FOOD_RESTORED' }
-	| { type: 'FOOD_SEARCH' }
+	| { type: 'HEALTH_RESTORED' }
+	| { type: 'START_URGENT_NEEDS'; need: 'food' | 'health' }
 
 export type CombatEvents =
-	| { type: 'START_COMBAT'; target: Entity }
+	| { type: 'START_COMBAT'; target: Entity | null }
 	| { type: 'STOP_COMBAT' }
 	| { type: 'WEAPON_BROKEN' }
 	| { type: 'NO_ENEMIES' }
@@ -35,43 +31,23 @@ export type UpdateEvents =
 			nearestEnemy: { entity: Entity | null; distance: number }
 	  }
 
-export type ChatEvents =
-	| { type: 'mine' }
-	| { type: 'follow' }
-	| { type: 'sleep' }
-	| { type: 'shelter' }
-	| { type: 'farm' }
-	| { type: 'build' }
+export type UserEvents =
+	| { type: 'USER_COMMAND'; username: string; text: string }
+	| { type: 'STOP_CURRENT_GOAL'; username?: string }
 
-export type BotEvents = { type: 'PLAYER_STOP' }
-
-export type PlanExecutorEvents =
-	| { type: 'START_PLAN'; plan: Plan }
-	| { type: 'VALIDATE_PLAN'; plan: Plan }
-	| { type: 'EXECUTE_TASK'; task: Task }
-
-export type TaskEvents =
+export type PrimitiveEvents =
 	| { type: 'FOUND_FOOD' }
 	| { type: 'NOT_FOUND'; reason: string }
 	| { type: 'FOUND'; block?: Block; entity?: Entity }
-	| { type: 'START_MINING'; taskData: AnyTaskData }
-	| { type: 'START_FOLLOWING'; taskData: AnyTaskData }
-	| { type: 'START_SMELTING'; taskData: AnyTaskData }
-	| { type: 'START_CRAFTING'; taskData: AnyTaskData }
-	| { type: 'START_SLEEPING'; taskData: AnyTaskData }
-	| { type: 'START_FARMING'; taskData: AnyTaskData }
 	| { type: 'SUCCESSFULLY' }
 	| { type: 'ARRIVED' }
-	| { type: 'NAVIGATION_FAILED' }
+	| { type: 'NAVIGATION_FAILED'; reason?: string }
 	| { type: 'BROKEN' }
 	| { type: 'BREAKING_FAILED'; reason?: string }
-	// primitiveOpenContainer
 	| { type: 'OPENED'; container: any; block: Block }
 	| { type: 'OPEN_FAILED'; reason: string }
-	// primitiveCraft, primitiveCraftInWorkbench
 	| { type: 'CRAFTED'; itemName: string; count: number }
 	| { type: 'CRAFT_FAILED'; reason: string }
-	// primitiveSmelt
 	| {
 			type: 'SMELTED'
 			inputItemName: string
@@ -79,13 +55,10 @@ export type TaskEvents =
 			outputItem: string | null
 	  }
 	| { type: 'SMELT_FAILED'; reason: string }
-	// primitivePlacing
 	| { type: 'PLACED'; blockName: string; position: Vec3 }
 	| { type: 'PLACING_FAILED'; reason: string }
-	// primitiveFollowing
 	| { type: 'FOLLOWING_STOPPED'; reason: string }
 	| { type: 'FOLLOWING_FAILED'; reason: string }
-	// Sleeping
 	| { type: 'WOKE_UP' }
 	| { type: 'SLEEP_FAILED'; reason: string }
 
@@ -95,14 +68,9 @@ export type MachineEvent =
 	| HealthEvents
 	| CombatEvents
 	| UpdateEvents
-	| BotEvents
-	| TaskEvents
+	| UserEvents
+	| PrimitiveEvents
 	| SystemEvents
-	| ChatEvents
-	| PlanExecutorEvents
-// ============================================
-// УТИЛИТАРНЫЕ ТИПЫ
-// ============================================
 
 export type MachineGuard = (args: {
 	context: MachineContext
@@ -128,10 +96,6 @@ export type MachineGuardParams = {
 	context: MachineContext
 	event: MachineEvent
 }
-
-// ============================================
-// ТИПЫ ДЛЯ TASK REGISTRY
-// ============================================
 
 export interface TaskParams {
 	[key: string]: any

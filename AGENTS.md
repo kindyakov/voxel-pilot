@@ -1,28 +1,45 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`src/` contains the application code. `src/index.ts` is the runtime entrypoint, `src/core/` owns bot startup, connection lifecycle, memory, and command handling, and `src/hsm/` contains the XState state machine split into `actions/`, `actors/`, `guards/`, `tasks/`, and `primitives/`. Plugin wiring lives in `src/modules/`, shared helpers in `src/utils/`, config in `src/config/`, and shared typings in `src/types/`. Keep generated output in `dist/`, persisted bot state in `data/`, runtime logs in `logs/`, and architecture notes in `docs/`.
+`src/` contains the runtime code. `src/index.ts` is the entrypoint. `src/core/` owns bot bootstrap, chat command ingestion, HSM wiring, and persistent services. `src/ai/` contains the LLM agent loop, provider clients, snapshot builder, tool schemas, and tool execution helpers. `src/core/memory/` is the long-term memory layer backed by SQLite via `better-sqlite3`. `src/hsm/` contains the XState v5 machine, primitives, actors, guards, and HSM utilities. Shared typings live in `src/types/`, config in `src/config/`, Mineflayer plugin wiring in `src/modules/`, and generic helpers in `src/utils/`. Tests live under `src/tests/` grouped by subsystem (`ai`, `core`, `config`, `hsm`). Build output goes to `dist/`, runtime state to `data/`, and logs to `logs/`.
+
+## Architecture Notes
+The task system is no longer a hardcoded `MINING/FARMING/CRAFTING` planner. The bot now runs an `AGENT_LOOP` inside `TASKS` with the shape `IDLE -> THINKING -> EXECUTING`. `THINKING` builds a deterministic snapshot and asks the configured model for one tool decision. Informational tools execute inline; execution tools transition the HSM into a concrete primitive state. `EXECUTING` writes success or failure back into machine context and always returns to `THINKING` unless the goal is cleared or the anti-loop guard aborts the run.
+
+## Memory Layer
+Do not add direct `fs` persistence for agent memory. Use the memory manager under `src/core/memory/` only. Persistent memory is stored in SQLite files under `data/` and accessed through CRUD methods such as `saveEntry`, `readEntries`, `updateEntryData`, `deleteEntry`, and container inspection helpers. If the schema changes, add a proper migration path instead of bolting new fields onto ad hoc JSON blobs.
+
+## `.codex/agents`
+Project-specific subagent definitions live in `.codex/agents/`. Current agents are:
+- `hardening-worker.toml`
+- `hsm-mapper.toml`
+- `mineflayer-archivist.toml`
+- `reviewer-hardline.toml`
+- `test-writer.toml`
+
+Use them when the task matches their ownership. Keep agent roles narrow, concrete, and non-overlapping. If you add a new subagent, document its purpose in the TOML clearly and keep it aligned with the actual repo architecture.
 
 ## Build, Test, and Development Commands
-Use Node 18+.
+Use Node 18+; current project dependencies are already aligned with modern Node and ESM. Core commands:
 
-- `npm run dev`: run the bot with `tsx watch` against `src/index.ts`.
-- `npm run build`: compile TypeScript to `dist/` and rewrite path aliases with `tsc-alias`.
-- `npm start`: run the compiled bot from `dist/index.js`.
-- `npm run type-check`: strict TypeScript validation without emitting files.
-- `npm run knip`: detect unused files, exports, and dependencies.
-- `npm run clean`: remove `dist/` before a fresh build.
+- `npm run dev`: run the bot with `tsx watch src/index.ts`
+- `npm run build`: compile TypeScript and rewrite path aliases with `tsc-alias`
+- `npm start`: run the compiled bot from `dist/index.js`
+- `npm run type-check`: strict TypeScript validation without emitting files
+- `npm run knip`: detect unused files, exports, and dependencies
+- `npm run clean`: remove `dist/`
+- `npx tsx --test src/tests/...`: run focused subsystem tests
 
-Run `npm run type-check && npm run build` before opening a PR.
+Before committing, run at least `npm run type-check` and `npm run build`. For HSM, AI, or memory changes, also run the relevant `tsx --test` suites under `src/tests/`.
 
 ## Coding Style & Naming Conventions
-Formatting is defined by [`.prettierrc`](/D:/Developer/Minecraft_bot/.prettierrc): tabs, visual width 2, no semicolons, single quotes, and ES module syntax. Prefer the configured path aliases such as `@core/*`, `@hsm/*`, and `@utils/*` over long relative imports. Follow existing naming patterns: classes in PascalCase, functions and variables in camelCase, and domain files with suffixes like `*.guards.ts`, `*.actors.ts`, `*.entry.ts`, `*.exit.ts`, and `*.primitive.ts`.
+Formatting is defined by `.prettierrc`: tabs, width 2, no semicolons, single quotes, ES modules. Prefer path aliases such as `@core/*`, `@hsm/*`, `@utils/*`, and `@/ai/*` over deep relative imports. Follow existing domain naming: classes in PascalCase, functions and variables in camelCase, and state-machine files with explicit suffixes such as `*.guards.ts`, `*.actors.ts`, `*.primitive.ts`, and `*.update.ts`.
 
 ## Testing Guidelines
-There is no dedicated automated test runner configured in `package.json` yet. Treat `npm run type-check`, `npm run build`, and an observed local bot session as the minimum validation bar. Put new automated tests in `src/tests/` when you add a runner, and name them after the unit or behavior under test, for example `enemyVisibility.test.ts`. If a change is hard to automate, document the manual verification steps in `docs/`.
+Tests already exist in `src/tests/`; do not pretend the project is untested. Add focused tests next to the affected subsystem directory. Prioritize regression tests for HSM transitions, AI tool parsing, snapshot formatting, provider clients, and memory CRUD semantics. If a bug only reproduces in the live Minecraft session, document the manual scenario precisely in `docs/` or in the change summary.
 
 ## Commit & Pull Request Guidelines
-Recent history uses short prefixed subjects such as `feat:` and `задача:`. Keep that convention, write imperative summaries, and avoid meaningless commit messages. Each PR should state the affected subsystem, describe behavioral changes, list validation steps, and link the relevant issue or task. Include logs or screenshots only when the change affects Prismarine Viewer or web inventory.
+Keep commit subjects short and imperative. Existing history uses prefixes like `feat:` and `задача:`; continue that style. A valid PR or handoff note should state which subsystem changed, what behavioral contract changed, and how it was verified. Do not dump raw terminal noise when a concise verification summary is enough.
 
 ## Security & Configuration Tips
-Start from [`.env.example`](/D:/Developer/Minecraft_bot/.env.example) and keep secrets in a local `.env` only. Never commit credentials, live server addresses, or generated log files. Review `data/` and `logs/` before committing to avoid leaking runtime state.
+Start from `.env.example` and keep secrets only in local `.env`. Never hardcode provider keys, server addresses, or tokens in source files, tests, or docs. Review `data/` and `logs/` before committing. If you rotate model providers, update `.env.example` and the config contract together; do not leave stale environment documentation behind.

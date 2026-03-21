@@ -1,5 +1,5 @@
 import type { Bot, Vec3, Entity, Item } from '@types'
-import type { AnyTaskData, Plan } from '@hsm/tasks/types'
+import type { PendingExecution } from '@/ai/tools.js'
 
 export interface MachineContext {
 	bot: Bot | null
@@ -14,7 +14,6 @@ export interface MachineContext {
 	enemies: Entity[]
 	players: Entity[]
 
-	// Инвентарь и экипировка
 	inventory: Item[]
 	toolDurability: {
 		pickaxe: number | null
@@ -40,30 +39,20 @@ export interface MachineContext {
 		maxDistToEnemy: number
 		maxObservDist: number
 		combatMode: 'defensive' | 'attack' | 'retreat'
-
-		// FLEEING distances
 		safeEatDistance: number
 		fleeTargetDistance: number
 		safePlayerDistance: number
 		fleeToPlayerRadius: number
-
 		enemyMeleeRange: number
 		enemyRangedRange: number
-
 		maxCountSlotsInInventory: number
-
-		// Пороги для EMERGENCY_EATING
 		foodEmergency: number
 		foodRestored: number
-
-		// Пороги для EMERGENCY_HEALING
 		healthEmergency: number
 		healthFullyRestored: number
-
-		// Фильтрация врагов (3-уровневая)
-		pathfindTimeout: number // Timeout для pathfinder при проверке достижимости (мс)
-		maxPathLengthMultiplier: number // Множитель для макс. длины пути (maxDistToEnemy * multiplier)
-		pathfindCacheDuration: number // Время жизни кеша pathfinder (мс)
+		pathfindTimeout: number
+		maxPathLengthMultiplier: number
+		pathfindCacheDuration: number
 	}
 
 	nearestEnemy: {
@@ -72,28 +61,37 @@ export interface MachineContext {
 	}
 
 	isActiveTask: boolean
-	taskData: AnyTaskData | null
-	plan: Plan | null
-	pausedPlan: Plan | null // Прерванный план
-	savedTaskState: null // Сохранённое состояние задачи
+	taskData: unknown | null
+	plan: unknown | null
+	pausedPlan: unknown | null
+	savedTaskState: unknown | null
+
+	currentGoal: string | null
+	subGoal: string | null
+	lastAction: string | null
+	lastActionArgs: Record<string, unknown> | null
+	lastResult: 'SUCCESS' | 'FAILED' | null
+	lastReason: string | null
+	errorHistory: string[]
+	pendingExecution: PendingExecution | null
+	lastToolTranscript: string[]
+	failureSignature: string | null
+	failureRepeats: number
 }
 
 export const context: MachineContext = {
 	bot: null,
-	// Жизненные показатели
 	health: 20,
 	food: 20,
 	oxygenLevel: 20,
 	foodSaturation: 5,
 
-	// Окружение
 	weather: null,
 	timeOfDay: null,
 	entities: [],
 	enemies: [],
 	players: [],
 
-	// Инвентарь и экипировка
 	inventory: [],
 	toolDurability: {
 		pickaxe: null,
@@ -108,12 +106,10 @@ export const context: MachineContext = {
 		boots: null
 	},
 
-	// Позиция и навигация
 	position: null,
 	spawn: null,
 	home: null,
 
-	// Настройки поведения
 	preferences: {
 		autoEat: true,
 		autoDefend: true,
@@ -121,30 +117,20 @@ export const context: MachineContext = {
 		maxDistToEnemy: 20,
 		maxObservDist: 50,
 		combatMode: 'defensive',
-
-		// FLEEING distances
 		safeEatDistance: 20,
 		fleeTargetDistance: 15,
 		safePlayerDistance: 10,
 		fleeToPlayerRadius: 50,
-
 		enemyMeleeRange: 5,
 		enemyRangedRange: 8,
-
 		maxCountSlotsInInventory: 45,
-
-		// Пороги для EMERGENCY_EATING
-		foodEmergency: 15,
-		foodRestored: 20,
-
-		// Пороги для EMERGENCY_HEALING
+		foodEmergency: 6,
+		foodRestored: 18,
 		healthEmergency: 10,
 		healthFullyRestored: 18,
-
-		// Фильтрация врагов (3-уровневая)
-		pathfindTimeout: 800, // 800ms для проверки пути
-		maxPathLengthMultiplier: 2, // Путь не длиннее чем maxDistToEnemy * 2
-		pathfindCacheDuration: 3000 // Кеш на 3 секунды
+		pathfindTimeout: 800,
+		maxPathLengthMultiplier: 2,
+		pathfindCacheDuration: 3000
 	},
 
 	nearestEnemy: {
@@ -153,8 +139,20 @@ export const context: MachineContext = {
 	},
 
 	isActiveTask: false,
-	plan: null, // Текущий план
-	taskData: null, //  данные текущей задачи
-	pausedPlan: null, // Прерванный план
-	savedTaskState: null // Сохранённое состояние задачи
+	taskData: null,
+	plan: null,
+	pausedPlan: null,
+	savedTaskState: null,
+
+	currentGoal: null,
+	subGoal: null,
+	lastAction: null,
+	lastActionArgs: null,
+	lastResult: null,
+	lastReason: null,
+	errorHistory: [],
+	pendingExecution: null,
+	lastToolTranscript: [],
+	failureSignature: null,
+	failureRepeats: 0
 }

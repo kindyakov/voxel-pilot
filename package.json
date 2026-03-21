@@ -22,6 +22,7 @@
   "dependencies": {
     "ajv": "^8.17.1",
     "axios": "^1.11.0",
+    "better-sqlite3": "^12.8.0",
     "canvas": "^3.2.0",
     "dotenv": "^17.2.1",
     "minecrafthawkeye": "^1.3.9",
@@ -33,11 +34,13 @@
     "mineflayer-pvp": "^1.3.2",
     "mineflayer-tool": "^1.2.0",
     "mineflayer-web-inventory": "^1.8.5",
+    "openai": "^6.32.0",
     "prismarine-viewer": "^1.33.0",
     "winston": "^3.17.0",
     "xstate": "^5.22.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.12.0",
     "knip": "^6.0.0",
     "prettier": "^3.6.2",

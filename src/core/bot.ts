@@ -1,63 +1,60 @@
 import EventEmitter from 'node:events'
-import mineflayer from 'mineflayer'
+import * as mineflayer from 'mineflayer'
 import type { Bot } from '@types'
 import BotStateMachine from '@core/hsm'
 import CommandHandler from '@core/commandHandler.js'
-import BotMemory from '@core/memory.js'
+import { MemoryManager } from '@core/memory/index.js'
 import Config from '@config/config'
 import Logger from '@config/logger'
 import { initConnection } from '@modules/connection/index.js'
 import { BotUtils } from '@utils/minecraft/botUtils'
 
+const createMineflayerBot = (mineflayer as unknown as {
+	createBot: (options: unknown) => Bot
+}).createBot
+
 class MinecraftBot extends EventEmitter {
 	private bot: Bot | null = null
-	private isConnected: boolean = false
-	private reconnectAttempts: number = 0
-	private readonly maxReconnectAttempts: number = 5
-	private readonly reconnectDelay: number = 3000
-
-	constructor() {
-		super()
-	}
+	private isConnected = false
+	private reconnectAttempts = 0
+	private readonly maxReconnectAttempts = 5
+	private readonly reconnectDelay = 3000
 
 	start(): void {
 		try {
 			Logger.info('Запуск бота...')
+			Config.assertAIConfigured()
 
 			if (this.bot) {
 				Logger.warn('Бот уже запущен!')
 				return
 			}
 
-			// @ts-expect-error - Type augmentation issue with mineflayer
-			this.bot = mineflayer.createBot(Config.minecraft) as Bot
-
-			if (!this.bot) {
-				throw Error('Не предвиденная ошибка при создании бота')
-			}
+			this.bot = createMineflayerBot(Config.minecraft)
 
 			this.bot.on('botReady', () => {
 				this.isConnected = true
 				this.reconnectAttempts = 0
 
-				if (!this.bot) return
+				if (!this.bot) {
+					return
+				}
 
 				this.bot.utils = new BotUtils(this.bot)
-				this.bot.memory = new BotMemory(this.bot.username)
+				this.bot.memory = new MemoryManager({
+					botName: this.bot.username
+				}) as any
 				this.bot.hsm = new BotStateMachine(this.bot)
 				new CommandHandler(this.bot, this.bot.hsm)
 
-				setInterval(
-					() => {
-						this.bot!.memory.save()
-					},
-					5 * 60 * 1000
-				)
+				setInterval(() => {
+					void this.bot!.memory.save()
+				}, 5 * 60 * 1000)
 
 				this.bot.chat('Я готов к работе ;)')
 			})
 
-			this.bot.on('botDisconnected', (reason: string) => {
+			this.bot.on('botDisconnected', () => {
 				this.isConnected = false
 				this.bot = null
 				this.scheduleReconnect()
@@ -85,6 +82,7 @@ class MinecraftBot extends EventEmitter {
 				Logger.warn('Попытка остановить бота, который не был запущен.')
 				return
 			}
+
 			await this.bot.memory.save()
 			this.isConnected = false
 			this.bot.hsm.stop()
@@ -96,7 +94,7 @@ class MinecraftBot extends EventEmitter {
 		}
 	}
 
-	scheduleReconnect(): void {
+	private scheduleReconnect(): void {
 		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
 			Logger.error(
 				'Превышено число попыток реконнекта. Бот больше не подключается.'
@@ -107,7 +105,7 @@ class MinecraftBot extends EventEmitter {
 		const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts)
 		Logger.info(`Попытка реконнекта через ${delay / 1000} секунд...`)
 
-		this.reconnectAttempts++
+		this.reconnectAttempts += 1
 		setTimeout(() => this.start(), delay)
 	}
 }

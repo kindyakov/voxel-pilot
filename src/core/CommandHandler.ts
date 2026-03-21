@@ -2,11 +2,6 @@ import logger from '@config/logger'
 import type { Bot } from '@types'
 import type BotStateMachine from '@core/hsm'
 
-interface ParsedCommand {
-	command: string
-	args: string[]
-}
-
 export default class CommandHandler {
 	private bot: Bot
 	private hsm: BotStateMachine
@@ -24,23 +19,23 @@ export default class CommandHandler {
 	chat(username: string, message: string): void {
 		if (username === this.bot.username) return
 
-		const parsed = this.parseMessage(message)
-		if (!parsed) return // не команда
+		const text = message.trim()
+		if (!text) return
 
-		const { command, args } = parsed
-
-		logger.playerCommand(username, command, args)
-
-		this.hsm.emit('player-command', command, { username, options: args })
-	}
-
-	parseMessage(msg: string): ParsedCommand | null {
-		let text = msg.trim()
-		if (!text || !text.startsWith(':')) return null
-		const [command = '', ...args] = text.slice(1).split(' ') // возвращает все после ":"
-		return {
-			command: command.toLowerCase(),
-			args
+		if (text === ':stop') {
+			logger.playerCommand(username, 'stop', [])
+			this.hsm.send({
+				type: 'STOP_CURRENT_GOAL',
+				username
+			})
+			return
 		}
+
+		logger.playerCommand(username, 'goal', [text])
+		this.hsm.send({
+			type: 'USER_COMMAND',
+			username,
+			text
+		})
 	}
 }
