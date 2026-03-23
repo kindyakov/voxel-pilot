@@ -1,7 +1,8 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import test from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
+
 import { createActor, fromPromise } from 'xstate'
 
 import { createBotMachine } from '../../hsm/machine.js'
@@ -109,16 +110,36 @@ class FakeBot extends EventEmitter {
 		return 36
 	}
 	async openChest() {
-		return { close() {}, containerItems() { return [] } }
+		return {
+			close() {},
+			containerItems() {
+				return []
+			}
+		}
 	}
 	async openContainer() {
-		return { close() {}, containerItems() { return [] } }
+		return {
+			close() {},
+			containerItems() {
+				return []
+			}
+		}
 	}
 	async openFurnace() {
-		return { close() {}, containerItems() { return [] } }
+		return {
+			close() {},
+			containerItems() {
+				return []
+			}
+		}
 	}
 	async openBlock() {
-		return { close() {}, containerItems() { return [] } }
+		return {
+			close() {},
+			containerItems() {
+				return []
+			}
+		}
 	}
 	closeWindow() {}
 	setControlState() {}
@@ -182,7 +203,9 @@ test('machine enters TASKS.THINKING on USER_COMMAND', async () => {
 		await waitForTurn()
 
 		assert.equal(
-			actor.getSnapshot().matches({ MAIN_ACTIVITY: { TASKS: 'THINKING' } } as never),
+			actor
+				.getSnapshot()
+				.matches({ MAIN_ACTIVITY: { TASKS: 'THINKING' } } as never),
 			true
 		)
 	} finally {
@@ -207,13 +230,18 @@ test('combat returns to TASKS.THINKING when a goal exists', async () => {
 		})
 		await waitForTurn()
 
-		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'COMBAT' } as never), true)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'COMBAT' } as never),
+			true
+		)
 
 		actor.send({ type: 'NO_ENEMIES' })
 		await waitForTurn()
 
 		assert.equal(
-			actor.getSnapshot().matches({ MAIN_ACTIVITY: { TASKS: 'THINKING' } } as never),
+			actor
+				.getSnapshot()
+				.matches({ MAIN_ACTIVITY: { TASKS: 'THINKING' } } as never),
 			true
 		)
 	} finally {
@@ -231,12 +259,18 @@ test('combat returns to IDLE when there is no active goal', async () => {
 		})
 		await waitForTurn()
 
-		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'COMBAT' } as never), true)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'COMBAT' } as never),
+			true
+		)
 
 		actor.send({ type: 'NO_ENEMIES' })
 		await waitForTurn()
 
-		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never), true)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never),
+			true
+		)
 	} finally {
 		actor.stop()
 	}
@@ -259,13 +293,18 @@ test('urgent needs returns to TASKS.THINKING when a goal exists', async () => {
 		})
 		await waitForTurn()
 
-		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'URGENT_NEEDS' } as never), true)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'URGENT_NEEDS' } as never),
+			true
+		)
 
 		actor.send({ type: 'FOOD_RESTORED' })
 		await waitForTurn()
 
 		assert.equal(
-			actor.getSnapshot().matches({ MAIN_ACTIVITY: { TASKS: 'THINKING' } } as never),
+			actor
+				.getSnapshot()
+				.matches({ MAIN_ACTIVITY: { TASKS: 'THINKING' } } as never),
 			true
 		)
 	} finally {
@@ -283,18 +322,22 @@ test('urgent needs returns to IDLE when there is no active goal', async () => {
 		})
 		await waitForTurn()
 
-		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'URGENT_NEEDS' } as never), true)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'URGENT_NEEDS' } as never),
+			true
+		)
 
 		actor.send({ type: 'HEALTH_RESTORED' })
 		await waitForTurn()
 
-		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never), true)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never),
+			true
+		)
 	} finally {
 		actor.stop()
 	}
 })
-
-
 
 test('thinking execution enters a concrete executing substate without crashing', async () => {
 	const thinkingActor = fromPromise(async () => ({
@@ -420,7 +463,9 @@ test('invalid navigate args do not default to world zero', async () => {
 		const nonNullGoalCalls = setGoalCalls.filter(Boolean)
 		assert.equal(nonNullGoalCalls.length, 0)
 		assert.equal(
-			(actor.getSnapshot() as any).matches({ MAIN_ACTIVITY: { TASKS: 'THINKING' } }),
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: { TASKS: 'THINKING' }
+			}),
 			true
 		)
 	} finally {

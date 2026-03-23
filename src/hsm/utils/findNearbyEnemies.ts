@@ -1,4 +1,5 @@
 import type { Entity } from '@types'
+
 import type { MachineContext } from '@hsm/context'
 
 /**

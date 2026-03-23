@@ -1,5 +1,7 @@
 import 'dotenv/config'
-import { WinstonLogLevel } from '../types'
+
+import { WinstonLogLevel } from '../types/index.js'
+import { validateEnv } from './env.js'
 
 interface MinecraftConfig {
 	host: string
@@ -28,39 +30,37 @@ export class Config {
 	private readonly _logging: LoggingConfig
 
 	constructor() {
+		const env = validateEnv()
+
 		this._minecraft = {
-			host: process.env.MINECRAFT_HOST || 'localhost',
-			port: parseInt(process.env.MINECRAFT_PORT || '25565', 10),
-			username: process.env.MINECRAFT_USERNAME || 'bot',
-			version: process.env.MINECRAFT_VERSION || '1.20.1'
+			host: env.MINECRAFT_HOST!,
+			port: parseInt(env.MINECRAFT_PORT!, 10),
+			username: env.MINECRAFT_USERNAME!,
+			version: env.MINECRAFT_VERSION!
 		}
 
 		this._ai = {
-			provider: process.env.AI_PROVIDER || 'openai',
-			baseUrl: process.env.AI_BASE_URL || undefined,
-			model: process.env.AI_MODEL || 'gpt-5-mini',
-			apiKey: process.env.AI_API_KEY,
-			timeout: parseInt(process.env.AI_TIMEOUT_MS || '15000', 10),
-			maxTokens: parseInt(process.env.AI_MAX_TOKENS || '800', 10)
+			provider: env.AI_PROVIDER!,
+			baseUrl: env.AI_BASE_URL,
+			model: env.AI_MODEL!,
+			apiKey: env.AI_API_KEY,
+			timeout: parseInt(env.AI_TIMEOUT_MS || '15000', 10),
+			maxTokens: parseInt(env.AI_MAX_TOKENS || '1000', 10)
 		}
 
 		this._logging = {
-			level: (process.env.LOG_LEVEL as WinstonLogLevel) || 'info',
-			file: process.env.LOG_FILE || 'logs/bot.log'
+			level: (env.LOG_LEVEL as WinstonLogLevel) || 'info',
+			file: env.LOG_FILE || 'logs/bot.log'
 		}
 	}
 
 	get minecraft(): MinecraftConfig {
 		return this._minecraft
 	}
-
 	get ai(): AIConfig {
 		return this._ai
 	}
-
-	get logging(): LoggingConfig {
-		return this._logging
-	}
+	get logging(): LoggingConfig { return this._logging }
 
 	get isDevelopment(): boolean {
 		return process.env.NODE_ENV === 'development'
@@ -71,13 +71,9 @@ export class Config {
 	}
 
 	assertAIConfigured(): void {
-		if (this._ai.provider === 'disabled' || this._ai.provider === 'local') {
+		if (this._ai.provider === 'disabled' || this._ai.provider === 'local')
 			return
-		}
-
-		if (!this._ai.apiKey) {
-			throw new Error('Missing required environment variable: AI_API_KEY')
-		}
+		if (!this._ai.apiKey) throw new Error('Missing AI_API_KEY in .env')
 	}
 }
 

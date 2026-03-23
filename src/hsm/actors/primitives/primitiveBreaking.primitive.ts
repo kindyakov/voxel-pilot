@@ -1,9 +1,11 @@
-import type { Block } from '@types'
 import {
-	createStatefulService,
-	type BaseServiceState
+	type BaseServiceState,
+	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
 import { GoalNear } from '@/modules/plugins/goals'
+
+import type { Block } from '@types'
+
 import utils from '@utils/general/index.general.utils'
 
 interface PrimitiveBreakingState extends BaseServiceState {

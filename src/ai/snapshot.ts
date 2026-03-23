@@ -90,7 +90,9 @@ type SnapshotBot = {
 		slots: Array<ItemLike | null>
 		items(): ItemLike[]
 	}
-	getEquipmentDestSlot(destination: 'hand' | 'off-hand' | 'head' | 'torso' | 'legs' | 'feet'): number
+	getEquipmentDestSlot(
+		destination: 'hand' | 'off-hand' | 'head' | 'torso' | 'legs' | 'feet'
+	): number
 	blockAt(position: { x: number; y: number; z: number }): BlockLike | null
 	findBlocks(options: {
 		matching: (block: BlockLike) => boolean
@@ -150,8 +152,11 @@ const formatEquipmentItem = (item: ItemLike | null | undefined): string => {
 	return `${item.name}${formatDurability(item)}`
 }
 
-const formatPosition = (position: { x: number; y: number; z: number }): string =>
-	`${position.x},${position.y},${position.z}`
+const formatPosition = (position: {
+	x: number
+	y: number
+	z: number
+}): string => `${position.x},${position.y},${position.z}`
 
 const roundDistance = (distance: number): string => distance.toFixed(1)
 
@@ -173,7 +178,7 @@ const describeEntity = (entity: EntityLike, origin: VecLike): string => {
 	const baseName =
 		entity.type === 'player' && entity.username
 			? `player:${entity.username}`
-			: entity.name ?? entity.type ?? 'unknown'
+			: (entity.name ?? entity.type ?? 'unknown')
 
 	return `${baseName} @ ${roundDistance(origin.distanceTo(entity.position))} -> ${formatPosition(entity.position)}`
 }
@@ -237,7 +242,9 @@ export const buildSnapshot = (input: BuildSnapshotInput): string => {
 		: '-'
 
 	const cappedErrorHistory = input.errorHistory.slice(0, limits.errorHistory)
-	const errorLine = cappedErrorHistory.length ? cappedErrorHistory.join(' | ') : '-'
+	const errorLine = cappedErrorHistory.length
+		? cappedErrorHistory.join(' | ')
+		: '-'
 
 	return [
 		'STATUS',

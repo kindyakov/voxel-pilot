@@ -1,8 +1,10 @@
-import type { Block, Item } from '@types'
 import {
-	createStatefulService,
-	type BaseServiceState
+	type BaseServiceState,
+	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
+
+import type { Block, Item } from '@types'
+
 import utils from '@utils/general/index.general.utils'
 
 interface SmeltState extends BaseServiceState {
@@ -189,7 +191,7 @@ export const primitiveSmelt = createStatefulService<SmeltState, SmeltOptions>({
 					resolve()
 				}
 				abortSignal.addEventListener('abort', onAbort)
-				
+
 				// Clean up listener when naturally resolved
 				setTimeout(() => {
 					abortSignal.removeEventListener('abort', onAbort)

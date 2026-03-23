@@ -1,8 +1,9 @@
-import type { Block } from '@types'
 import {
-	createStatefulService,
-	type BaseServiceState
+	type BaseServiceState,
+	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
+
+import type { Block } from '@types'
 
 interface OpenContainerState extends BaseServiceState {
 	block: Block | null

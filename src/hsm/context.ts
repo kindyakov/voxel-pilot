@@ -1,5 +1,6 @@
-import type { Bot, Vec3, Entity, Item } from '@types'
 import type { PendingExecution } from '@/ai/tools.js'
+
+import type { Bot, Entity, Item, Vec3 } from '@types'
 
 export interface MachineContext {
 	bot: Bot | null

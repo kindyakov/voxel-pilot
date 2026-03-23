@@ -1,8 +1,8 @@
-import type { Entity } from '@/types'
 import {
-	createStatefulService,
-	type BaseServiceState
+	type BaseServiceState,
+	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
+import type { Entity } from '@/types'
 
 interface SearchEntityState extends BaseServiceState {
 	entityType?: string
@@ -74,7 +74,14 @@ export const primitiveSearchEntity = createStatefulService<
 	},
 
 	onTick: api => {
-		const { entityType, entityName, maxDistance, maxSearchTicks, tickCount, searching } = api.state
+		const {
+			entityType,
+			entityName,
+			maxDistance,
+			maxSearchTicks,
+			tickCount,
+			searching
+		} = api.state
 
 		if (!searching) return
 
@@ -103,7 +110,15 @@ export const primitiveSearchEntity = createStatefulService<
 				if (entityType) {
 					if (entityType === 'hostile') {
 						// Простая проверка врагов по типу (в mineflayer type 'mob' и hostile name)
-						const hostileNames = ['zombie', 'skeleton', 'creeper', 'spider', 'enderman', 'witch', 'slime']
+						const hostileNames = [
+							'zombie',
+							'skeleton',
+							'creeper',
+							'spider',
+							'enderman',
+							'witch',
+							'slime'
+						]
 						return hostileNames.includes(entity.name!)
 					} else if (entityType === 'player') {
 						return entity.type === 'player'

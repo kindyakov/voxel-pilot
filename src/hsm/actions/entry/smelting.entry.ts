@@ -1,5 +1,5 @@
-import type { MachineActionParams } from '@hsm/types'
 import type { SmeltingTaskData } from '@hsm/tasks/types'
+import type { MachineActionParams } from '@hsm/types'
 
 /**
  * Entry action для SMELTING
@@ -12,21 +12,29 @@ const entrySmelting = ({ context }: MachineActionParams) => {
 	}
 
 	const taskData = context.taskData as SmeltingTaskData
-	console.log(`🔥 [SMELTING] Вход в состояние SMELTING: плавка ${taskData.inputItem} x${taskData.count}`)
+	console.log(
+		`🔥 [SMELTING] Вход в состояние SMELTING: плавка ${taskData.inputItem} x${taskData.count}`
+	)
 }
 
 /**
  * Entry action для CHECKING_PRECONDITIONS
  */
-const entryCheckingSmeltingPreconditions = ({ context }: MachineActionParams) => {
+const entryCheckingSmeltingPreconditions = ({
+	context
+}: MachineActionParams) => {
 	const bot = context.bot
 	if (!bot) {
-		console.error('❌ [entryCheckingSmeltingPreconditions] Bot не инициализирован')
+		console.error(
+			'❌ [entryCheckingSmeltingPreconditions] Bot не инициализирован'
+		)
 		return
 	}
 
 	const taskData = context.taskData as SmeltingTaskData
-	console.log(`🔍 [SMELTING] Проверка предусловий для плавки ${taskData.inputItem}`)
+	console.log(
+		`🔍 [SMELTING] Проверка предусловий для плавки ${taskData.inputItem}`
+	)
 }
 
 /**

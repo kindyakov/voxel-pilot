@@ -89,12 +89,7 @@ export const TASK_REGISTRY: Record<TaskType, TaskRegistryItem> = {
 		name: 'FOLLOWING',
 		description: 'Следование за игроком или сущностью',
 		required_params: [], // Хотя бы один из targetPlayerName, entityName, entityType должен быть указан
-		optional_params: [
-			'entityName',
-			'entityType',
-			'distance',
-			'maxDistance'
-		],
+		optional_params: ['entityName', 'entityType', 'distance', 'maxDistance'],
 		primitives_used: ['primitiveSearchEntity', 'primitiveFollowing'],
 		preconditions: {} // Нет особых требований
 	}

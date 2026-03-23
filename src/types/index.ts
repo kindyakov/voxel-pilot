@@ -1,10 +1,11 @@
-import type { Recipe } from 'prismarine-recipe'
-import type { EatUtil } from 'mineflayer-auto-eat/dist/new.js'
-import type { Pathfinder, Movements } from 'mineflayer-pathfinder'
 import type { HawkEye } from 'minecrafthawkeye'
+import type { EatUtil } from 'mineflayer-auto-eat/dist/new.js'
+import type { Movements, Pathfinder } from 'mineflayer-pathfinder'
 import type { Block } from 'prismarine-block'
 import type { Entity } from 'prismarine-entity'
+import type { Recipe } from 'prismarine-recipe'
 import type { Vec3 } from 'vec3'
+
 import type { MemoryManager } from '@core/memory/index.js'
 
 export type { Item } from 'prismarine-item'

@@ -1,7 +1,9 @@
 import { fromCallback } from 'xstate'
+
 import type { Bot } from '@types'
-import type { MachineEvent } from '@hsm/types'
+
 import type { MachineContext } from '@hsm/context'
+import type { MachineEvent } from '@hsm/types'
 
 export type BaseServiceState = {
 	isActive: boolean
@@ -97,7 +99,10 @@ export function createStatefulService<
 					const result = config.onStart(api)
 					if (result instanceof Promise) {
 						result.catch(error => {
-							console.error(`❌ [${config.name}] Async Error in onStart:`, error)
+							console.error(
+								`❌ [${config.name}] Async Error in onStart:`,
+								error
+							)
 							sendBack({
 								type: 'ERROR',
 								error: error instanceof Error ? error.message : String(error)

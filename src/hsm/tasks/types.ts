@@ -1,4 +1,4 @@
-import type { Vec3, Item, Block, Entity } from '@types'
+import type { Block, Entity, Item, Vec3 } from '@types'
 
 export interface Plan {
 	goal: string

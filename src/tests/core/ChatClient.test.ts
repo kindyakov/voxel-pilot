@@ -1,10 +1,10 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
+import test from 'node:test'
 
 import {
 	OpenAICompatibleChatClient,
-	createAgentClient,
-	type ParsedToolCall
+	type ParsedToolCall,
+	createAgentClient
 } from '../../ai/client.js'
 import { Config } from '../../config/config.js'
 
@@ -31,7 +31,8 @@ test('OpenAICompatibleChatClient maps chat completion tool calls into compact to
 												type: 'function',
 												function: {
 													name: 'call_navigate',
-													arguments: '{"position":{"x":12,"y":64,"z":-4},"range":2}'
+													arguments:
+														'{"position":{"x":12,"y":64,"z":-4},"range":2}'
 												}
 											}
 										]

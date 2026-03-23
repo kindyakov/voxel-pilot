@@ -1,5 +1,5 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
+import test from 'node:test'
 
 import { buildSnapshot } from '../../ai/snapshot.js'
 
@@ -83,11 +83,17 @@ test('buildSnapshot renders compact world, inventory, equipment, goal, and feedb
 			}
 			return blocks[key] ?? null
 		},
-		findBlocks({ matching }: { matching: (block: { name: string }) => boolean }) {
-			return [createVec3(12, 64, -4), createVec3(14, 64, -3)].filter(position => {
-				const block = this.blockAt(position)
-				return block ? matching(block) : false
-			})
+		findBlocks({
+			matching
+		}: {
+			matching: (block: { name: string }) => boolean
+		}) {
+			return [createVec3(12, 64, -4), createVec3(14, 64, -3)].filter(
+				position => {
+					const block = this.blockAt(position)
+					return block ? matching(block) : false
+				}
+			)
 		},
 		entities: {
 			1: {
@@ -185,7 +191,11 @@ test('buildSnapshot caps environment sections and error history for token discip
 				}
 			}
 		},
-		findBlocks({ matching }: { matching: (block: { name: string }) => boolean }) {
+		findBlocks({
+			matching
+		}: {
+			matching: (block: { name: string }) => boolean
+		}) {
 			return [
 				createVec3(1, 64, 0),
 				createVec3(2, 64, 0),
@@ -224,4 +234,3 @@ test('buildSnapshot caps environment sections and error history for token discip
 	assert.equal(snapshot.includes('error_history: a | b | c | d'), false)
 	assert.match(snapshot, /time: night/)
 })
-

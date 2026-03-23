@@ -1,6 +1,8 @@
-import winston from 'winston'
 import path from 'path'
+import winston from 'winston'
+
 import type { WinstonLogLevel } from '@types'
+
 import Config from '@config/config'
 
 /**

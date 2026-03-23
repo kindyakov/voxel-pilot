@@ -1,6 +1,6 @@
 import Logger from '../../config/logger'
-import { loadPlugins, initPlugins } from '../plugins/index.plugins'
 import type { Bot } from '../../types'
+import { initPlugins, loadPlugins } from '../plugins/index.plugins'
 
 export const initConnection = (bot: Bot) => {
 	try {

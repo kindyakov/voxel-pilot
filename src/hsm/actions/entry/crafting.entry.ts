@@ -1,5 +1,5 @@
-import type { MachineActionParams } from '@hsm/types'
 import type { CraftingTaskData } from '@hsm/tasks/types'
+import type { MachineActionParams } from '@hsm/types'
 
 /**
  * Entry action для CRAFTING
@@ -12,7 +12,9 @@ const entryCrafting = ({ context }: MachineActionParams) => {
 	}
 
 	const taskData = context.taskData as CraftingTaskData
-	console.log(`🔨 [CRAFTING] Вход в состояние CRAFTING: крафт ${taskData.recipe} x${taskData.count}`)
+	console.log(
+		`🔨 [CRAFTING] Вход в состояние CRAFTING: крафт ${taskData.recipe} x${taskData.count}`
+	)
 }
 
 /**

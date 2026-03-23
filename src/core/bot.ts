@@ -1,17 +1,25 @@
 import EventEmitter from 'node:events'
+
 import * as mineflayer from 'mineflayer'
+
 import type { Bot } from '@types'
-import BotStateMachine from '@core/hsm'
-import CommandHandler from '@core/CommandHandler.js'
-import { MemoryManager } from '@core/memory/index.js'
+
 import Config from '@config/config'
 import Logger from '@config/logger'
+
+import CommandHandler from '@core/CommandHandler.js'
+import BotStateMachine from '@core/hsm'
+import { MemoryManager } from '@core/memory/index.js'
+
 import { initConnection } from '@modules/connection/index.js'
+
 import { BotUtils } from '@utils/minecraft/botUtils'
 
-const createMineflayerBot = (mineflayer as unknown as {
-	createBot: (options: unknown) => Bot
-}).createBot
+const createMineflayerBot = (
+	mineflayer as unknown as {
+		createBot: (options: unknown) => Bot
+	}
+).createBot
 
 class MinecraftBot extends EventEmitter {
 	private bot: Bot | null = null
@@ -47,9 +55,12 @@ class MinecraftBot extends EventEmitter {
 				this.bot.hsm = new BotStateMachine(this.bot)
 				new CommandHandler(this.bot, this.bot.hsm)
 
-				setInterval(() => {
-					void this.bot!.memory.save()
-				}, 5 * 60 * 1000)
+				setInterval(
+					() => {
+						void this.bot!.memory.save()
+					},
+					5 * 60 * 1000
+				)
 
 				this.bot.chat('Я готов к работе ;)')
 			})

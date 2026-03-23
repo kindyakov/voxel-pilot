@@ -1,5 +1,5 @@
-import type { MachineActionParams } from '@hsm/types'
 import type { SleepingTaskData } from '@hsm/tasks/types'
+import type { MachineActionParams } from '@hsm/types'
 
 /**
  * Entry action для SLEEPING

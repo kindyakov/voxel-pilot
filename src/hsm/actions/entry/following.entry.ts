@@ -1,5 +1,5 @@
-import type { MachineActionParams } from '@hsm/types'
 import type { FollowingTaskData } from '@hsm/tasks/types'
+import type { MachineActionParams } from '@hsm/types'
 
 /**
  * Entry action для FOLLOWING
@@ -18,7 +18,9 @@ const entryFollowing = ({ context }: MachineActionParams) => {
 			? `существо типа ${taskData.entityType}`
 			: 'неизвестную цель'
 
-	console.log(`🏃 [FOLLOWING] Вход в состояние FOLLOWING: следование за ${targetInfo}`)
+	console.log(
+		`🏃 [FOLLOWING] Вход в состояние FOLLOWING: следование за ${targetInfo}`
+	)
 }
 
 /**
@@ -102,7 +104,9 @@ const taskFollowingFailed = ({ context }: MachineActionParams) => {
 		? taskData.entityName || taskData.entityType || 'неизвестная цель'
 		: 'неизвестная цель'
 
-	console.log(`❌ [FOLLOWING] Задача провалена: не удалось найти/следовать за ${targetInfo}`)
+	console.log(
+		`❌ [FOLLOWING] Задача провалена: не удалось найти/следовать за ${targetInfo}`
+	)
 
 	// Очистить context.taskData
 	context.taskData = null

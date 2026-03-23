@@ -1,5 +1,7 @@
-import logger from '@config/logger'
 import type { Bot } from '@types'
+
+import logger from '@config/logger'
+
 import type BotStateMachine from '@core/hsm'
 
 export default class CommandHandler {

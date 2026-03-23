@@ -1,12 +1,12 @@
+import { type AgentTurnResult, runAgentTurn } from '@/ai/loop.js'
+import type { PendingExecution } from '@/ai/tools.js'
 import { Vec3 as Vec3Class } from 'vec3'
 import { assign, fromPromise, setup } from 'xstate'
 
 import type { Bot, Entity } from '@types'
-import { context, type MachineContext } from '@hsm/context'
-import type { MachineEvent } from '@hsm/types'
-import monitoringActors from '@hsm/actors/monitoring.actors'
+
 import combatActors from '@hsm/actors/combat.actors'
-import combatGuards from '@hsm/guards/combat.guards'
+import monitoringActors from '@hsm/actors/monitoring.actors'
 import { primitiveBreaking } from '@hsm/actors/primitives/primitiveBreaking.primitive'
 import { primitiveCraft } from '@hsm/actors/primitives/primitiveCraft.primitive'
 import { primitiveCraftInWorkbench } from '@hsm/actors/primitives/primitiveCraftInWorkbench.primitive'
@@ -14,8 +14,9 @@ import { primitiveFollowing } from '@hsm/actors/primitives/primitiveFollowing.pr
 import { primitiveNavigating } from '@hsm/actors/primitives/primitiveNavigating.primitive'
 import { primitivePlacing } from '@hsm/actors/primitives/primitivePlacing.primitive'
 import { primitiveSmelt } from '@hsm/actors/primitives/primitiveSmelt.primitive'
-import { runAgentTurn, type AgentTurnResult } from '@/ai/loop.js'
-import type { PendingExecution } from '@/ai/tools.js'
+import { type MachineContext, context } from '@hsm/context'
+import combatGuards from '@hsm/guards/combat.guards'
+import type { MachineEvent } from '@hsm/types'
 
 const waitWithSignal = (ms: number, signal: AbortSignal): Promise<void> =>
 	new Promise((resolve, reject) => {
@@ -781,12 +782,16 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											{ guard: 'isNavigateExecution', target: 'NAVIGATING' },
 											{ guard: 'isBreakExecution', target: 'BREAKING' },
 											{ guard: 'isCraftExecution', target: 'CRAFTING' },
-											{ guard: 'isCraftWorkbenchExecution', target: 'CRAFTING_WORKBENCH' },
+											{
+												guard: 'isCraftWorkbenchExecution',
+												target: 'CRAFTING_WORKBENCH'
+											},
 											{ guard: 'isSmeltExecution', target: 'SMELTING' },
 											{ guard: 'isPlaceExecution', target: 'PLACING' },
 											{ guard: 'isFollowExecution', target: 'FOLLOWING' },
 											{
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											}
 										]
@@ -794,19 +799,23 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									NAVIGATING: {
 										invoke: {
 											src: primitiveNavigating,
-											input: ({ context }: { context: MachineContext }) => resolveExecutionInput(context)
+											input: ({ context }: { context: MachineContext }) =>
+												resolveExecutionInput(context)
 										},
 										on: {
 											ARRIVED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionSuccess']
 											},
 											NAVIGATION_FAILED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											},
 											ERROR: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											}
 										}
@@ -814,19 +823,23 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									BREAKING: {
 										invoke: {
 											src: primitiveBreaking,
-											input: ({ context }: { context: MachineContext }) => resolveExecutionInput(context)
+											input: ({ context }: { context: MachineContext }) =>
+												resolveExecutionInput(context)
 										},
 										on: {
 											BROKEN: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionSuccess']
 											},
 											BREAKING_FAILED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											},
 											ERROR: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											}
 										}
@@ -834,19 +847,23 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									CRAFTING: {
 										invoke: {
 											src: primitiveCraft,
-											input: ({ context }: { context: MachineContext }) => resolveExecutionInput(context)
+											input: ({ context }: { context: MachineContext }) =>
+												resolveExecutionInput(context)
 										},
 										on: {
 											CRAFTED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionSuccess']
 											},
 											CRAFT_FAILED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											},
 											ERROR: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											}
 										}
@@ -854,19 +871,23 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									CRAFTING_WORKBENCH: {
 										invoke: {
 											src: primitiveCraftInWorkbench,
-											input: ({ context }: { context: MachineContext }) => resolveExecutionInput(context)
+											input: ({ context }: { context: MachineContext }) =>
+												resolveExecutionInput(context)
 										},
 										on: {
 											CRAFTED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionSuccess']
 											},
 											CRAFT_FAILED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											},
 											ERROR: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											}
 										}
@@ -874,19 +895,23 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									SMELTING: {
 										invoke: {
 											src: primitiveSmelt,
-											input: ({ context }: { context: MachineContext }) => resolveExecutionInput(context)
+											input: ({ context }: { context: MachineContext }) =>
+												resolveExecutionInput(context)
 										},
 										on: {
 											SMELTED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionSuccess']
 											},
 											SMELT_FAILED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											},
 											ERROR: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											}
 										}
@@ -894,19 +919,23 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									PLACING: {
 										invoke: {
 											src: primitivePlacing,
-											input: ({ context }: { context: MachineContext }) => resolveExecutionInput(context)
+											input: ({ context }: { context: MachineContext }) =>
+												resolveExecutionInput(context)
 										},
 										on: {
 											PLACED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionSuccess']
 											},
 											PLACING_FAILED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											},
 											ERROR: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											}
 										}
@@ -914,19 +943,23 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									FOLLOWING: {
 										invoke: {
 											src: primitiveFollowing,
-											input: ({ context }: { context: MachineContext }) => resolveExecutionInput(context)
+											input: ({ context }: { context: MachineContext }) =>
+												resolveExecutionInput(context)
 										},
 										on: {
 											FOLLOWING_STOPPED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionSuccess']
 											},
 											FOLLOWING_FAILED: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											},
 											ERROR: {
-												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+												target:
+													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
 											}
 										}
@@ -1022,4 +1055,3 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 }
 
 export const machine = createBotMachine()
-

@@ -1,8 +1,10 @@
-import type { Block, Entity, Vec3 } from '@types'
 import {
-	createStatefulService,
-	type BaseServiceState
+	type BaseServiceState,
+	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
+
+import type { Block, Entity, Vec3 } from '@types'
+
 import { GoalNear } from '@modules/plugins/goals'
 
 interface NavigatingState extends BaseServiceState {

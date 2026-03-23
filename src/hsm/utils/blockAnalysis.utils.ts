@@ -1,4 +1,4 @@
-import type { Bot, Vec3, Block } from '@/types'
+import type { Block, Bot, Vec3 } from '@/types'
 
 /**
  * Информация об анализированном блоке

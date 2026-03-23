@@ -1,8 +1,8 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
+import test from 'node:test'
 
-import { runAgentTurn } from '../../ai/loop.js'
 import { OpenAIResponsesClient } from '../../ai/client.js'
+import { runAgentTurn } from '../../ai/loop.js'
 
 const createVec3 = (x: number, y: number, z: number) => ({
 	x,
@@ -122,5 +122,3 @@ test('runAgentTurn resolves inline memory tool calls before selecting one execut
 	})
 	assert.deepEqual(result.transcript, ['memory_read', 'call_navigate'])
 })
-
-

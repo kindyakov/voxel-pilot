@@ -74,7 +74,8 @@ export const PRIMITIVE_REGISTRY: Record<string, PrimitiveDefinition> = {
 	},
 	following: {
 		name: 'primitiveFollowing',
-		description: 'Следование за целью (сущность/игрок/позиция) используя movement',
+		description:
+			'Следование за целью (сущность/игрок/позиция) используя movement',
 		required_params: ['target'],
 		optional_params: ['distance'],
 		events_emitted: ['FOLLOWING_STOPPED', 'FOLLOWING_FAILED']

@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
 
 import BetterSqlite3 from 'better-sqlite3'
+
 import type {
 	DeleteEntrySelector,
 	LegacyBotMemoryData,
@@ -181,10 +182,7 @@ export class MemoryManager {
 			})
 	}
 
-	updateEntryData(
-		id: string,
-		data: Record<string, any>
-	): MemoryEntry | null {
+	updateEntryData(id: string, data: Record<string, any>): MemoryEntry | null {
 		const db = this.getDb()
 		const current = this.getEntryById(id)
 		if (!current) {
@@ -251,7 +249,8 @@ export class MemoryManager {
 				type: 'location',
 				position,
 				tags: [type],
-				description: type === 'home' ? 'Bot home position' : 'Bot spawn position',
+				description:
+					type === 'home' ? 'Bot home position' : 'Bot spawn position',
 				data: {}
 			})
 			return
@@ -317,12 +316,13 @@ export class MemoryManager {
 			return null
 		}
 
-		return candidates
-			.sort(
+		return (
+			candidates.sort(
 				(a, b) =>
 					distanceBetween(a.position, currentPosition) -
 					distanceBetween(b.position, currentPosition)
 			)[0]?.position ?? null
+		)
 	}
 
 	rememberPlayer(username: string, metadata?: Record<string, any>): void {
@@ -343,7 +343,8 @@ export class MemoryManager {
 			firstMet: new Date().toISOString(),
 			lastSeen: new Date().toISOString(),
 			interactions: 1,
-			friendly: typeof metadata?.friendly === 'boolean' ? metadata.friendly : true,
+			friendly:
+				typeof metadata?.friendly === 'boolean' ? metadata.friendly : true,
 			notes: Array.isArray(metadata?.notes) ? metadata.notes : []
 		}
 	}
@@ -368,7 +369,11 @@ export class MemoryManager {
 		}
 	}
 
-	rememberDeath(cause: string, location: MemoryPosition, lesson?: string): void {
+	rememberDeath(
+		cause: string,
+		location: MemoryPosition,
+		lesson?: string
+	): void {
 		this.legacyState.experience.deaths.push({
 			timestamp: new Date().toISOString(),
 			cause,
@@ -392,12 +397,14 @@ export class MemoryManager {
 					(this.legacyState.stats.blocksPlaced[item] || 0) + count
 				break
 			case 'crafted':
-				this.legacyState.stats.itemsCrafted = this.legacyState.stats.itemsCrafted || {}
+				this.legacyState.stats.itemsCrafted =
+					this.legacyState.stats.itemsCrafted || {}
 				this.legacyState.stats.itemsCrafted[item] =
 					(this.legacyState.stats.itemsCrafted[item] || 0) + count
 				break
 			case 'killed':
-				this.legacyState.stats.mobsKilled = this.legacyState.stats.mobsKilled || {}
+				this.legacyState.stats.mobsKilled =
+					this.legacyState.stats.mobsKilled || {}
 				this.legacyState.stats.mobsKilled[item] =
 					(this.legacyState.stats.mobsKilled[item] || 0) + count
 				break
@@ -451,7 +458,8 @@ export class MemoryManager {
 			...this.legacyState,
 			meta: {
 				...this.legacyState.meta,
-				lastUpdated: this.getMetaValue('last_updated') ?? new Date().toISOString(),
+				lastUpdated:
+					this.getMetaValue('last_updated') ?? new Date().toISOString(),
 				version: DB_VERSION
 			},
 			world: {
@@ -508,7 +516,8 @@ export class MemoryManager {
 	}
 
 	private ensureMeta(): void {
-		const createdAt = this.getMetaValue('created_at') ?? new Date().toISOString()
+		const createdAt =
+			this.getMetaValue('created_at') ?? new Date().toISOString()
 		this.touchMeta('bot_name', this.botName)
 		this.touchMeta('created_at', createdAt)
 		this.touchMeta('last_updated', new Date().toISOString())
@@ -686,7 +695,7 @@ export class MemoryManager {
 					type:
 						typeof entry.data.resourceType === 'string'
 							? entry.data.resourceType
-							: entry.tags[0] ?? 'unknown',
+							: (entry.tags[0] ?? 'unknown'),
 					position: entry.position,
 					discovered:
 						typeof entry.data.discovered === 'string'
@@ -699,12 +708,18 @@ export class MemoryManager {
 		return knownLocations
 	}
 
-	private resolveLegacyContainerType(tags: string[]): LegacyChestLocation['type'] {
+	private resolveLegacyContainerType(
+		tags: string[]
+	): LegacyChestLocation['type'] {
 		const matched =
 			tags.find(tag =>
-				['chest', 'furnace', 'crafting_table', 'barrel', 'shulker_box'].includes(
-					tag
-				)
+				[
+					'chest',
+					'furnace',
+					'crafting_table',
+					'barrel',
+					'shulker_box'
+				].includes(tag)
 			) ?? 'chest'
 
 		return matched as LegacyChestLocation['type']
@@ -761,4 +776,3 @@ export type {
 } from './types.js'
 
 export default MemoryManager
-

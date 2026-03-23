@@ -1,10 +1,13 @@
-import { Weapons } from 'minecrafthawkeye'
-import type { Entity, Item } from '@types'
 import {
-	createStatefulService,
-	type BaseServiceState
+	type BaseServiceState,
+	createStatefulService
 } from '@/hsm/helpers/createStatefulService.js'
+import { Weapons } from 'minecrafthawkeye'
+
+import type { Entity, Item } from '@types'
+
 import { GoalXZ } from '@modules/plugins/goals.js'
+
 import { canSeeEnemy } from '@utils/combat/enemyVisibility'
 
 interface MeleeAttackState extends BaseServiceState {

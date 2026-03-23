@@ -1,17 +1,18 @@
-import type { MemoryManager } from '@core/memory/index.js'
 import type { Bot } from '@types'
 
+import type { MemoryManager } from '@core/memory/index.js'
+
+import { type AgentModelClient, createAgentClient } from './client.js'
 import { buildSnapshot } from './snapshot.js'
-import { createAgentClient, type AgentModelClient } from './client.js'
 import {
 	AGENT_SYSTEM_PROMPT,
 	AGENT_TOOLS,
+	type PendingExecution,
 	executeInlineToolCall,
 	isControlToolName,
 	isExecutionToolName,
 	isInlineToolName,
-	summarizeExecution,
-	type PendingExecution
+	summarizeExecution
 } from './tools.js'
 
 export interface AgentTurnInput {
@@ -98,7 +99,8 @@ export const runAgentTurn = async (
 			if (modelRetries < MAX_MODEL_RETRIES) {
 				modelRetries += 1
 				previousResponseId = response.id
-				nextInput = 'Return exactly one tool call. Do not answer with plain text.'
+				nextInput =
+					'Return exactly one tool call. Do not answer with plain text.'
 				continue
 			}
 
@@ -121,7 +123,8 @@ export const runAgentTurn = async (
 				if (execution || sawInlineTool || finishMessage) {
 					return {
 						kind: 'failed',
-						reason: 'Model mixed execution and informational tools in one response',
+						reason:
+							'Model mixed execution and informational tools in one response',
 						transcript
 					}
 				}
@@ -160,9 +163,13 @@ export const runAgentTurn = async (
 			}
 
 			sawInlineTool = true
-			const result = await executeInlineToolCall(toolCall.name, toolCall.arguments, {
-				bot: input.bot
-			})
+			const result = await executeInlineToolCall(
+				toolCall.name,
+				toolCall.arguments,
+				{
+					bot: input.bot
+				}
+			)
 			inlineOutputs.push({
 				type: 'function_call_output',
 				call_id: toolCall.callId,
@@ -174,7 +181,10 @@ export const runAgentTurn = async (
 			return {
 				kind: 'execute',
 				execution,
-				subGoal: parseSubGoal(response.outputText, summarizeExecution(execution)),
+				subGoal: parseSubGoal(
+					response.outputText,
+					summarizeExecution(execution)
+				),
 				transcript
 			}
 		}

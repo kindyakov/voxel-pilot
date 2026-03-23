@@ -1,19 +1,21 @@
 import {
-	createStatefulService,
-	type BaseServiceState
+	type BaseServiceState,
+	createStatefulService
 } from '@/hsm/helpers/createStatefulService.js'
+
 import { GoalNear } from '@modules/plugins/goals.js'
+
 import {
+	FLEE_THRESHOLDS,
+	type FleeMode,
 	calculateDangerCenter,
-	updateMovementFlee,
-	updatePathfinderFlee,
-	switchToMovementMode,
-	switchToPathfinderMode,
-	switchToEatingMode,
 	cleanupFleeMode,
 	determineFleeMode,
-	FLEE_THRESHOLDS,
-	type FleeMode
+	switchToEatingMode,
+	switchToMovementMode,
+	switchToPathfinderMode,
+	updateMovementFlee,
+	updatePathfinderFlee
 } from '@utils/combat'
 
 interface EmergencyHealingState extends BaseServiceState {
@@ -99,7 +101,10 @@ const serviceEmergencyHealing = createStatefulService<EmergencyHealingState>({
 			})()
 
 		// 4. Убегание к игроку (приоритет) - используем PATHFINDER
-		if (canFleeToPlayer && nearestEnemy.distance < preferences.safeEatDistance) {
+		if (
+			canFleeToPlayer &&
+			nearestEnemy.distance < preferences.safeEatDistance
+		) {
 			if (state.fleeMode !== 'PATHFINDER') {
 				console.log(`🏃‍♂️ Бегу к игроку "${player.username}"`)
 				bot.chat(`${player.username}, спаси меня!`)

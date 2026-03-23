@@ -1,4 +1,5 @@
 import { assign } from 'xstate'
+
 import type { MachineActionParams } from '@hsm/types'
 
 const updatePosition = assign({

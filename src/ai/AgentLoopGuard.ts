@@ -23,12 +23,15 @@ const stableStringify = (value: unknown): string => {
 		return `[${value.map(stableStringify).join(',')}]`
 	}
 
-	const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
-		left.localeCompare(right)
+	const entries = Object.entries(value as Record<string, unknown>).sort(
+		([left], [right]) => left.localeCompare(right)
 	)
 
 	return `{${entries
-		.map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`)
+		.map(
+			([key, entryValue]) =>
+				`${JSON.stringify(key)}:${stableStringify(entryValue)}`
+		)
 		.join(',')}}`
 }
 

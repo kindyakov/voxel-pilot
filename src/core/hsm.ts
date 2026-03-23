@@ -1,10 +1,12 @@
 import { createActor } from 'xstate'
-import type { Bot, Entity } from '@types'
-import type { MachineContext } from '@hsm/context'
-import type { MachineEvent } from '@hsm/types'
 
+import type { Bot, Entity } from '@types'
+
+import type { MachineContext } from '@hsm/context'
 import { machine } from '@hsm/machine'
+import type { MachineEvent } from '@hsm/types'
 import { AntiLoopGuard } from '@hsm/utils/antiLoop'
+
 import { cleanupPathfindCache } from '@utils/combat/enemyVisibility'
 
 class BotStateMachine {
@@ -166,4 +168,3 @@ class BotStateMachine {
 }
 
 export default BotStateMachine
-

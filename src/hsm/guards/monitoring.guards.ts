@@ -1,4 +1,5 @@
 import { and, not, stateIn } from 'xstate'
+
 import type { MachineGuardParams } from '@hsm/types'
 import { getHigherPriorityConditions } from '@hsm/utils/getPriority.js'
 

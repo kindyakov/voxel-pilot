@@ -1,5 +1,5 @@
-import type { MachineActionParams } from '@hsm/types'
 import type { CraftingTaskData } from '@hsm/tasks/types'
+import type { MachineActionParams } from '@hsm/types'
 
 /**
  * Exit action для CRAFTING

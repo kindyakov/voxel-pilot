@@ -1,4 +1,5 @@
 import { loader as autoEat } from 'mineflayer-auto-eat'
+
 import type { Bot } from '../../types'
 
 export const loadAutoEat = (bot: Bot): void => {

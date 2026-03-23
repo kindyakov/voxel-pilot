@@ -1,11 +1,14 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import test from 'node:test'
 
 import { MemoryManager } from '../../../core/memory/index.js'
-import type { LegacyBotMemoryData, MemoryEntryInput } from '../../../core/memory/types.js'
+import type {
+	LegacyBotMemoryData,
+	MemoryEntryInput
+} from '../../../core/memory/types.js'
 
 const createTempDataDir = async (): Promise<string> => {
 	return fs.mkdtemp(path.join(os.tmpdir(), 'minecraft-bot-memory-'))
@@ -158,14 +161,18 @@ test('load migrates legacy JSON memory into sqlite entries and creates backup on
 
 	const imported = manager.readEntries({})
 	assert.equal(imported.length, 4)
-	assert.deepEqual(
-		imported.map(entry => entry.type).sort(),
-		['container', 'location', 'location', 'resource']
-	)
+	assert.deepEqual(imported.map(entry => entry.type).sort(), [
+		'container',
+		'location',
+		'location',
+		'resource'
+	])
 
 	const backups = await fs.readdir(dataDir)
 	assert.equal(
-		backups.some(fileName => fileName.startsWith(`bot_memory_${botName}.backup_`)),
+		backups.some(fileName =>
+			fileName.startsWith(`bot_memory_${botName}.backup_`)
+		),
 		true
 	)
 })

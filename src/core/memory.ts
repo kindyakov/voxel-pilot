@@ -1,5 +1,6 @@
 import fs from 'fs/promises'
 import path from 'path'
+
 import type { Bot, Vec3 } from '@types'
 
 /** Локация сундука/печи/верстака */

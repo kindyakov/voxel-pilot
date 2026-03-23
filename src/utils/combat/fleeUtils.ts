@@ -2,10 +2,10 @@
  * Утилиты для системы убегания от врагов
  * Гибридный подход: mineflayer-movement для близких дистанций + pathfinder для средних
  */
+import { GoalXZ } from '@/modules/plugins/goals'
+import { Vec3 } from 'vec3'
 
 import type { Bot, Entity } from '@types'
-import { Vec3 } from 'vec3'
-import { GoalXZ } from '@/modules/plugins/goals'
 
 // Режимы убегания
 export type FleeMode = 'IDLE' | 'MOVEMENT' | 'PATHFINDER' | 'EATING'

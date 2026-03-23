@@ -1,5 +1,5 @@
-import type { MachineActionParams } from '@hsm/types'
 import type { FollowingTaskData } from '@hsm/tasks/types'
+import type { MachineActionParams } from '@hsm/types'
 
 /**
  * Exit action для FOLLOWING

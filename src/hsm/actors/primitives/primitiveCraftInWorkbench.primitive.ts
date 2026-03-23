@@ -1,8 +1,9 @@
-import type { Block } from '@types'
 import {
-	createStatefulService,
-	type BaseServiceState
+	type BaseServiceState,
+	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
+
+import type { Block } from '@types'
 
 interface CraftInWorkbenchState extends BaseServiceState {
 	itemName: string | null
@@ -37,9 +38,7 @@ export const primitiveCraftInWorkbench = createStatefulService<
 		}
 
 		if (!craftingTable) {
-			console.error(
-				'❌ [primitiveCraftInWorkbench] No craftingTable provided'
-			)
+			console.error('❌ [primitiveCraftInWorkbench] No craftingTable provided')
 			sendBack({ type: 'CRAFT_FAILED', reason: 'No craftingTable provided' })
 			return
 		}

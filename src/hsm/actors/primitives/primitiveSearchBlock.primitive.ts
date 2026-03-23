@@ -1,14 +1,14 @@
-import type { Vec3 } from '@/types'
 import {
-	createStatefulService,
-	type BaseServiceState
+	type BaseServiceState,
+	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
 import {
-	checkBlockSafety,
-	isBlockDirectlyBelowBot,
+	type AnalyzedBlock,
 	calculateBlockScore,
-	type AnalyzedBlock
+	checkBlockSafety,
+	isBlockDirectlyBelowBot
 } from '@/hsm/utils/blockAnalysis.utils'
+import type { Vec3 } from '@/types'
 
 interface SearchBlockState extends BaseServiceState {
 	blockName: string
@@ -95,7 +95,14 @@ export const primitiveSearchBlock = createStatefulService<
 	},
 
 	onTick: api => {
-		const { blockName, maxDistance, maxSearchTicks, tickCount, searching, blockId } = api.state
+		const {
+			blockName,
+			maxDistance,
+			maxSearchTicks,
+			tickCount,
+			searching,
+			blockId
+		} = api.state
 
 		if (!searching || !blockId) return
 

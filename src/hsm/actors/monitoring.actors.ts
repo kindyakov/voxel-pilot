@@ -1,7 +1,9 @@
+import type { Entity } from '@types'
+
 import { createStatefulService } from '@hsm/helpers/createStatefulService'
 import { isEntityOfType } from '@hsm/utils/isEntityOfType'
+
 import { canAttackEnemy } from '@utils/combat/enemyVisibility'
-import type { Entity } from '@types'
 
 export const serviceEntitiesTracking = createStatefulService({
 	name: 'serviceEntitiesTracking',

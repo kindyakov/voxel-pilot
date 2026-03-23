@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import type { Responses } from 'openai/resources/responses/responses'
 
 import defaultConfig, { type Config as ConfigInstance } from '@config/config'
+
 import type { AgentToolDefinition } from './tools.js'
 
 export interface ParsedToolCall {
@@ -21,7 +22,9 @@ export interface ParsedFunctionCallOutputItem {
 export interface ParsedToolResponse {
 	id: string
 	output_text?: string
-	output: Array<ParsedFunctionCallOutputItem | { type: string; [key: string]: unknown }>
+	output: Array<
+		ParsedFunctionCallOutputItem | { type: string; [key: string]: unknown }
+	>
 }
 
 export interface CreateResponseResult {
@@ -64,7 +67,10 @@ interface ChatCompletionToolCall {
 }
 
 interface ChatCompletionMessageLike {
-	content?: string | Array<{ type?: string; text?: string; [key: string]: unknown }> | null
+	content?:
+		| string
+		| Array<{ type?: string; text?: string; [key: string]: unknown }>
+		| null
 	tool_calls?: ChatCompletionToolCall[]
 }
 
@@ -90,7 +96,10 @@ export interface OpenAICompatibleChatSdkLike {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
-const parseArguments = (value: string, parsed?: unknown): Record<string, unknown> => {
+const parseArguments = (
+	value: string,
+	parsed?: unknown
+): Record<string, unknown> => {
 	if (isRecord(parsed)) {
 		return parsed
 	}
@@ -103,7 +112,9 @@ const parseArguments = (value: string, parsed?: unknown): Record<string, unknown
 	}
 }
 
-const extractTextContent = (content: ChatCompletionMessageLike['content']): string => {
+const extractTextContent = (
+	content: ChatCompletionMessageLike['content']
+): string => {
 	if (typeof content === 'string') {
 		return content
 	}
@@ -123,7 +134,8 @@ export const mapParsedToolCalls = (
 ): ParsedToolCall[] =>
 	response.output
 		.filter(
-			(item): item is ParsedFunctionCallOutputItem => item.type === 'function_call'
+			(item): item is ParsedFunctionCallOutputItem =>
+				item.type === 'function_call'
 		)
 		.map(toolCall => ({
 			callId: toolCall.call_id,
@@ -131,14 +143,18 @@ export const mapParsedToolCalls = (
 			arguments: parseArguments(toolCall.arguments, toolCall.parsed_arguments)
 		}))
 
-const mapChatToolCalls = (toolCalls: ChatCompletionToolCall[] = []): ParsedToolCall[] =>
+const mapChatToolCalls = (
+	toolCalls: ChatCompletionToolCall[] = []
+): ParsedToolCall[] =>
 	toolCalls.map(toolCall => ({
 		callId: toolCall.id,
 		name: toolCall.function.name,
 		arguments: parseArguments(toolCall.function.arguments)
 	}))
 
-const toChatTools = (tools: AgentToolDefinition[]): Array<Record<string, unknown>> =>
+const toChatTools = (
+	tools: AgentToolDefinition[]
+): Array<Record<string, unknown>> =>
 	tools.map(tool => ({
 		type: 'function',
 		function: {
@@ -174,7 +190,8 @@ export class OpenAIResponsesClient implements AgentModelClient {
 			}) as unknown as OpenAIResponsesSdkLike)
 		this.model = options?.model ?? defaultConfig.ai.model
 		this.timeoutMs = options?.timeoutMs ?? defaultConfig.ai.timeout
-		this.maxOutputTokens = options?.maxOutputTokens ?? defaultConfig.ai.maxTokens
+		this.maxOutputTokens =
+			options?.maxOutputTokens ?? defaultConfig.ai.maxTokens
 	}
 
 	async createResponse(
@@ -256,7 +273,9 @@ export class OpenAICompatibleChatClient implements AgentModelClient {
 			return
 		}
 
-		const toolOutputs = input.filter(item => item.type === 'function_call_output')
+		const toolOutputs = input.filter(
+			item => item.type === 'function_call_output'
+		)
 		if (toolOutputs.length > 0) {
 			for (const item of toolOutputs) {
 				const callId = String(item.call_id ?? '')

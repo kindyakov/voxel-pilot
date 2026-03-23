@@ -1,6 +1,8 @@
-import type { Bot, Entity } from '@types'
-import { GoalNear } from '@modules/plugins/goals'
 import pathFinderPkg from 'mineflayer-pathfinder'
+
+import type { Bot, Entity } from '@types'
+
+import { GoalNear } from '@modules/plugins/goals'
 
 const { Movements } = pathFinderPkg
 

@@ -2,6 +2,7 @@ import type { Responses } from 'openai/resources/responses/responses'
 import { Vec3 as Vec3Class } from 'vec3'
 
 import type { Bot } from '@types'
+
 import type { MemoryEntryType, MemoryPosition } from '@core/memory/types.js'
 
 export type AgentToolName =
@@ -199,14 +200,18 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 		},
 		required: []
 	}),
-	tool('inspect_container', 'Inspect nearby container/workstation and persist contents.', {
-		type: 'object',
-		additionalProperties: false,
-		properties: {
-			position: positionSchema
-		},
-		required: ['position']
-	}),
+	tool(
+		'inspect_container',
+		'Inspect nearby container/workstation and persist contents.',
+		{
+			type: 'object',
+			additionalProperties: false,
+			properties: {
+				position: positionSchema
+			},
+			required: ['position']
+		}
+	),
 	tool('finish_goal', 'Finish the current goal.', {
 		type: 'object',
 		additionalProperties: false,
@@ -297,16 +302,16 @@ const toPosition = (value: Record<string, unknown>): MemoryPosition => ({
 const toVec3 = (position: MemoryPosition) =>
 	new Vec3Class(position.x, position.y, position.z)
 
-const serializeContainerItems = (items: any[]): Array<Record<string, unknown>> =>
-	items
-		.filter(Boolean)
-		.map(item => ({
-			name: item.name,
-			count: item.count,
-			slot: item.slot,
-			maxDurability: item.maxDurability,
-			durabilityUsed: item.durabilityUsed
-		}))
+const serializeContainerItems = (
+	items: any[]
+): Array<Record<string, unknown>> =>
+	items.filter(Boolean).map(item => ({
+		name: item.name,
+		count: item.count,
+		slot: item.slot,
+		maxDurability: item.maxDurability,
+		durabilityUsed: item.durabilityUsed
+	}))
 
 const openContainerWindow = async (bot: Bot, block: any): Promise<any> => {
 	if (CONTAINER_NAMES.some(name => block.name.includes(name))) {
@@ -388,7 +393,9 @@ export const executeInlineToolCall = async (
 				tags: Array.isArray(args.tags) ? args.tags.map(String) : [],
 				description: String(args.description ?? ''),
 				data:
-					args.data && typeof args.data === 'object' && !Array.isArray(args.data)
+					args.data &&
+					typeof args.data === 'object' &&
+					!Array.isArray(args.data)
 						? (args.data as Record<string, unknown>)
 						: {}
 			})
@@ -402,10 +409,10 @@ export const executeInlineToolCall = async (
 					: [],
 				origin: context.bot.entity?.position
 					? {
-						x: context.bot.entity.position.x,
-						y: context.bot.entity.position.y,
-						z: context.bot.entity.position.z
-					}
+							x: context.bot.entity.position.x,
+							y: context.bot.entity.position.y,
+							z: context.bot.entity.position.z
+						}
 					: undefined,
 				maxDistance: Number(args.max_distance ?? 0)
 			})
@@ -427,7 +434,10 @@ export const executeInlineToolCall = async (
 					args.position && typeof args.position === 'object'
 						? toPosition(args.position as Record<string, unknown>)
 						: undefined,
-				type: typeof args.type === 'string' ? (args.type as MemoryEntryType) : undefined
+				type:
+					typeof args.type === 'string'
+						? (args.type as MemoryEntryType)
+						: undefined
 			})
 			return { ok: deleted, output: { deleted } }
 		}
@@ -442,7 +452,9 @@ export const executeInlineToolCall = async (
 			if (distance > 4) {
 				return {
 					ok: false,
-					output: { reason: `Container is too far away (${distance.toFixed(1)}m)` }
+					output: {
+						reason: `Container is too far away (${distance.toFixed(1)}m)`
+					}
 				}
 			}
 
