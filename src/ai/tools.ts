@@ -56,7 +56,8 @@ export const AGENT_SYSTEM_PROMPT = [
 	'Return exactly one execution decision after enough information is gathered.',
 	'Keep arguments concrete and minimal.',
 	'Never invent coordinates, blocks, entities, or containers that are not present in the snapshot or tool results.',
-	'If the user asks you to come to them, follow them, or stay near them, prefer call_follow_entity with the matching nearby player name instead of call_navigate.'
+	'If the user asks you to come to them, follow them, or stay near them, prefer call_follow_entity with the matching nearby player name instead of call_navigate.',
+	'SPEED IS CRITICAL: If the goal is simple movement (follow player, go to coordinates), return an execution tool IMMEDIATELY in the first round without calling informational tools.'
 ].join(' ')
 
 const FUNCTION = 'function' as const

@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev
 
 # Build TypeScript to JavaScript
-npm build
+npm run build
 
 # Type checking (without emitting)
 npm run type-check
@@ -26,219 +26,85 @@ npm start
 
 ## Project Overview
 
-This is a **Minecraft bot** using **xstate** (v5) for state management and **mineflayer** for game interaction. The bot uses a hierarchical state machine (HSM) with a 3-level task execution system:
+This is a **Minecraft bot** using **xstate** (v5) for state management and **mineflayer** for game interaction. The bot uses a two-tier execution loop within the `TASKS` state:
 
-1. **Level 1 (Primitives)**: Atomic services - single actions like searching, navigating, breaking blocks
-2. **Level 2 (Tasks)**: Task orchestrators - sequences of primitives for complex operations (mining, crafting, smelting)
-3. **Level 3 (Plan Executor)**: Manages sequential task execution from AI-generated plans
+1. **Level 1 (Thinking)**: The `AGENT_LOOP` builds a world snapshot and asks the LLM for a tool decision. Informational (inline) tools execute instantly to update context.
+2. **Level 2 (Executing)**: Once an execution tool is chosen, the HSM transitions to a concrete **Primitive Actor** (Navigating, Breaking, Smelting, etc.) to perform the physical action.
 
 ## High-Level Architecture
 
 ### Core Systems
 
-- **HSM (Hierarchical State Machine)** (`src/hsm/machine.ts`):
-  - Uses xstate parallel states for managing bot activity
-  - Main state hierarchy: `MAIN_ACTIVITY` → `IDLE | URGENT_NEEDS | COMBAT | TASKS | MONITORING`
-  - Uses history states to resume interrupted activities
+- **HSM** (`src/hsm/machine.ts`):
+  - Parallel machine: `MAIN_ACTIVITY` (Idle, Urgent Needs, Combat, Tasks) and `MONITORING`.
+  - `TASKS.THINKING`: Invokes the AI Loop to decide the next step.
+  - `TASKS.EXECUTING`: Invokes a primitive actor based on the AI's decision.
 
-- **Bot Core** (`src/core/bot.ts`):
-  - Initializes mineflayer connection
-  - Sets up HSM, memory system, and command handler
-  - Manages reconnection and bot lifecycle
+- **AI Loop** (`src/ai/loop.ts`):
+  - **Snapshot**: Builds a text representation of the bot's state.
+  - **Thinking**: Calls OpenAI with available tools.
+  - **Tool System** (`src/ai/tools.ts`):
+    - *Inline Tools*: Instant info retrieval (memory read, container inspect).
+    - *Execution Tools*: Physical actions that trigger HSM transitions.
 
-- **Memory System** (`src/core/memory.ts`):
-  - Two-tier memory: short-term (context) and long-term (persistent JSON file at `data/bot_memory.json`)
-  - Stores known locations, player interactions, task statistics, deaths, and world exploration data
-  - Auto-saves every 5 minutes and on shutdown
+- **Memory System** (`src/core/memory/`):
+  - Long-term memory layer backed by **SQLite** (`better-sqlite3`).
+  - Persistent database located at `data/bot_memory_${botName}.db`.
+  - Stores spatially indexed entries (locations, containers, resources) and legacy statistics.
+  - CRUD operations: `saveEntry`, `readEntries`, `updateEntryData`, `deleteEntry`.
+  - Auto-saves metadata every 5 minutes; entries are persisted immediately.
+  - **Path**: `data/bot_memory_[name].db`.
 
 ### Plugin Architecture
-
-Mineflayer plugins loaded in `src/modules/plugins/index.plugins.ts`:
-- `armorManager` - Equipment management
-- `autoEat` - Automatic food consumption
-- `pathfinder` - A* pathfinding
-- `pvp` - Combat mechanics
-- `movement` - Advanced movement control
-- `tool` - Tool management
-- `viewer` - Web-based world viewer
-- `webInventory` - Inventory management UI
-- `hawkeye` - Entity detection utilities
+Mineflayer plugins loaded in `src/modules/plugins/index.plugins.ts`: `armorManager`, `autoEat`, `pathfinder`, `pvp`, `movement`, `tool`, `viewer`, `webInventory`, `hawkeye`.
 
 ### Primitive Services (Atomic Actions)
-
-Located in `src/hsm/actors/primitives/`, created via `createStatefulService()` helper:
-- `primitiveSearchBlock` - Find blocks in world with memory integration
-- `primitiveSearchEntity` - Find mobs/players
-- `primitiveNavigating` - Move to target with pathfinding
-- `primitiveBreaking` - Break blocks
-- `primitivePlacing` - Place blocks
-- `primitiveOpenContainer` - Open chests/furnaces/crafting tables
-
-Registry in `src/hsm/primitives/registry.primitives.ts` for validation and documentation.
-
-### Task Orchestrators
-
-Located in `src/hsm/tasks/registry.tasks.ts`. Each task:
-- Defines required/optional parameters
-- Specifies execution preconditions
-- Orchestrates primitive services sequentially
-- Saves progress in `context.taskData` for resumption on interruption
-
-Typical examples: MINING, SMELTING, CRAFTING, BUILDING tasks.
-
-### Actions & Guards
-
-**Actions** (`src/hsm/actions/`):
-- Entry/exit handlers for state transitions
-- Always-running actions
-- Periodic state updates
-- Save operations
-- Organized by feature: `combat.ts`, `mining.ts`, `monitoring.ts`, etc.
-
-**Guards** (`src/hsm/guards/`):
-- Conditions for state transitions
-- Check preconditions before state changes
-- Located in guard files by feature
+Located in `src/hsm/actors/primitives/`. All must support `AbortSignal`.
+- `primitiveNavigating`, `primitiveBreaking`, `primitivePlacing`, `primitiveCraft`, `primitiveSmelt`, `primitiveFollowing`, etc.
 
 ## Key Architectural Principles
 
-### Separation of Concerns
-
-- **Primitives**: Know nothing about tasks or goals; single atomic actions
-- **Tasks**: Sequence primitives toward objectives; don't know about plans
-- **Plan Executor**: Manages task sequences from AI plans
-
-### Services vs States
-
-Primitives are **services (actors)**, NOT state machine states:
-- Invoked via `invoke` from task states
-- Have lifecycle: `onStart` → `onTick` | `onAsyncTick` | `onEvents` → `onCleanup`
-- Communicate with state machine via `sendBack()` events
+### Cancellability & Safety
+- **AbortSignal**: Every primitive MUST accept and respect a `signal` for instant cancellation.
+- **Anti-Loop**: `failureRepeats` tracking and `isAgentLoopStuck` guard prevent infinite failure cycles.
+- **Context Isolation**: Use HSM context for state; avoid direct `bot.entity` mutations.
 
 ### Parameter Flow
-
-Parameters flow through `input` at each level:
-
 ```
-AI generates Plan
-  → Plan Executor receives tasks and validates
-  → Task orchestrator receives params via input
-  → Primitive receives params via input
+User Command (Event)
+  → HSM transition to TASKS.THINKING
+  → AI Loop generates Tool Call (Execution)
+  → HSM transition to TASKS.EXECUTING.[State]
+  → Primitive Actor invoked with Tool Arguments
 ```
-
-### Priority System
-
-Interruption priorities defined in `src/hsm/config/priorities.ts`:
-- FOLLOWING: 9
-- EMERGENCY_HEALING: 8
-- EMERGENCY_EATING: 8
-- COMBAT: 7
-- PLAN_EXECUTOR: 6
-- IDLE: 1
-
-Higher priority states can interrupt lower ones. Use history states to resume interrupted activity.
 
 ## TypeScript Configuration
+- **Path aliases**: `@/*`, `@hsm/*`, `@config/*`, `@utils/*`, `@modules/*`, `@core/*`.
+- **Target**: ES2022, Strict mode enabled.
 
-- **Path aliases** (tsconfig.json): `@/*`, `@hsm/*`, `@config/*`, `@utils/*`, `@modules/*`, `@core/*`
-- **Target**: ES2022
-- **Module**: ESNext
-- **Strict mode**: Enabled with full strictness checks
-- **Build tool**: tsc + tsc-alias for resolving path aliases
-
-## Memory System Details
-
-### Long-term Memory Structure (`data/bot_memory.json`)
-
-```
-meta: { botName, createdAt, lastUpdated, version }
-world: { knownLocations, knownPlayers }
-experience: { tasksCompleted, deaths, achievements }
-goals: { current, completed, failed }
-preferences: { favoriteTools, avoidAreas, preferredMiningDepth }
-stats: { totalPlaytime, blocksMined, blocksPlaced, itemsCrafted, mobsKilled, distanceTraveled }
-```
-
-### Memory API
-
-- `bot.hsm.memory.rememberLocation(type, position, metadata)`
-- `bot.hsm.memory.findNearestKnown(type, currentPosition)`
-- `bot.hsm.memory.rememberTask(taskType, success, duration)`
-- `bot.hsm.memory.updateStats(type, item, count)`
-
-## Validation System (3 Levels)
-
-1. **Preconditions**: Defined in Task Registry (static checks)
-2. **Plan Validation**: Before execution starts (validate all tasks)
-3. **Runtime Checks**: During execution (dynamic conditions)
-
-## File Structure Summary
-
-```
-src/
-├── core/              # Bot initialization, HSM, memory, command handler
-├── hsm/               # State machine implementation
-│   ├── actors/        # Primitive services
-│   ├── actions/       # Entry/exit/update/always handlers
-│   ├── guards/        # State transition conditions
-│   ├── tasks/         # Task registries and types
-│   ├── primitives/    # Primitive registry
-│   ├── config/        # Priorities config
-│   ├── utils/         # HSM utilities (antiLoop, blockAnalysis, entityDetection)
-│   └── helpers/       # createStatefulService helper
-├── modules/
-│   ├── connection/    # Mineflayer setup
-│   └── plugins/       # Mineflayer plugins
-├── utils/
-│   ├── combat/        # Combat utilities
-│   ├── minecraft/     # Bot utilities
-│   └── general/       # General utilities
-├── types/             # Type definitions
-└── index.ts           # Entry point
-```
-
-## Documentation
-
-Comprehensive guides in `docs/`:
-- `architecture.md` - Full architecture explanation
-- `primitives-guide.md` - Primitive service reference
-- `tasks-guide.md` - Task orchestrator patterns
-- `memory-guide.md` - Memory system details
-- `validation-guide.md` - Validation system
-- `bot_architecture_plan.md` - Design documentation
-- `enemy-visibility-system.md` - Enemy detection mechanics
-- `implementation-plan.md` - Development roadmap
+## Memory Structure
+- **Meta**: Bot metadata, versions.
+- **World**: Locations, Players (interactions, friendliness).
+- **Experience**: Task success rates, average durations, death records.
+- **Stats**: Mined, placed, crafted, killed counts, distance traveled.
 
 ## Common Development Tasks
 
-### Adding a New Primitive Service
+### Adding a New Physical Capability
+1. **Primitive**: Create a new actor in `src/hsm/actors/primitives/`.
+2. **Registry**: Register it in `src/hsm/actors/primitives/index.primitive.ts`.
+3. **Tool Definition**: Add a `call_[name]` execution tool to `src/ai/tools.ts`.
+4. **HSM Update**:
+   - Add state to `TASKS.EXECUTING` in `src/hsm/machine.ts`.
+   - Add guard (e.g., `is[Name]Execution`).
+   - Add logic to `resolveExecutionActor` and `resolveExecutionInput`.
 
-1. Create `src/hsm/actors/primitives/primitive[Name].primitive.ts`
-2. Use `createStatefulService()` helper with lifecycle handlers
-3. Add to `PRIMITIVE_REGISTRY` in `src/hsm/primitives/registry.primitives.ts`
-4. Export from `src/hsm/actors/primitives/index.primitive.ts`
-
-### Adding a New Task
-
-1. Add task type to `src/hsm/tasks/types.ts`
-2. Define task in `TASK_REGISTRY` in `src/hsm/tasks/registry.tasks.ts` with preconditions
-3. Implement task orchestration logic (invokes primitives in sequence)
-4. Create entry/exit/update actions if needed in `src/hsm/actions/`
-5. Add guards in `src/hsm/guards/` if conditional logic needed
-
-### Adding a New HSM State
-
-1. Define state in `machine.ts` with appropriate nesting
-2. Create entry/exit actions in `src/hsm/actions/entry/` and `src/hsm/actions/exit/`
-3. Add guards in `src/hsm/guards/` if transitions are conditional
-4. Use `invoke` for async operations or service calls
-5. Define transitions with appropriate priority considerations
+### Adding a New Informational Tool
+1. **Tool Definition**: Add a tool to `InlineToolName` and `AGENT_TOOLS` in `src/ai/tools.ts`.
+2. **Implementation**: Add logic to `executeInlineToolCall` in `src/ai/tools.ts`.
 
 ## Debugging Tips
-
-- Use `npm run dev` for watch mode development
-- Bot logs to `logs/bot.log` (info) and `logs/error.log` (errors)
-- Use Logger from `@config/logger` for consistent logging
-- Memory can be inspected at `data/bot_memory.json`
-- HSM context available in all state handlers and services via parameter
-- Check `antiLoop` utility in `src/hsm/utils/antiLoop.ts` for stuck detection
+- Logs: `logs/bot.log` and `logs/error.log`.
+- Database: Inspect `data/*.db` with a SQLite viewer.
+- Viewer: Access the bot's perspective via `prismarine-viewer` (if enabled).
+- Failure Signatures: Check `context.failureSignature` in HSM to see why the AI loop is repeating errors.

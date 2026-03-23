@@ -83,6 +83,7 @@ export const runAgentTurn = async (
 			throw new Error('Agent thinking aborted')
 		}
 
+		const roundStart = Date.now()
 		const response = await client.createResponse({
 			instructions: AGENT_SYSTEM_PROMPT,
 			input: nextInput,
@@ -90,6 +91,8 @@ export const runAgentTurn = async (
 			previousResponseId,
 			signal: input.signal
 		})
+		const duration = Date.now() - roundStart
+		transcript.push(`round_${round}_ms:${duration}`)
 
 		if (response.toolCalls.length === 0) {
 			if (modelRetries < MAX_MODEL_RETRIES) {
