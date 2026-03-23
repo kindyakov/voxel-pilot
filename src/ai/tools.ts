@@ -39,11 +39,11 @@ export interface PendingExecution {
 	args: Record<string, unknown>
 }
 
-export interface InlineToolExecutionContext {
+interface InlineToolExecutionContext {
 	bot: Bot
 }
 
-export interface InlineToolExecutionResult {
+interface InlineToolExecutionResult {
 	ok: boolean
 	output: Record<string, unknown>
 }

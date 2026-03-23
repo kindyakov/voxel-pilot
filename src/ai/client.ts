@@ -45,7 +45,7 @@ export interface AgentModelClient {
 	createResponse(request: AgentResponseRequest): Promise<CreateResponseResult>
 }
 
-export interface OpenAIResponsesSdkLike {
+interface OpenAIResponsesSdkLike {
 	responses: {
 		create: (
 			body: Responses.ResponseCreateParamsNonStreaming,
@@ -74,7 +74,7 @@ interface ChatCompletionMessageLike {
 	tool_calls?: ChatCompletionToolCall[]
 }
 
-export interface OpenAICompatibleChatSdkLike {
+interface OpenAICompatibleChatSdkLike {
 	chat: {
 		completions: {
 			create: (
@@ -129,7 +129,7 @@ const extractTextContent = (
 		.trim()
 }
 
-export const mapParsedToolCalls = (
+const mapParsedToolCalls = (
 	response: ParsedToolResponse
 ): ParsedToolCall[] =>
 	response.output

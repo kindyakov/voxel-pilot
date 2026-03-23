@@ -1,14 +1,14 @@
-export interface AgentLoopFailure {
+interface AgentLoopFailure {
 	toolName: string
 	args: Record<string, unknown>
 	reason: string
 }
 
-export interface AgentLoopGuardOptions {
+interface AgentLoopGuardOptions {
 	maxRepeats: number
 }
 
-export interface AgentLoopGuardResult {
+interface AgentLoopGuardResult {
 	shouldAbort: boolean
 	repeats: number
 	signature: string

@@ -25,7 +25,7 @@ export class GoalFollow extends goalsClasses.GoalFollow {
 /**
  * Дойти прямо к блоку (встать на него)
  */
-export class GoalBlock extends goalsClasses.GoalBlock {
+class GoalBlock extends goalsClasses.GoalBlock {
 	constructor(x: number, y: number, z: number) {
 		super(x, y, z)
 	}
@@ -43,7 +43,7 @@ export class GoalXZ extends goalsClasses.GoalXZ {
 /**
  * Дойти до конкретной высоты Y
  */
-export class GoalY extends goalsClasses.GoalY {
+class GoalY extends goalsClasses.GoalY {
 	constructor(y: number) {
 		super(y)
 	}
@@ -52,7 +52,7 @@ export class GoalY extends goalsClasses.GoalY {
 /**
  * Составная цель: достичь любую из переданных целей (OR)
  */
-export class GoalCompositeAny extends goalsClasses.GoalCompositeAny<goals.Goal> {
+class GoalCompositeAny extends goalsClasses.GoalCompositeAny<goals.Goal> {
 	constructor(goalsList: goals.Goal[]) {
 		super(goalsList)
 	}
@@ -61,7 +61,7 @@ export class GoalCompositeAny extends goalsClasses.GoalCompositeAny<goals.Goal> 
 /**
  * Составная цель: достичь все цели по очереди (AND)
  */
-export class GoalCompositeAll extends goalsClasses.GoalCompositeAll<goals.Goal> {
+class GoalCompositeAll extends goalsClasses.GoalCompositeAll<goals.Goal> {
 	constructor(goalsList: goals.Goal[]) {
 		super(goalsList)
 	}

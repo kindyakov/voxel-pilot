@@ -102,7 +102,7 @@ type SnapshotBot = {
 	entities?: Record<string, EntityLike>
 }
 
-export interface BuildSnapshotInput {
+interface BuildSnapshotInput {
 	bot: SnapshotBot
 	currentGoal: string | null
 	subGoal: string | null

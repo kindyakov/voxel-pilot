@@ -73,22 +73,22 @@ export type MachineEvent =
 	| PrimitiveEvents
 	| SystemEvents
 
-export type MachineGuard = (args: {
+type MachineGuard = (args: {
 	context: MachineContext
 	event: MachineEvent
 }) => boolean
 
-export type MachineAction = (args: {
+type MachineAction = (args: {
 	context: MachineContext
 	event: MachineEvent
 }) => void | Partial<MachineContext>
 
-export type AssignAction = (args: {
+type AssignAction = (args: {
 	context: MachineContext
 	event: MachineEvent
 }) => Partial<MachineContext>
 
-export type MachineActionParams = {
+type MachineActionParams = {
 	context: MachineContext
 	event: MachineEvent
 }
@@ -98,11 +98,11 @@ export type MachineGuardParams = {
 	event: MachineEvent
 }
 
-export interface TaskParams {
+interface TaskParams {
 	[key: string]: any
 }
 
-export interface TaskPreconditions {
+interface TaskPreconditions {
 	tool?: string
 	inventory_space?: boolean
 	furnace?: 'nearby'
@@ -110,18 +110,18 @@ export interface TaskPreconditions {
 	materials?: Record<string, number>
 }
 
-export interface TaskValidationResult {
+interface TaskValidationResult {
 	valid: boolean
 	missing: string[]
 	suggestions: TaskSuggestion[]
 }
 
-export interface TaskSuggestion {
+interface TaskSuggestion {
 	action: string
 	params: TaskParams
 }
 
-export interface TaskDefinition {
+interface TaskDefinition {
 	name: string
 	description: string
 	required_params: string[]
@@ -132,4 +132,4 @@ export interface TaskDefinition {
 	events_emitted: string[]
 }
 
-export type TaskRegistry = Record<string, TaskDefinition>
+type TaskRegistry = Record<string, TaskDefinition>

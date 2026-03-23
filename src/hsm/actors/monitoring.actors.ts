@@ -5,7 +5,7 @@ import { isEntityOfType } from '@hsm/utils/isEntityOfType'
 
 import { canAttackEnemy } from '@utils/combat/enemyVisibility'
 
-export const serviceEntitiesTracking = createStatefulService({
+const serviceEntitiesTracking = createStatefulService({
 	name: 'serviceEntitiesTracking',
 	asyncTickInterval: 100,
 

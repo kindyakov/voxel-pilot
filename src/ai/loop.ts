@@ -15,7 +15,7 @@ import {
 	summarizeExecution
 } from './tools.js'
 
-export interface AgentTurnInput {
+interface AgentTurnInput {
 	bot: Bot
 	memory: MemoryManager
 	currentGoal: string

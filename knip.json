@@ -1,8 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/index.ts!"],
-  "project": ["src/**/*.ts!"],
-  "ignore": ["src/tests/**/*", "src/types/external/**/*"],
+  "entry": ["src/tests/**/*.test.ts"],
+  "project": ["src/**/*.ts"],
+  "ignore": [],
   "paths": {
     "@/*": ["src/*"],
     "@types": ["src/types/index.ts"],
@@ -12,12 +12,7 @@
     "@modules/*": ["src/modules/*"],
     "@core/*": ["src/core/*"]
   },
-  "ignoreDependencies": [
-    "tsx",
-    "tsc-alias",
-    "prettier",
-    "typescript"
-  ],
+  "ignoreDependencies": [],
   "rules": {
     "files": "error",
     "dependencies": "error",
@@ -28,7 +23,6 @@
     "types": "warn",
     "nsExports": "warn",
     "nsTypes": "warn",
-    "enumMembers": "warn",
-    "classMembers": "warn"
+    "enumMembers": "warn"
   }
 }

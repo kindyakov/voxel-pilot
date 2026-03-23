@@ -92,7 +92,7 @@ export function canSeeEnemy(bot: Bot, enemy: Entity): boolean {
  * @param cacheDuration - Время жизни кеша (мс)
  * @returns Promise<true> если путь существует и не слишком длинный
  */
-export async function isEnemyReachable(
+async function isEnemyReachable(
 	bot: Bot,
 	enemy: Entity,
 	maxPathLength: number,
@@ -293,7 +293,7 @@ export async function canAttackEnemy(
 /**
  * Очистка кеша pathfinder (вызывать периодически или при изменении мира)
  */
-export function clearPathfindCache(): void {
+function clearPathfindCache(): void {
 	pathfindCache.clear()
 	console.log('🧹 [clearPathfindCache] Кеш pathfinder очищен')
 }

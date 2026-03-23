@@ -14,7 +14,7 @@ import type {
 	MemoryPosition,
 	ReadEntriesQuery,
 	TaskStats
-} from '@/types/memory'
+} from './types.js'
 import BetterSqlite3 from 'better-sqlite3'
 
 type SqliteDatabase = InstanceType<typeof BetterSqlite3>
@@ -672,13 +672,3 @@ export class MemoryManager {
 	}
 }
 
-export type {
-	BotMemoryData,
-	CurrentGoal,
-	DeleteEntrySelector,
-	MemoryEntry,
-	MemoryEntryInput,
-	ReadEntriesQuery
-} from '@/types/memory.js'
-
-export default MemoryManager

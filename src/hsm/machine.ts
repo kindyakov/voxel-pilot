@@ -303,7 +303,7 @@ const resolveExecutionInput = (context: MachineContext) => {
 	}
 }
 
-export interface MachineFactoryOptions {
+interface MachineFactoryOptions {
 	thinkingActor?: any
 	actors?: Record<string, any>
 }
