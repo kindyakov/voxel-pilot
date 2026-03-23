@@ -5,59 +5,11 @@ import path from 'node:path'
 import test from 'node:test'
 
 import { MemoryManager } from '../../../core/memory/index.js'
-import type {
-	LegacyBotMemoryData,
-	MemoryEntryInput
-} from '../../../core/memory/types.js'
+import type { MemoryEntryInput } from '../../../core/memory/types.js'
 
 const createTempDataDir = async (): Promise<string> => {
 	return fs.mkdtemp(path.join(os.tmpdir(), 'minecraft-bot-memory-'))
 }
-
-const createLegacyMemory = (botName: string): LegacyBotMemoryData => ({
-	meta: {
-		botName,
-		createdAt: '2026-03-01T00:00:00.000Z',
-		lastUpdated: '2026-03-01T00:00:00.000Z',
-		version: '1.0.0'
-	},
-	world: {
-		knownLocations: {
-			home: { x: 100, y: 64, z: 100 },
-			spawn: { x: 0, y: 64, z: 0 },
-			chests: [
-				{
-					position: { x: 101, y: 64, z: 100 },
-					type: 'chest',
-					contents: ['oak_log: 32'],
-					lastChecked: '2026-03-01T00:10:00.000Z'
-				}
-			],
-			resources: [
-				{
-					type: 'oak_log',
-					position: { x: 130, y: 70, z: 110 },
-					discovered: '2026-03-01T00:20:00.000Z'
-				}
-			]
-		},
-		knownPlayers: {}
-	},
-	experience: {
-		tasksCompleted: {},
-		deaths: []
-	},
-	goals: {
-		completed: [],
-		failed: []
-	},
-	stats: {
-		totalPlaytime: 0,
-		blocksMined: {},
-		blocksPlaced: {},
-		distanceTraveled: 0
-	}
-})
 
 test('saveEntry upserts same type and position and readEntries filters by tag and distance', async () => {
 	const dataDir = await createTempDataDir()
@@ -141,14 +93,14 @@ test('updateEntryData and deleteEntry mutate persisted records', async () => {
 	)
 })
 
-test('load migrates legacy JSON memory into sqlite entries and creates backup once', async () => {
+test('load ignores legacy JSON memory file and does not create backup', async () => {
 	const dataDir = await createTempDataDir()
 	const botName = 'MigratingBot'
 	const legacyPath = path.join(dataDir, `bot_memory_${botName}.json`)
 
 	await fs.writeFile(
 		legacyPath,
-		JSON.stringify(createLegacyMemory(botName), null, 2),
+		JSON.stringify({ legacy: true }, null, 2),
 		'utf8'
 	)
 
@@ -159,20 +111,13 @@ test('load migrates legacy JSON memory into sqlite entries and creates backup on
 
 	await manager.load()
 
-	const imported = manager.readEntries({})
-	assert.equal(imported.length, 4)
-	assert.deepEqual(imported.map(entry => entry.type).sort(), [
-		'container',
-		'location',
-		'location',
-		'resource'
-	])
+	assert.equal(manager.readEntries({}).length, 0)
 
 	const backups = await fs.readdir(dataDir)
 	assert.equal(
 		backups.some(fileName =>
 			fileName.startsWith(`bot_memory_${botName}.backup_`)
 		),
-		true
+		false
 	)
 })

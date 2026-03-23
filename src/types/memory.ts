@@ -49,27 +49,27 @@ export interface MemoryManagerOptions {
 	dataDir?: string
 }
 
-export interface LegacyChestLocation {
+export interface ChestLocation {
 	position: MemoryPosition
 	type: 'chest' | 'furnace' | 'crafting_table' | 'barrel' | 'shulker_box'
 	contents?: string[]
 	lastChecked: string
 }
 
-export interface LegacyResourceLocation {
+export interface ResourceLocation {
 	type: string
 	position: MemoryPosition
 	discovered: string
 }
 
-export interface LegacyKnownLocations {
+export interface KnownLocations {
 	home?: MemoryPosition
 	spawn?: MemoryPosition
-	chests: LegacyChestLocation[]
-	resources: LegacyResourceLocation[]
+	chests: ChestLocation[]
+	resources: ResourceLocation[]
 }
 
-export interface LegacyPlayerInfo {
+export interface PlayerInfo {
 	firstMet: string
 	lastSeen: string
 	interactions: number
@@ -77,21 +77,21 @@ export interface LegacyPlayerInfo {
 	notes: string[]
 }
 
-export interface LegacyTaskStats {
+export interface TaskStats {
 	count: number
 	successRate: number
 	averageTime: number
 	lastCompleted: string
 }
 
-export interface LegacyDeathRecord {
+export interface DeathRecord {
 	timestamp: string
 	cause: string
 	location: MemoryPosition
 	lesson?: string
 }
 
-export interface LegacyCurrentGoal {
+export interface CurrentGoal {
 	goal: string
 	priority: number
 	startedAt: string
@@ -100,21 +100,21 @@ export interface LegacyCurrentGoal {
 	progress?: Record<string, unknown>
 }
 
-export interface LegacyCompletedGoal {
+export interface CompletedGoal {
 	goal: string
 	completedAt: string
 	duration: number
 	tasksCompleted: number
 }
 
-export interface LegacyFailedGoal {
+export interface FailedGoal {
 	goal: string
 	failedAt: string
 	reason: string
 	tasksAttempted: number
 }
 
-export interface LegacyBotMemoryData {
+export interface BotMemoryData {
 	meta: {
 		botName: string
 		createdAt: string
@@ -122,18 +122,18 @@ export interface LegacyBotMemoryData {
 		version: string
 	}
 	world: {
-		knownLocations: LegacyKnownLocations
-		knownPlayers: Record<string, LegacyPlayerInfo>
+		knownLocations: KnownLocations
+		knownPlayers: Record<string, PlayerInfo>
 	}
 	experience: {
-		tasksCompleted: Record<string, LegacyTaskStats>
-		deaths: LegacyDeathRecord[]
+		tasksCompleted: Record<string, TaskStats>
+		deaths: DeathRecord[]
 		achievements?: string[]
 	}
 	goals: {
-		current?: LegacyCurrentGoal
-		completed: LegacyCompletedGoal[]
-		failed: LegacyFailedGoal[]
+		current?: CurrentGoal
+		completed: CompletedGoal[]
+		failed: FailedGoal[]
 	}
 	preferences?: {
 		favoriteTools?: string[]
