@@ -15,16 +15,22 @@ const canUseRanged = ({ context }: MachineGuardParams): boolean => {
 	return canSeeEnemy(context.bot, context.nearestEnemy.entity)
 }
 
-const canUseRangedAndEnemyFar = ({
-	context,
-	event
-}: MachineGuardParams): boolean => {
+const isEnemyInMeleeRange = ({ context }: MachineGuardParams): boolean => {
 	return (
-		canUseRanged({ context, event }) &&
-		context.nearestEnemy?.distance > context.preferences.enemyRangedRange
+		context.nearestEnemy.entity !== null &&
+		context.nearestEnemy.distance <= context.preferences.enemyMeleeRange
+	)
+}
+
+const canSkirmishRanged = ({ context, event }: MachineGuardParams): boolean => {
+	return (
+		context.nearestEnemy.entity !== null &&
+		context.nearestEnemy.distance > context.preferences.enemyMeleeRange &&
+		canUseRanged({ context, event })
 	)
 }
 
 export default {
-	canUseRangedAndEnemyFar
+	canSkirmishRanged,
+	isEnemyInMeleeRange
 }

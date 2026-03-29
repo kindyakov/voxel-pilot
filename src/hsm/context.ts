@@ -60,6 +60,7 @@ export interface MachineContext {
 		entity: Entity | null
 		distance: number
 	}
+	movementOwner: 'NONE' | 'PATHFINDER' | 'PVP' | 'MOVEMENT'
 	preferredCombatTargetId: number | null
 	combatStopRequested: boolean
 
@@ -140,6 +141,7 @@ export const context: MachineContext = {
 		entity: null,
 		distance: Infinity
 	},
+	movementOwner: 'NONE',
 	preferredCombatTargetId: null,
 	combatStopRequested: false,
 

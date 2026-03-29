@@ -18,6 +18,8 @@ import { type MachineContext, context } from '@hsm/context'
 import combatGuards from '@hsm/guards/combat.guards'
 import type { MachineEvent } from '@hsm/types'
 
+import { hasMovementController } from '@utils/combat/movementController'
+
 const waitWithSignal = (ms: number, signal: AbortSignal): Promise<void> =>
 	new Promise((resolve, reject) => {
 		const timeout = setTimeout(() => {
@@ -329,12 +331,16 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			serviceEntitiesTracking:
 				actorOverrides.serviceEntitiesTracking ??
 				monitoringActors.serviceEntitiesTracking,
+			serviceApproaching:
+				actorOverrides.serviceApproaching ?? combatActors.serviceApproaching,
 			serviceFleeing:
 				actorOverrides.serviceFleeing ?? combatActors.serviceFleeing,
 			serviceMeleeAttack:
 				actorOverrides.serviceMeleeAttack ?? combatActors.serviceMeleeAttack,
-			serviceRangedAttack:
-				actorOverrides.serviceRangedAttack ?? combatActors.serviceRangedAttack
+			serviceRangedSkirmish:
+				actorOverrides.serviceRangedSkirmish ??
+				actorOverrides.serviceRangedAttack ??
+				combatActors.serviceRangedSkirmish
 		},
 		guards: {
 			...combatGuards,
@@ -458,6 +464,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					entity: null,
 					distance: Infinity
 				},
+				movementOwner: 'NONE',
 				currentGoal: null,
 				subGoal: null,
 				pendingExecution: null,
@@ -494,6 +501,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				lastToolTranscript: [],
 				failureSignature: null,
 				failureRepeats: 0,
+				movementOwner: 'NONE',
 				preferredCombatTargetId: null,
 				combatStopRequested: false
 			}),
@@ -520,8 +528,22 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				combatStopRequested: true
 			}),
 			clearCombatTarget: assign({
+				movementOwner: 'NONE',
 				preferredCombatTargetId: null,
 				nearestEnemy: { entity: null, distance: Infinity }
+			}),
+			ownMovementNone: assign({
+				movementOwner: 'NONE'
+			}),
+			ownMovementPathfinder: assign({
+				movementOwner: 'PATHFINDER'
+			}),
+			ownMovementPvp: assign({
+				movementOwner: 'PVP'
+			}),
+			ownMovementMicro: assign({
+				movementOwner: ({ context }) =>
+					hasMovementController(context.bot) ? 'MOVEMENT' : 'NONE'
 			}),
 			storeThinkingExecution: assign(({ event }) => {
 				const output = (event as any).output as AgentTurnResult
@@ -741,39 +763,63 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 						}
 					},
 					COMBAT: {
+						exit: ['ownMovementNone'],
 						initial: 'DECIDING',
-					on: {
-						WEAPON_BROKEN: {
-							target: '.DECIDING'
-						},
-						NO_ENEMIES: [
-							{
-								guard: 'hasCurrentGoal',
-								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.THINKING',
-								actions: ['clearCombatTarget']
+						on: {
+							WEAPON_BROKEN: {
+								target: '.DECIDING'
 							},
-							{
-								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-								actions: ['clearCombatTarget']
-							}
-						]
-					},
+							ENEMY_BECAME_FAR: {
+								target: '.DECIDING'
+							},
+							ENEMY_BECAME_CLOSE: {
+								target: '.DECIDING'
+							},
+							NO_ENEMIES: [
+								{
+									guard: 'hasCurrentGoal',
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.THINKING',
+									actions: ['clearCombatTarget']
+								},
+								{
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: ['clearCombatTarget']
+								}
+							]
+						},
 						states: {
 							DECIDING: {
-					always: [
-						{
-							target: 'FLEEING',
-							guard: ({ context }) =>
-								context.preferences.combatMode === 'retreat'
-						},
-						{
-							target: 'RANGED_ATTACKING',
-							guard: 'canUseRangedAndEnemyFar'
-						},
-						{ target: 'MELEE_ATTACKING' }
+								always: [
+									{
+										target: 'FLEEING',
+										guard: ({ context }) =>
+											context.preferences.combatMode === 'retreat'
+									},
+									{
+										target: 'MELEE_ATTACKING',
+										guard: 'isEnemyInMeleeRange'
+									},
+									{
+										target: 'RANGED_SKIRMISHING',
+										guard: 'canSkirmishRanged'
+									},
+									{
+										target: 'APPROACHING',
+										guard: 'isEnemyNearby'
+									}
 								]
 							},
+							APPROACHING: {
+								entry: ['ownMovementPathfinder'],
+								invoke: {
+									src: 'serviceApproaching',
+									input: ({ context }: { context: MachineContext }) => ({
+										bot: context.bot
+									})
+								}
+							},
 							FLEEING: {
+								entry: ['ownMovementPathfinder'],
 								invoke: {
 									src: 'serviceFleeing',
 									input: ({ context }: { context: MachineContext }) => ({
@@ -782,12 +828,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 								}
 							},
 							MELEE_ATTACKING: {
-								on: {
-									ENEMY_BECAME_FAR: {
-										target: 'RANGED_ATTACKING',
-										guard: 'canUseRangedAndEnemyFar'
-									}
-								},
+								entry: ['ownMovementPvp'],
 								invoke: {
 									src: 'serviceMeleeAttack',
 									input: ({ context }: { context: MachineContext }) => ({
@@ -795,21 +836,17 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									})
 								}
 							},
-							RANGED_ATTACKING: {
-								on: {
-									ENEMY_BECAME_CLOSE: {
-										target: 'MELEE_ATTACKING'
-									}
-								},
-						invoke: {
-							src: 'serviceRangedAttack',
-							input: ({ context }: { context: MachineContext }) => ({
-								bot: context.bot
-							})
+							RANGED_SKIRMISHING: {
+								entry: ['ownMovementMicro'],
+								invoke: {
+									src: 'serviceRangedSkirmish',
+									input: ({ context }: { context: MachineContext }) => ({
+										bot: context.bot
+									})
+								}
+							}
 						}
-					}
-				}
-			},
+					},
 					TASKS: {
 						entry: ['markTaskActive'],
 						exit: ['markTaskInactive'],

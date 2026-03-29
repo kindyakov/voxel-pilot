@@ -16,12 +16,26 @@ const createVec3 = (x: number, y: number, z: number) => ({
 		const dy = y - other.y
 		const dz = z - other.z
 		return Math.sqrt(dx * dx + dy * dy + dz * dz)
+	},
+	offset(dx: number, dy: number, dz: number) {
+		return createVec3(x + dx, y + dy, z + dz)
+	},
+	minus(other: { x: number; y: number; z: number }) {
+		return {
+			x: x - other.x,
+			y: y - other.y,
+			z: z - other.z,
+			normalize() {
+				const length = Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z)
+				return createVec3(this.x / length, this.y / length, this.z / length)
+			}
+		}
 	}
 })
 
 class FakeBot extends EventEmitter {
 	username = 'Bot'
-	entity = { id: 999, position: createVec3(0, 64, 0) }
+	entity = { id: 999, position: createVec3(0, 64, 0), height: 1.8 }
 	entities = {}
 	health = 20
 	food = 20
@@ -34,7 +48,22 @@ class FakeBot extends EventEmitter {
 	registry = {
 		isNewerOrEqualTo: () => true
 	}
-	movement = {}
+	movement = {
+		goals: {
+			Default: { id: 'default-goal' }
+		},
+		heuristic: {
+			get: () => ({
+				target: () => ({
+					avoid: () => {}
+				}),
+				avoid: () => {}
+			})
+		},
+		setGoal: () => {},
+		getYaw: () => 0,
+		steer: async () => {}
+	}
 	game = { dimension: 'overworld' }
 	time = { isDay: true, timeOfDay: 1000 }
 	autoEat = {
@@ -166,8 +195,9 @@ const createTestActor = () => {
 			thinkingActor: hangingActor,
 			actors: {
 				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
 				serviceMeleeAttack: noopActor,
-				serviceRangedAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
 				serviceFleeing: noopActor,
 				serviceEmergencyEating: hangingActor,
 				serviceEmergencyHealing: hangingActor
@@ -367,8 +397,9 @@ test('autoDefend false prevents entity updates from forcing combat entry', async
 			thinkingActor: hangingActor,
 			actors: {
 				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
 				serviceMeleeAttack: noopActor,
-				serviceRangedAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
 				serviceFleeing: noopActor,
 				serviceEmergencyEating: hangingActor,
 				serviceEmergencyHealing: hangingActor
@@ -427,6 +458,104 @@ test('NO_ENEMIES clears nearestEnemy before returning to thinking', async () => 
 
 		assert.equal(actor.getSnapshot().context.nearestEnemy.entity, null)
 		assert.equal(actor.getSnapshot().context.nearestEnemy.distance, Infinity)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('combat falls back to APPROACHING when no immediate attack mode is valid', async () => {
+	const { actor } = createTestActor()
+
+	try {
+		actor.send({
+			type: 'START_COMBAT',
+			target: {
+				...enemy,
+				position: createVec3(12, 64, 0)
+			} as any
+		})
+		await waitForTurn()
+
+		assert.equal(
+			actor.getSnapshot().matches({
+				MAIN_ACTIVITY: { COMBAT: 'APPROACHING' }
+			} as never),
+			true
+		)
+		assert.equal(actor.getSnapshot().context.movementOwner, 'PATHFINDER')
+	} finally {
+		actor.stop()
+	}
+})
+
+test('combat chooses RANGED_SKIRMISHING when ranged window is valid', async () => {
+	const bot = new FakeBot() as any
+	bot.utils.getRangeWeapon = () => ({ name: 'bow' })
+	bot.utils.getArrow = () => ({ name: 'arrow' })
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor: hangingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'START_COMBAT',
+			target: {
+				...enemy,
+				position: createVec3(12, 64, 0)
+			} as any
+		})
+		await waitForTurn()
+
+		assert.equal(
+			actor.getSnapshot().matches({
+				MAIN_ACTIVITY: { COMBAT: 'RANGED_SKIRMISHING' }
+			} as never),
+			true
+		)
+		assert.equal(actor.getSnapshot().context.movementOwner, 'MOVEMENT')
+	} finally {
+		actor.stop()
+	}
+})
+
+test('combat chooses MELEE_ATTACKING in close range and assigns pvp ownership', async () => {
+	const { actor } = createTestActor()
+
+	try {
+		actor.send({
+			type: 'START_COMBAT',
+			target: enemy as any
+		})
+		await waitForTurn()
+
+		assert.equal(
+			actor.getSnapshot().matches({
+				MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' }
+			} as never),
+			true
+		)
+		assert.equal(actor.getSnapshot().context.movementOwner, 'PVP')
 	} finally {
 		actor.stop()
 	}
@@ -516,8 +645,9 @@ test('thinking execution enters a concrete executing substate without crashing',
 				thinkingActor,
 				actors: {
 					serviceEntitiesTracking: noopActor,
+					serviceApproaching: noopActor,
 					serviceMeleeAttack: noopActor,
-					serviceRangedAttack: noopActor,
+					serviceRangedSkirmish: noopActor,
 					serviceFleeing: noopActor,
 					serviceEmergencyEating: hangingActor,
 					serviceEmergencyHealing: hangingActor
@@ -588,8 +718,9 @@ test('invalid navigate args do not default to world zero', async () => {
 			thinkingActor,
 			actors: {
 				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
 				serviceMeleeAttack: noopActor,
-				serviceRangedAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
 				serviceFleeing: noopActor,
 				serviceEmergencyEating: hangingActor,
 				serviceEmergencyHealing: hangingActor

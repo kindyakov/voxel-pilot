@@ -6,18 +6,23 @@ import { Weapons } from 'minecrafthawkeye'
 
 import type { Entity, Item } from '@types'
 
-import { GoalXZ } from '@modules/plugins/goals.js'
+import { GoalFollow, GoalXZ } from '@modules/plugins/goals.js'
 
+import { hasMovementController } from '@utils/combat/movementController'
 import { canSeeEnemy } from '@utils/combat/enemyVisibility'
 
 interface MeleeAttackState extends BaseServiceState {
 	currentTarget: Entity | null
 }
 
-interface RangedAttackState extends BaseServiceState {
+interface RangedSkirmishState extends BaseServiceState {
 	currentTarget: Entity | null
 	weapon: Item | null
 	weaponType: Weapons | null
+}
+
+interface ApproachingState extends BaseServiceState {
+	currentTargetId: number | null
 }
 
 const stopMeleeAttack = (bot: any) => {
@@ -26,6 +31,25 @@ const stopMeleeAttack = (bot: any) => {
 
 const stopRangedAttack = (bot: any) => {
 	bot.hawkEye.stop()
+}
+
+const clearMicroMovement = (bot: any) => {
+	if (typeof bot.setControlState !== 'function') {
+		return
+	}
+
+	bot.setControlState('forward', false)
+	bot.setControlState('sprint', false)
+	bot.setControlState('jump', false)
+}
+
+const stopPathfinderMovement = (bot: any) => {
+	bot.pathfinder.setGoal(null)
+}
+
+const getWeaponType = (weaponName: string): Weapons => {
+	if (weaponName.includes('crossbow')) return Weapons.crossbow
+	return Weapons.bow
 }
 
 const resolveRangedLoadout = (bot: any) => {
@@ -42,6 +66,75 @@ const resolveRangedLoadout = (bot: any) => {
 	}
 }
 
+const hasValidCombatTarget = (context: any) => {
+	const { nearestEnemy, preferences } = context
+
+	return (
+		Boolean(nearestEnemy?.entity?.isValid) &&
+		nearestEnemy.distance <= preferences.maxDistToEnemy
+	)
+}
+
+const canEnterRangedSkirmish = (bot: any, context: any) => {
+	if (!hasValidCombatTarget(context) || !context.nearestEnemy.entity) {
+		return false
+	}
+
+	return (
+		context.nearestEnemy.distance > context.preferences.enemyMeleeRange &&
+		resolveRangedLoadout(bot) !== null &&
+		canSeeEnemy(bot, context.nearestEnemy.entity)
+	)
+}
+
+const serviceApproaching = createStatefulService<ApproachingState>({
+	name: 'Approaching',
+	tickInterval: 250,
+	initialState: {
+		currentTargetId: null
+	},
+
+	onTick: ({ context, bot, sendBack, state, setState }) => {
+		if (!hasValidCombatTarget(context) || !context.nearestEnemy.entity) {
+			if (state.currentTargetId !== null) {
+				stopPathfinderMovement(bot)
+				setState({ currentTargetId: null })
+			}
+
+			sendBack({ type: 'NO_ENEMIES' })
+			return
+		}
+
+		const enemy = context.nearestEnemy.entity
+
+		if (context.nearestEnemy.distance <= context.preferences.enemyMeleeRange) {
+			stopPathfinderMovement(bot)
+			setState({ currentTargetId: null })
+			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
+			return
+		}
+
+		if (canEnterRangedSkirmish(bot, context)) {
+			stopPathfinderMovement(bot)
+			setState({ currentTargetId: null })
+			sendBack({ type: 'ENEMY_BECAME_FAR' })
+			return
+		}
+
+		if (state.currentTargetId !== enemy.id) {
+			bot.pathfinder.setGoal(
+				new GoalFollow(enemy as any, context.preferences.enemyMeleeRange)
+			)
+			setState({ currentTargetId: enemy.id })
+		}
+	},
+
+	onCleanup: ({ bot, setState }) => {
+		stopPathfinderMovement(bot)
+		setState({ currentTargetId: null })
+	}
+})
+
 const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 	name: 'MeleeAttack',
 	tickInterval: 500,
@@ -50,28 +143,22 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 	},
 
 	onStart: async ({ bot, abortSignal }) => {
-		const meleeWeapon = bot.utils.getMeleeWeapon() // поиск оружия меч/топор
+		const meleeWeapon = bot.utils.getMeleeWeapon()
 
-		if (meleeWeapon) {
-			await bot.equip(meleeWeapon, 'hand')
-			if (abortSignal.aborted) {
-				return
-			}
-			console.log(`🗡️ Экипировал оружие: ${meleeWeapon.name}`)
-		} else {
-			console.log('🗡️ Нет оружия ближнего боя❗')
+		if (!meleeWeapon) {
+			return
 		}
+
+		await bot.equip(meleeWeapon, 'hand')
+		if (abortSignal.aborted) {
+			return
+		}
+
+		console.log(`Melee equipped: ${meleeWeapon.name}`)
 	},
 
 	onTick: ({ context, state, bot, sendBack, setState }) => {
-		const { nearestEnemy, preferences } = context
-
-		if (
-			!nearestEnemy?.entity?.isValid ||
-			nearestEnemy.distance > preferences.maxDistToEnemy
-		) {
-			console.log('⚔️ Нет валидного врага для атаки')
-
+		if (!hasValidCombatTarget(context) || !context.nearestEnemy.entity) {
 			if (state.currentTarget) {
 				stopMeleeAttack(bot)
 				setState({ currentTarget: null })
@@ -81,23 +168,23 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 			return
 		}
 
-		const enemy = nearestEnemy.entity
-		const distance = nearestEnemy.distance
-
-		if (distance > preferences.enemyRangedRange) {
-			const weapon = bot.utils.getRangeWeapon() // поиск оружия лук/арбалет
-			const arrows = bot.utils.getArrow()
-			const isSeeEnemy = canSeeEnemy(bot, nearestEnemy.entity)
-
-			if (weapon && arrows && isSeeEnemy) {
-				sendBack({ type: 'ENEMY_BECAME_FAR' })
-				return
+		if (canEnterRangedSkirmish(bot, context)) {
+			if (state.currentTarget) {
+				stopMeleeAttack(bot)
+				setState({ currentTarget: null })
 			}
+
+			sendBack({ type: 'ENEMY_BECAME_FAR' })
+			return
 		}
 
+		const enemy = context.nearestEnemy.entity
+
 		if (!state.currentTarget || state.currentTarget.id !== enemy.id) {
-			console.log(`⚔️ Атакую ${enemy.name}, id: ${enemy.id}`)
-			if (state.currentTarget) stopMeleeAttack(bot)
+			if (state.currentTarget) {
+				stopMeleeAttack(bot)
+			}
+
 			bot.pvp.attack(enemy)
 			setState({ currentTarget: enemy })
 		}
@@ -109,29 +196,23 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 	}
 })
 
-const getWeaponType = (weaponName: string): Weapons => {
-	if (weaponName.includes('bow')) return Weapons.bow
-	if (weaponName.includes('crossbow')) return Weapons.crossbow
-
-	return Weapons.bow
-}
-
-const serviceRangedAttack = createStatefulService<RangedAttackState>({
-	name: 'RangedAttack',
-	tickInterval: 1500,
+const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
+	name: 'RangedSkirmish',
+	asyncTickInterval: 250,
 	initialState: {
 		currentTarget: null,
 		weapon: null,
 		weaponType: null
 	},
 
-	onStart: async ({ bot, sendBack, setState, context, abortSignal }) => {
+	onStart: async ({ bot, context, sendBack, setState, abortSignal }) => {
 		const loadout = resolveRangedLoadout(bot)
-		const isSeeEnemy =
-			context.nearestEnemy.entity !== null &&
-			canSeeEnemy(bot, context.nearestEnemy.entity)
 
-		if (!loadout || !isSeeEnemy) {
+		if (
+			!loadout ||
+			!context.nearestEnemy.entity ||
+			!canSeeEnemy(bot, context.nearestEnemy.entity)
+		) {
 			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
 			return
 		}
@@ -141,61 +222,104 @@ const serviceRangedAttack = createStatefulService<RangedAttackState>({
 			if (abortSignal.aborted) {
 				return
 			}
-			console.log(
-				`🏹 Экипировал: ${loadout.weapon.name} (${loadout.weaponType})`
-			)
+
+			if (hasMovementController(bot)) {
+				bot.movement.setGoal(bot.movement.goals.Default)
+				bot.setControlState('forward', true)
+				bot.setControlState('sprint', true)
+				bot.setControlState('jump', true)
+			}
 			setState(loadout)
-		} catch (error) {
+		} catch {
 			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
 		}
 	},
 
-	onTick: ({ context, state, bot, sendBack, setState }) => {
-		const { nearestEnemy, preferences } = context
-
-		if (
-			!nearestEnemy?.entity?.isValid ||
-			nearestEnemy.distance > preferences.maxDistToEnemy
-		) {
-			console.log('⚔️ Нет валидного врага для атаки')
-
+	onAsyncTick: async ({
+		context,
+		state,
+		bot,
+		sendBack,
+		setState,
+		abortSignal
+	}) => {
+		if (!hasValidCombatTarget(context) || !context.nearestEnemy.entity) {
 			if (state.currentTarget) {
 				stopRangedAttack(bot)
-				setState({ currentTarget: null })
+				setState({ currentTarget: null, weapon: null, weaponType: null })
 			}
 
 			sendBack({ type: 'NO_ENEMIES' })
 			return
 		}
 
-		const enemy = nearestEnemy.entity
-		const distance = nearestEnemy.distance
-		const isSeeEnemy = canSeeEnemy(bot, nearestEnemy.entity)
-		const hasLoadout = resolveRangedLoadout(bot)
+		const enemy = context.nearestEnemy.entity
+		const loadout = resolveRangedLoadout(bot)
+		const hasSight = canSeeEnemy(bot, enemy)
 
-		if (distance <= preferences.enemyMeleeRange || !isSeeEnemy || !hasLoadout) {
+		if (
+			context.nearestEnemy.distance <= context.preferences.enemyMeleeRange ||
+			!loadout ||
+			!hasSight
+		) {
 			if (state.currentTarget) {
 				stopRangedAttack(bot)
 				setState({ currentTarget: null, weapon: null, weaponType: null })
 			}
+
 			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
 			return
 		}
 
-		if (!state.currentTarget || state.currentTarget.id !== enemy.id) {
-			console.log(`🏹 Стреляю в ${enemy.name} ${enemy.id}`)
-			if (state.currentTarget) stopRangedAttack(bot)
+		if (state.weapon !== loadout.weapon || state.weaponType !== loadout.weaponType) {
+			try {
+				await bot.equip(loadout.weapon, 'hand')
+				if (abortSignal.aborted) {
+					return
+				}
+			} catch {
+				sendBack({ type: 'ENEMY_BECAME_CLOSE' })
+				return
+			}
+		}
 
-			if (state.weaponType) {
-				bot.hawkEye.autoAttack(enemy, state.weaponType)
+		if (hasMovementController(bot)) {
+			const proximity = bot.movement.heuristic.get('proximity')
+			proximity.target(enemy.position)
+			proximity.avoid(
+				context.nearestEnemy.distance <= context.preferences.enemyRangedRange
+			)
+
+			const yaw = bot.movement.getYaw(240, 15, 1)
+			void bot.movement.steer(yaw, true).catch(() => {
+				if (!abortSignal.aborted) {
+					sendBack({ type: 'ENEMY_BECAME_CLOSE' })
+				}
+			})
+		}
+
+		if (
+			!state.currentTarget ||
+			state.currentTarget.id !== enemy.id ||
+			state.weapon !== loadout.weapon ||
+			state.weaponType !== loadout.weaponType
+		) {
+			if (state.currentTarget) {
+				stopRangedAttack(bot)
 			}
 
-			setState({ currentTarget: enemy })
+			bot.hawkEye.autoAttack(enemy, loadout.weaponType)
+			setState({
+				currentTarget: enemy,
+				weapon: loadout.weapon,
+				weaponType: loadout.weaponType
+			})
 		}
 	},
 
 	onCleanup: ({ bot, setState }) => {
 		stopRangedAttack(bot)
+		clearMicroMovement(bot)
 		setState({ currentTarget: null, weapon: null, weaponType: null })
 	}
 })
@@ -205,7 +329,6 @@ const serviceFleeing = createStatefulService({
 	tickInterval: 500,
 
 	onStart: ({ bot }) => {
-		console.log('🏃 Тактическое отступление')
 		if (bot.movements) {
 			bot.movements.allowSprinting = true
 		}
@@ -215,25 +338,16 @@ const serviceFleeing = createStatefulService({
 		const { nearestEnemy, preferences, position } = context
 		if (!position) return
 
-		// Нет врагов - выходим
-		if (
-			!nearestEnemy?.entity?.isValid ||
-			nearestEnemy.distance > preferences.maxDistToEnemy
-		) {
+		if (!hasValidCombatTarget(context) || !nearestEnemy.entity) {
 			sendBack({ type: 'NO_ENEMIES' })
 			return
 		}
 
-		const enemy = nearestEnemy.entity
-
-		// Просто убегаем от врага
-		const enemyPos = enemy.position
+		const enemyPos = nearestEnemy.entity.position
 		const direction = position.clone().subtract(enemyPos).normalize()
 		const fleeTarget = position
 			.clone()
 			.add(direction.scaled(preferences.fleeTargetDistance))
-
-		console.log(`🏃 Отхожу от ${enemy.name}`)
 
 		bot.pathfinder.setGoal(
 			new GoalXZ(Math.floor(fleeTarget.x), Math.floor(fleeTarget.z))
@@ -241,12 +355,16 @@ const serviceFleeing = createStatefulService({
 	},
 
 	onCleanup: ({ bot }) => {
-		bot.pathfinder.setGoal(null)
+		stopPathfinderMovement(bot)
 	}
 })
 
+const serviceRangedAttack = serviceRangedSkirmish
+
 export default {
+	serviceApproaching,
 	serviceFleeing,
 	serviceMeleeAttack,
-	serviceRangedAttack
+	serviceRangedAttack,
+	serviceRangedSkirmish
 }
