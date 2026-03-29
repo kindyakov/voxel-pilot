@@ -276,6 +276,162 @@ test('combat returns to IDLE when there is no active goal', async () => {
 	}
 })
 
+test('START_COMBAT seeds nearestEnemy from the event target', async () => {
+	const { actor } = createTestActor()
+
+	try {
+		actor.send({
+			type: 'START_COMBAT',
+			target: enemy as any
+		})
+		await waitForTurn()
+
+		assert.equal(actor.getSnapshot().context.nearestEnemy.entity, enemy)
+		assert.equal(actor.getSnapshot().context.nearestEnemy.distance, 2)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('STOP_COMBAT returns to TASKS.THINKING when a goal exists', async () => {
+	const { actor } = createTestActor()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Follow the target'
+		})
+		await waitForTurn()
+
+		actor.send({
+			type: 'START_COMBAT',
+			target: enemy as any
+		})
+		await waitForTurn()
+
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'COMBAT' } as never),
+			true
+		)
+
+		actor.send({ type: 'STOP_COMBAT' })
+		await waitForTurn()
+
+		assert.equal(
+			actor
+				.getSnapshot()
+				.matches({ MAIN_ACTIVITY: { TASKS: 'THINKING' } } as never),
+			true
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('STOP_COMBAT suppresses auto re-entry into combat until enemies are gone', async () => {
+	const { actor } = createTestActor()
+
+	try {
+		actor.send({
+			type: 'START_COMBAT',
+			target: enemy as any
+		})
+		await waitForTurn()
+
+		actor.send({ type: 'STOP_COMBAT' })
+		await waitForTurn()
+
+		actor.send({
+			type: 'UPDATE_ENTITIES',
+			entities: [enemy as any],
+			enemies: [enemy as any],
+			players: [],
+			nearestEnemy: {
+				entity: enemy as any,
+				distance: 2
+			}
+		})
+		await waitForTurn()
+
+		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never), true)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('autoDefend false prevents entity updates from forcing combat entry', async () => {
+	const bot = new FakeBot() as any
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor: hangingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedAttack: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.getSnapshot().context.preferences.autoDefend = false
+		actor.send({
+			type: 'UPDATE_ENTITIES',
+			entities: [enemy as any],
+			enemies: [enemy as any],
+			players: [],
+			nearestEnemy: {
+				entity: enemy as any,
+				distance: 2
+			}
+		})
+		await waitForTurn()
+
+		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never), true)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('NO_ENEMIES clears nearestEnemy before returning to thinking', async () => {
+	const { actor } = createTestActor()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Follow the target'
+		})
+		await waitForTurn()
+
+		actor.send({
+			type: 'START_COMBAT',
+			target: enemy as any
+		})
+		await waitForTurn()
+
+		actor.send({ type: 'NO_ENEMIES' })
+		await waitForTurn()
+
+		assert.equal(actor.getSnapshot().context.nearestEnemy.entity, null)
+		assert.equal(actor.getSnapshot().context.nearestEnemy.distance, Infinity)
+	} finally {
+		actor.stop()
+	}
+})
+
 test('urgent needs returns to TASKS.THINKING when a goal exists', async () => {
 	const { actor } = createTestActor()
 

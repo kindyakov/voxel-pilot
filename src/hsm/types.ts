@@ -18,7 +18,6 @@ export type CombatEvents =
 	| { type: 'NO_ENEMIES' }
 	| { type: 'ENEMY_BECAME_FAR' }
 	| { type: 'ENEMY_BECAME_CLOSE' }
-	| { type: 'NOT_SURROUNDED' }
 
 export type UpdateEvents =
 	| { type: 'UPDATE_POSITION'; position: Vec3 }

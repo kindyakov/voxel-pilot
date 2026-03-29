@@ -60,6 +60,8 @@ export interface MachineContext {
 		entity: Entity | null
 		distance: number
 	}
+	preferredCombatTargetId: number | null
+	combatStopRequested: boolean
 
 	isActiveTask: boolean
 	taskData: unknown | null
@@ -138,6 +140,8 @@ export const context: MachineContext = {
 		entity: null,
 		distance: Infinity
 	},
+	preferredCombatTargetId: null,
+	combatStopRequested: false,
 
 	isActiveTask: false,
 	taskData: null,

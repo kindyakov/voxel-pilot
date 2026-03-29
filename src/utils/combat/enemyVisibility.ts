@@ -284,7 +284,9 @@ export async function canAttackEnemy(
 		return true
 	}
 
-	if (isActiveTask) false
+	if (isActiveTask) {
+		return false
+	}
 
 	// УРОВЕНЬ 3: Pathfinder - есть ли путь обхода? (медленно, с кешем)
 	return await isEnemyReachable(bot, enemy, maxPathLength, pathfindTimeout)

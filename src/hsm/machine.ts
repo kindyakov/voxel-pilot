@@ -392,10 +392,33 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					event.type === 'UPDATE_ENTITIES' ? event.enemies : [],
 				players: ({ event }) =>
 					event.type === 'UPDATE_ENTITIES' ? event.players : [],
-				nearestEnemy: ({ event }) =>
+				nearestEnemy: ({ context, event }) => {
+					if (event.type !== 'UPDATE_ENTITIES') {
+						return { entity: null, distance: Infinity }
+					}
+
+					const preferredTarget =
+						context.preferredCombatTargetId === null
+							? null
+							: [...event.entities, ...event.enemies, ...event.players].find(
+									entity => entity.id === context.preferredCombatTargetId
+								) ?? null
+
+					if (!preferredTarget) {
+						return event.nearestEnemy
+					}
+
+					return {
+						entity: preferredTarget,
+						distance:
+							context.bot?.entity?.position?.distanceTo(preferredTarget.position) ??
+							event.nearestEnemy.distance
+					}
+				},
+				combatStopRequested: ({ context, event }) =>
 					event.type === 'UPDATE_ENTITIES'
-						? event.nearestEnemy
-						: { entity: null, distance: Infinity }
+						? context.combatStopRequested && Boolean(event.nearestEnemy.entity)
+						: false
 			}),
 			removeEntity: assign(({ context, event }) => {
 				if (event.type !== 'REMOVE_ENTITY') {
@@ -415,7 +438,15 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					nearestEnemy:
 						context.nearestEnemy.entity?.id === event.entity.id
 							? { entity: null, distance: Infinity }
-							: context.nearestEnemy
+							: context.nearestEnemy,
+					preferredCombatTargetId:
+						context.preferredCombatTargetId === event.entity.id
+							? null
+							: context.preferredCombatTargetId,
+					combatStopRequested:
+						context.nearestEnemy.entity?.id === event.entity.id
+							? false
+							: context.combatStopRequested
 				}
 			}),
 			updateAfterDeath: assign({
@@ -430,7 +461,9 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				currentGoal: null,
 				subGoal: null,
 				pendingExecution: null,
-				lastToolTranscript: []
+				lastToolTranscript: [],
+				preferredCombatTargetId: null,
+				combatStopRequested: false
 			}),
 			markTaskActive: assign({
 				isActiveTask: true
@@ -460,7 +493,35 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				pendingExecution: null,
 				lastToolTranscript: [],
 				failureSignature: null,
-				failureRepeats: 0
+				failureRepeats: 0,
+				preferredCombatTargetId: null,
+				combatStopRequested: false
+			}),
+			setCombatTargetFromEvent: assign(({ context, event }) => {
+				if (event.type !== 'START_COMBAT' || !event.target) {
+					return {
+						preferredCombatTargetId: null,
+						combatStopRequested: false
+					}
+				}
+
+				return {
+					preferredCombatTargetId: event.target.id,
+					combatStopRequested: false,
+					nearestEnemy: {
+						entity: event.target,
+						distance:
+							context.bot?.entity?.position?.distanceTo(event.target.position) ??
+							context.nearestEnemy.distance
+					}
+				}
+			}),
+			suppressCombatAutoEntry: assign({
+				combatStopRequested: true
+			}),
+			clearCombatTarget: assign({
+				preferredCombatTargetId: null,
+				nearestEnemy: { entity: null, distance: Infinity }
 			}),
 			storeThinkingExecution: assign(({ event }) => {
 				const output = (event as any).output as AgentTurnResult
@@ -578,8 +639,20 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				actions: ['clearGoal']
 			},
 			START_COMBAT: {
-				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT'
+				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
+				actions: ['setCombatTargetFromEvent']
 			},
+			STOP_COMBAT: [
+				{
+					guard: 'hasCurrentGoal',
+					target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.THINKING',
+					actions: ['suppressCombatAutoEntry', 'clearCombatTarget']
+				},
+				{
+					target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+					actions: ['suppressCombatAutoEntry', 'clearCombatTarget']
+				}
+			],
 			START_URGENT_NEEDS: [
 				{
 					guard: ({ event }) =>
@@ -669,26 +742,35 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					},
 					COMBAT: {
 						initial: 'DECIDING',
-						on: {
-							NO_ENEMIES: [
-								{
-									guard: 'hasCurrentGoal',
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.THINKING'
-								},
-								{
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE'
-								}
-							]
+					on: {
+						WEAPON_BROKEN: {
+							target: '.DECIDING'
 						},
+						NO_ENEMIES: [
+							{
+								guard: 'hasCurrentGoal',
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.THINKING',
+								actions: ['clearCombatTarget']
+							},
+							{
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+								actions: ['clearCombatTarget']
+							}
+						]
+					},
 						states: {
 							DECIDING: {
-								always: [
-									{ target: 'DEFENDING', guard: 'isSurrounded' },
-									{
-										target: 'RANGED_ATTACKING',
-										guard: 'canUseRangedAndEnemyFar'
-									},
-									{ target: 'MELEE_ATTACKING' }
+					always: [
+						{
+							target: 'FLEEING',
+							guard: ({ context }) =>
+								context.preferences.combatMode === 'retreat'
+						},
+						{
+							target: 'RANGED_ATTACKING',
+							guard: 'canUseRangedAndEnemyFar'
+						},
+						{ target: 'MELEE_ATTACKING' }
 								]
 							},
 							FLEEING: {
@@ -719,22 +801,15 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 										target: 'MELEE_ATTACKING'
 									}
 								},
-								invoke: {
-									src: 'serviceRangedAttack',
-									input: ({ context }: { context: MachineContext }) => ({
-										bot: context.bot
-									})
-								}
-							},
-							DEFENDING: {
-								on: {
-									NOT_SURROUNDED: {
-										target: 'DECIDING'
-									}
-								}
-							}
+						invoke: {
+							src: 'serviceRangedAttack',
+							input: ({ context }: { context: MachineContext }) => ({
+								bot: context.bot
+							})
 						}
-					},
+					}
+				}
+			},
 					TASKS: {
 						entry: ['markTaskActive'],
 						exit: ['markTaskInactive'],
@@ -1025,13 +1100,15 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					},
 					ENTITIES_MONITOR: {
 						on: {
-							UPDATE_ENTITIES: [
-								{
-									guard: ({ event }) =>
-										event.type === 'UPDATE_ENTITIES' &&
-										Boolean(event.nearestEnemy.entity),
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
-									actions: ['updateEntities']
+						UPDATE_ENTITIES: [
+							{
+								guard: ({ event, context }) =>
+									event.type === 'UPDATE_ENTITIES' &&
+									context.preferences.autoDefend &&
+									!context.combatStopRequested &&
+									Boolean(event.nearestEnemy.entity),
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
+								actions: ['updateEntities']
 								},
 								{
 									actions: ['updateEntities']

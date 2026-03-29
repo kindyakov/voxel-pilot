@@ -25,9 +25,6 @@ const canUseRangedAndEnemyFar = ({
 	)
 }
 
-const isSurrounded = ({ context, event }: MachineGuardParams): boolean => false
-
 export default {
-	canUseRangedAndEnemyFar,
-	isSurrounded
+	canUseRangedAndEnemyFar
 }

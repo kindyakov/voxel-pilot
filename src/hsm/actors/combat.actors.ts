@@ -20,6 +20,28 @@ interface RangedAttackState extends BaseServiceState {
 	weaponType: Weapons | null
 }
 
+const stopMeleeAttack = (bot: any) => {
+	bot.pvp.stop()
+}
+
+const stopRangedAttack = (bot: any) => {
+	bot.hawkEye.stop()
+}
+
+const resolveRangedLoadout = (bot: any) => {
+	const weapon = bot.utils.getRangeWeapon()
+	const arrows = bot.utils.getArrow()
+
+	if (!weapon || !arrows) {
+		return null
+	}
+
+	return {
+		weapon,
+		weaponType: getWeaponType(weapon.name)
+	}
+}
+
 const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 	name: 'MeleeAttack',
 	tickInterval: 500,
@@ -27,12 +49,15 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 		currentTarget: null
 	},
 
-	onStart: ({ bot }) => {
+	onStart: async ({ bot, abortSignal }) => {
 		const meleeWeapon = bot.utils.getMeleeWeapon() // поиск оружия меч/топор
 
 		if (meleeWeapon) {
+			await bot.equip(meleeWeapon, 'hand')
+			if (abortSignal.aborted) {
+				return
+			}
 			console.log(`🗡️ Экипировал оружие: ${meleeWeapon.name}`)
-			bot.equip(meleeWeapon, 'hand')
 		} else {
 			console.log('🗡️ Нет оружия ближнего боя❗')
 		}
@@ -48,7 +73,7 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 			console.log('⚔️ Нет валидного врага для атаки')
 
 			if (state.currentTarget) {
-				bot.pvp.stop()
+				stopMeleeAttack(bot)
 				setState({ currentTarget: null })
 			}
 
@@ -72,17 +97,21 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 
 		if (!state.currentTarget || state.currentTarget.id !== enemy.id) {
 			console.log(`⚔️ Атакую ${enemy.name}, id: ${enemy.id}`)
-			if (state.currentTarget) bot.pvp.stop()
+			if (state.currentTarget) stopMeleeAttack(bot)
 			bot.pvp.attack(enemy)
 			setState({ currentTarget: enemy })
 		}
+	},
+
+	onCleanup: ({ bot, setState }) => {
+		stopMeleeAttack(bot)
+		setState({ currentTarget: null })
 	}
 })
 
 const getWeaponType = (weaponName: string): Weapons => {
 	if (weaponName.includes('bow')) return Weapons.bow
 	if (weaponName.includes('crossbow')) return Weapons.crossbow
-	if (weaponName.includes('trident')) return Weapons.trident
 
 	return Weapons.bow
 }
@@ -96,17 +125,27 @@ const serviceRangedAttack = createStatefulService<RangedAttackState>({
 		weaponType: null
 	},
 
-	onStart: ({ bot, sendBack, setState, context }) => {
-		const weapon = bot.utils.getRangeWeapon() // поиск оружия лук/арбалет
-		const arrows = bot.utils.getArrow()
-		const isSeeEnemy = canSeeEnemy(bot, context.nearestEnemy.entity!)
+	onStart: async ({ bot, sendBack, setState, context, abortSignal }) => {
+		const loadout = resolveRangedLoadout(bot)
+		const isSeeEnemy =
+			context.nearestEnemy.entity !== null &&
+			canSeeEnemy(bot, context.nearestEnemy.entity)
 
-		if (weapon && arrows && isSeeEnemy) {
-			bot.equip(weapon, 'hand')
-			const weaponType = getWeaponType(weapon.name)
-			console.log(`🏹 Экипировал: ${weapon.name} (${weaponType})`)
-			setState({ weapon, weaponType })
-		} else {
+		if (!loadout || !isSeeEnemy) {
+			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
+			return
+		}
+
+		try {
+			await bot.equip(loadout.weapon, 'hand')
+			if (abortSignal.aborted) {
+				return
+			}
+			console.log(
+				`🏹 Экипировал: ${loadout.weapon.name} (${loadout.weaponType})`
+			)
+			setState(loadout)
+		} catch (error) {
 			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
 		}
 	},
@@ -121,7 +160,7 @@ const serviceRangedAttack = createStatefulService<RangedAttackState>({
 			console.log('⚔️ Нет валидного врага для атаки')
 
 			if (state.currentTarget) {
-				bot.hawkEye.stop()
+				stopRangedAttack(bot)
 				setState({ currentTarget: null })
 			}
 
@@ -132,15 +171,20 @@ const serviceRangedAttack = createStatefulService<RangedAttackState>({
 		const enemy = nearestEnemy.entity
 		const distance = nearestEnemy.distance
 		const isSeeEnemy = canSeeEnemy(bot, nearestEnemy.entity)
+		const hasLoadout = resolveRangedLoadout(bot)
 
-		if (distance <= preferences.enemyMeleeRange || !isSeeEnemy) {
+		if (distance <= preferences.enemyMeleeRange || !isSeeEnemy || !hasLoadout) {
+			if (state.currentTarget) {
+				stopRangedAttack(bot)
+				setState({ currentTarget: null, weapon: null, weaponType: null })
+			}
 			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
 			return
 		}
 
 		if (!state.currentTarget || state.currentTarget.id !== enemy.id) {
 			console.log(`🏹 Стреляю в ${enemy.name} ${enemy.id}`)
-			if (state.currentTarget) bot.hawkEye.stop()
+			if (state.currentTarget) stopRangedAttack(bot)
 
 			if (state.weaponType) {
 				bot.hawkEye.autoAttack(enemy, state.weaponType)
@@ -150,7 +194,10 @@ const serviceRangedAttack = createStatefulService<RangedAttackState>({
 		}
 	},
 
-	onCleanup: ({ bot }) => {}
+	onCleanup: ({ bot, setState }) => {
+		stopRangedAttack(bot)
+		setState({ currentTarget: null, weapon: null, weaponType: null })
+	}
 })
 
 const serviceFleeing = createStatefulService({
@@ -191,6 +238,10 @@ const serviceFleeing = createStatefulService({
 		bot.pathfinder.setGoal(
 			new GoalXZ(Math.floor(fleeTarget.x), Math.floor(fleeTarget.z))
 		)
+	},
+
+	onCleanup: ({ bot }) => {
+		bot.pathfinder.setGoal(null)
 	}
 })
 
