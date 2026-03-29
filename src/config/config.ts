@@ -60,7 +60,9 @@ export class Config {
 	get ai(): AIConfig {
 		return this._ai
 	}
-	get logging(): LoggingConfig { return this._logging }
+	get logging(): LoggingConfig {
+		return this._logging
+	}
 
 	get isDevelopment(): boolean {
 		return process.env.NODE_ENV === 'development'

@@ -4,7 +4,7 @@ import {
 } from '@/hsm/helpers/createStatefulService'
 import { Vec3 as Vec3Class } from 'vec3'
 
-import type { Block, Vec3 } from '@types'
+import type { Block, Vec3 } from '@/types'
 
 interface PlacingState extends BaseServiceState {
 	blockName: string | null

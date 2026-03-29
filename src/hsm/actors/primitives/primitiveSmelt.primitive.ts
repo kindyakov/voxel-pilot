@@ -3,9 +3,9 @@ import {
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
 
-import type { Block, Item } from '@types'
+import type { Block, Item } from '@/types'
 
-import utils from '@utils/general/index.general.utils'
+import utils from '@/utils/general/index.general.utils'
 
 interface SmeltState extends BaseServiceState {
 	inputItemName: string | null

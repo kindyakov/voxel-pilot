@@ -2,18 +2,18 @@ import EventEmitter from 'node:events'
 
 import * as mineflayer from 'mineflayer'
 
-import type { Bot } from '@types'
+import type { Bot } from '@/types'
 
-import Config from '@config/config'
-import Logger from '@config/logger'
+import Config from '@/config/config'
+import Logger from '@/config/logger'
 
-import CommandHandler from '@core/CommandHandler.js'
-import BotStateMachine from '@core/hsm'
-import { MemoryManager } from '@core/memory/index.js'
+import CommandHandler from '@/core/CommandHandler.js'
+import BotStateMachine from '@/core/hsm'
+import { MemoryManager } from '@/core/memory/index.js'
 
-import { initConnection } from '@modules/connection/index.js'
+import { initConnection } from '@/modules/connection/index.js'
 
-import { BotUtils } from '@utils/minecraft/botUtils'
+import { BotUtils } from '@/utils/minecraft/botUtils'
 
 const createMineflayerBot = (
 	mineflayer as unknown as {

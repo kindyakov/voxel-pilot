@@ -216,7 +216,14 @@ test('control: canAttackEnemy can use pathfinding when task is inactive', async 
 	const { bot, getPathFromToCalls } = createPathfindingHarness()
 	const enemy = createEnemy(203, 3)
 
-	const canAttack = await canAttackEnemy(bot as any, enemy as any, 20, 40, 100, false)
+	const canAttack = await canAttackEnemy(
+		bot as any,
+		enemy as any,
+		20,
+		40,
+		100,
+		false
+	)
 
 	assert.equal(canAttack, true)
 	assert.equal(getPathFromToCalls(), 1)
@@ -226,7 +233,14 @@ test('regression: canAttackEnemy should not pathfind non-visible enemies during 
 	const { bot, getPathFromToCalls } = createPathfindingHarness()
 	const enemy = createEnemy(204, 3)
 
-	const canAttack = await canAttackEnemy(bot as any, enemy as any, 20, 40, 100, true)
+	const canAttack = await canAttackEnemy(
+		bot as any,
+		enemy as any,
+		20,
+		40,
+		100,
+		true
+	)
 
 	assert.equal(canAttack, false)
 	assert.equal(getPathFromToCalls(), 0)

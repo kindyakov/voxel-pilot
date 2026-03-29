@@ -26,7 +26,9 @@ const createVec3 = (x: number, y: number, z: number) => ({
 			y: y - other.y,
 			z: z - other.z,
 			normalize() {
-				const length = Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z)
+				const length = Math.sqrt(
+					this.x * this.x + this.y * this.y + this.z * this.z
+				)
 				return createVec3(this.x / length, this.y / length, this.z / length)
 			}
 		}
@@ -384,7 +386,10 @@ test('STOP_COMBAT suppresses auto re-entry into combat until enemies are gone', 
 		})
 		await waitForTurn()
 
-		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never), true)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never),
+			true
+		)
 	} finally {
 		actor.stop()
 	}
@@ -430,7 +435,10 @@ test('autoDefend false prevents entity updates from forcing combat entry', async
 		})
 		await waitForTurn()
 
-		assert.equal(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never), true)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never),
+			true
+		)
 	} finally {
 		actor.stop()
 	}

@@ -1,4 +1,4 @@
-import type { Bot, Entity, Item } from '@types'
+import type { Bot, Entity, Item } from '@/types'
 
 type Priority = 'none' | 'low' | 'medium' | 'high' | 'critical'
 

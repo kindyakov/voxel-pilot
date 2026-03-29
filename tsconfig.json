@@ -10,12 +10,12 @@
 		"baseUrl": ".",
 		"paths": {
 			"@/*": ["src/*"],
-			"@types": ["src/types/index.ts"],
-			"@hsm/*": ["src/hsm/*"],
-			"@config/*": ["src/config/*"],
-			"@utils/*": ["src/utils/*"],
-			"@modules/*": ["src/modules/*"],
-			"@core/*": ["src/core/*"]
+			"@/types": ["src/types/index.ts"],
+			"@/hsm/*": ["src/hsm/*"],
+			"@/config/*": ["src/config/*"],
+			"@/utils/*": ["src/utils/*"],
+			"@/modules/*": ["src/modules/*"],
+			"@/core/*": ["src/core/*"]
 		},
 
 		// Строгость

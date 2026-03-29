@@ -79,7 +79,7 @@ User Command (Event)
 ```
 
 ## TypeScript Configuration
-- **Path aliases**: `@/*`, `@hsm/*`, `@config/*`, `@utils/*`, `@modules/*`, `@core/*`.
+- **Path aliases**: `@/*`, `@/hsm/*`, `@/config/*`, `@/utils/*`, `@/modules/*`, `@/core/*`.
 - **Target**: ES2022, Strict mode enabled.
 
 ## Memory Structure

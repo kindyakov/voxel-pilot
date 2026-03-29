@@ -1,6 +1,6 @@
-import type { MachineGuardParams } from '@hsm/types'
+import type { MachineGuardParams } from '@/hsm/types'
 
-import { canSeeEnemy } from '@utils/combat/enemyVisibility'
+import { canSeeEnemy } from '@/utils/combat/enemyVisibility'
 
 const canUseRanged = ({ context }: MachineGuardParams): boolean => {
 	const weapon = context.bot?.utils.getRangeWeapon()

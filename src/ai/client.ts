@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import type { Responses } from 'openai/resources/responses/responses'
 
-import defaultConfig, { type Config as ConfigInstance } from '@config/config'
+import defaultConfig, { type Config as ConfigInstance } from '@/config/config'
 
 import type { AgentToolDefinition } from './tools.js'
 
@@ -129,9 +129,7 @@ const extractTextContent = (
 		.trim()
 }
 
-const mapParsedToolCalls = (
-	response: ParsedToolResponse
-): ParsedToolCall[] =>
+const mapParsedToolCalls = (response: ParsedToolResponse): ParsedToolCall[] =>
 	response.output
 		.filter(
 			(item): item is ParsedFunctionCallOutputItem =>

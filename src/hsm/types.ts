@@ -1,6 +1,6 @@
-import type { Block, Bot, Entity, Vec3 } from '@types'
+import type { Block, Bot, Entity, Vec3 } from '@/types'
 
-import type { MachineContext } from '@hsm/context'
+import type { MachineContext } from '@/hsm/context'
 
 export type HealthEvents =
 	| { type: 'UPDATE_HEALTH'; health: number }

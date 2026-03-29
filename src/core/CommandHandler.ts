@@ -1,8 +1,8 @@
-import type { Bot } from '@types'
+import type { Bot } from '@/types'
 
-import logger from '@config/logger'
+import logger from '@/config/logger'
 
-import type BotStateMachine from '@core/hsm'
+import type BotStateMachine from '@/core/hsm'
 
 export default class CommandHandler {
 	private bot: Bot

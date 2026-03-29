@@ -1,8 +1,8 @@
 import 'dotenv/config'
 
-import Logger from '@config/logger'
+import Logger from '@/config/logger'
 
-import MinecraftBot from '@core/bot'
+import MinecraftBot from '@/core/bot'
 
 const minecraftBot = new MinecraftBot()
 minecraftBot.start()

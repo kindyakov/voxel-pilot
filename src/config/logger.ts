@@ -1,9 +1,9 @@
 import path from 'path'
 import winston from 'winston'
 
-import type { WinstonLogLevel } from '@types'
+import type { WinstonLogLevel } from '@/types'
 
-import Config from '@config/config'
+import Config from '@/config/config'
 
 /**
  * Создание корреляционного ID для трекинга операций

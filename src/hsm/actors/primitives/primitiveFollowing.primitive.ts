@@ -4,7 +4,7 @@ import {
 } from '@/hsm/helpers/createStatefulService'
 import { GoalFollow } from '@/modules/plugins/goals'
 
-import type { Entity } from '@types'
+import type { Entity } from '@/types'
 
 interface FollowingState extends BaseServiceState {
 	target: Entity | null

@@ -1,16 +1,34 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/tests/**/*.test.ts"],
-  "project": ["src/**/*.ts"],
+  "entry": [
+    "src/tests/**/*.test.ts"
+  ],
+  "project": [
+    "src/**/*.ts"
+  ],
   "ignore": [],
   "paths": {
-    "@/*": ["src/*"],
-    "@types": ["src/types/index.ts"],
-    "@hsm/*": ["src/hsm/*"],
-    "@config/*": ["src/config/*"],
-    "@utils/*": ["src/utils/*"],
-    "@modules/*": ["src/modules/*"],
-    "@core/*": ["src/core/*"]
+    "@/*": [
+      "src/*"
+    ],
+    "@/types": [
+      "src/types/index.ts"
+    ],
+    "@/hsm/*": [
+      "src/hsm/*"
+    ],
+    "@/config/*": [
+      "src/config/*"
+    ],
+    "@/utils/*": [
+      "src/utils/*"
+    ],
+    "@/modules/*": [
+      "src/modules/*"
+    ],
+    "@/core/*": [
+      "src/core/*"
+    ]
   },
   "ignoreDependencies": [],
   "rules": {

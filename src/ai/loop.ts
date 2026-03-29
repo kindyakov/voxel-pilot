@@ -1,6 +1,6 @@
-import type { Bot } from '@types'
+import type { Bot } from '@/types'
 
-import type { MemoryManager } from '@core/memory/index.js'
+import type { MemoryManager } from '@/core/memory/index.js'
 
 import { type AgentModelClient, createAgentClient } from './client.js'
 import { buildSnapshot } from './snapshot.js'

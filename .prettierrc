@@ -6,16 +6,18 @@
 	"singleQuote": true,
 	"jsxSingleQuote": true,
 	"arrowParens": "avoid",
-	"plugins": ["@trivago/prettier-plugin-sort-imports"],
+	"plugins": [
+		"@trivago/prettier-plugin-sort-imports"
+	],
 	"importOrder": [
 		"^node:(.*)$",
 		"<THIRD_PARTY_MODULES>",
-		"^@types$",
-		"^@config/(.*)$",
-		"^@core/(.*)$",
-		"^@hsm/(.*)$",
-		"^@modules/(.*)$",
-		"^@utils/(.*)$",
+		"^@/types$",
+		"^@/config/(.*)$",
+		"^@/core/(.*)$",
+		"^@/hsm/(.*)$",
+		"^@/modules/(.*)$",
+		"^@/utils/(.*)$",
 		"^[./]"
 	],
 	"importOrderSeparation": true,

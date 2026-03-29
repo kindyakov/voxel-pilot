@@ -3,22 +3,22 @@ import type { PendingExecution } from '@/ai/tools.js'
 import { Vec3 as Vec3Class } from 'vec3'
 import { assign, fromPromise, setup } from 'xstate'
 
-import type { Bot, Entity } from '@types'
+import type { Bot, Entity } from '@/types'
 
-import combatActors from '@hsm/actors/combat.actors'
-import monitoringActors from '@hsm/actors/monitoring.actors'
-import { primitiveBreaking } from '@hsm/actors/primitives/primitiveBreaking.primitive'
-import { primitiveCraft } from '@hsm/actors/primitives/primitiveCraft.primitive'
-import { primitiveCraftInWorkbench } from '@hsm/actors/primitives/primitiveCraftInWorkbench.primitive'
-import { primitiveFollowing } from '@hsm/actors/primitives/primitiveFollowing.primitive'
-import { primitiveNavigating } from '@hsm/actors/primitives/primitiveNavigating.primitive'
-import { primitivePlacing } from '@hsm/actors/primitives/primitivePlacing.primitive'
-import { primitiveSmelt } from '@hsm/actors/primitives/primitiveSmelt.primitive'
-import { type MachineContext, context } from '@hsm/context'
-import combatGuards from '@hsm/guards/combat.guards'
-import type { MachineEvent } from '@hsm/types'
+import combatActors from '@/hsm/actors/combat.actors'
+import monitoringActors from '@/hsm/actors/monitoring.actors'
+import { primitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive'
+import { primitiveCraft } from '@/hsm/actors/primitives/primitiveCraft.primitive'
+import { primitiveCraftInWorkbench } from '@/hsm/actors/primitives/primitiveCraftInWorkbench.primitive'
+import { primitiveFollowing } from '@/hsm/actors/primitives/primitiveFollowing.primitive'
+import { primitiveNavigating } from '@/hsm/actors/primitives/primitiveNavigating.primitive'
+import { primitivePlacing } from '@/hsm/actors/primitives/primitivePlacing.primitive'
+import { primitiveSmelt } from '@/hsm/actors/primitives/primitiveSmelt.primitive'
+import { type MachineContext, context } from '@/hsm/context'
+import combatGuards from '@/hsm/guards/combat.guards'
+import type { MachineEvent } from '@/hsm/types'
 
-import { hasMovementController } from '@utils/combat/movementController'
+import { hasMovementController } from '@/utils/combat/movementController'
 
 const waitWithSignal = (ms: number, signal: AbortSignal): Promise<void> =>
 	new Promise((resolve, reject) => {
@@ -406,9 +406,9 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					const preferredTarget =
 						context.preferredCombatTargetId === null
 							? null
-							: [...event.entities, ...event.enemies, ...event.players].find(
+							: ([...event.entities, ...event.enemies, ...event.players].find(
 									entity => entity.id === context.preferredCombatTargetId
-								) ?? null
+								) ?? null)
 
 					if (!preferredTarget) {
 						return event.nearestEnemy
@@ -417,8 +417,9 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					return {
 						entity: preferredTarget,
 						distance:
-							context.bot?.entity?.position?.distanceTo(preferredTarget.position) ??
-							event.nearestEnemy.distance
+							context.bot?.entity?.position?.distanceTo(
+								preferredTarget.position
+							) ?? event.nearestEnemy.distance
 					}
 				},
 				combatStopRequested: ({ context, event }) =>
@@ -519,8 +520,9 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					nearestEnemy: {
 						entity: event.target,
 						distance:
-							context.bot?.entity?.position?.distanceTo(event.target.position) ??
-							context.nearestEnemy.distance
+							context.bot?.entity?.position?.distanceTo(
+								event.target.position
+							) ?? context.nearestEnemy.distance
 					}
 				}
 			}),
@@ -1137,15 +1139,15 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					},
 					ENTITIES_MONITOR: {
 						on: {
-						UPDATE_ENTITIES: [
-							{
-								guard: ({ event, context }) =>
-									event.type === 'UPDATE_ENTITIES' &&
-									context.preferences.autoDefend &&
-									!context.combatStopRequested &&
-									Boolean(event.nearestEnemy.entity),
-								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
-								actions: ['updateEntities']
+							UPDATE_ENTITIES: [
+								{
+									guard: ({ event, context }) =>
+										event.type === 'UPDATE_ENTITIES' &&
+										context.preferences.autoDefend &&
+										!context.combatStopRequested &&
+										Boolean(event.nearestEnemy.entity),
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
+									actions: ['updateEntities']
 								},
 								{
 									actions: ['updateEntities']

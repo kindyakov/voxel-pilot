@@ -111,11 +111,11 @@ class CombatBot extends EventEmitter {
 		getAllFood: () => [{ name: 'bread' }],
 		eating: async () => {},
 		stopEating: () => {},
-		getMeleeWeapon: () => this.inventoryItems.find(item => item.name.includes('sword')) ?? null,
+		getMeleeWeapon: () =>
+			this.inventoryItems.find(item => item.name.includes('sword')) ?? null,
 		getRangeWeapon: () =>
 			this.inventoryItems.find(
-				item =>
-					item.name.includes('bow') || item.name.includes('crossbow')
+				item => item.name.includes('bow') || item.name.includes('crossbow')
 			) ?? null,
 		getArrow: () =>
 			this.inventoryItems.find(item => item.name.includes('arrow')) ?? null,
@@ -160,16 +160,36 @@ class CombatBot extends EventEmitter {
 		return 36
 	}
 	async openChest() {
-		return { close() {}, containerItems() { return [] } }
+		return {
+			close() {},
+			containerItems() {
+				return []
+			}
+		}
 	}
 	async openContainer() {
-		return { close() {}, containerItems() { return [] } }
+		return {
+			close() {},
+			containerItems() {
+				return []
+			}
+		}
 	}
 	async openFurnace() {
-		return { close() {}, containerItems() { return [] } }
+		return {
+			close() {},
+			containerItems() {
+				return []
+			}
+		}
 	}
 	async openBlock() {
-		return { close() {}, containerItems() { return [] } }
+		return {
+			close() {},
+			containerItems() {
+				return []
+			}
+		}
 	}
 	closeWindow() {}
 	setControlState(control: string, state: boolean) {
@@ -223,7 +243,9 @@ const enterCombat = async (
 		players: [],
 		nearestEnemy: {
 			entity: enemy as any,
-			distance: actor.getSnapshot().context.bot!.entity.position.distanceTo(enemy.position)
+			distance: actor
+				.getSnapshot()
+				.context.bot!.entity.position.distanceTo(enemy.position)
 		}
 	})
 	await delay(0)
@@ -349,7 +371,11 @@ test('ranged skirmish degrades to owner NONE when movement plugin is unavailable
 
 test('combat hands off from melee to ranged skirmish without overlap', async () => {
 	const bot = new CombatBot()
-	bot.inventoryItems = [{ name: 'iron_sword' }, { name: 'bow' }, { name: 'arrow' }]
+	bot.inventoryItems = [
+		{ name: 'iron_sword' },
+		{ name: 'bow' },
+		{ name: 'arrow' }
+	]
 	const actor = createRuntimeActor(bot)
 
 	try {
@@ -377,7 +403,11 @@ test('combat hands off from melee to ranged skirmish without overlap', async () 
 
 test('combat hands off from ranged skirmish back to melee without overlap', async () => {
 	const bot = new CombatBot()
-	bot.inventoryItems = [{ name: 'iron_sword' }, { name: 'bow' }, { name: 'arrow' }]
+	bot.inventoryItems = [
+		{ name: 'iron_sword' },
+		{ name: 'bow' },
+		{ name: 'arrow' }
+	]
 	const actor = createRuntimeActor(bot)
 
 	try {

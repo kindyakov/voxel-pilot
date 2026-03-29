@@ -3,7 +3,10 @@ import test from 'node:test'
 
 import { Vec3 } from 'vec3'
 
-import { canAttackEnemy, cleanupPathfindCache } from '../../utils/combat/enemyVisibility.js'
+import {
+	canAttackEnemy,
+	cleanupPathfindCache
+} from '../../utils/combat/enemyVisibility.js'
 
 const createOpaqueBlock = () => ({
 	boundingBox: 'block',
@@ -61,4 +64,3 @@ test('canAttackEnemy skips expensive pathfinding checks during active tasks when
 	assert.equal(canAttack, false)
 	assert.equal(getPathFromToCalls, 0)
 })
-

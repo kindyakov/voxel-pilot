@@ -4,9 +4,9 @@ import {
 } from '@/hsm/helpers/createStatefulService'
 import { GoalNear } from '@/modules/plugins/goals'
 
-import type { Block } from '@types'
+import type { Block } from '@/types'
 
-import utils from '@utils/general/index.general.utils'
+import utils from '@/utils/general/index.general.utils'
 
 interface PrimitiveBreakingState extends BaseServiceState {
 	block: Block | null

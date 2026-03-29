@@ -1,15 +1,16 @@
+import { Weapons } from 'minecrafthawkeye'
+
+import type { Entity, Item } from '@/types'
+
 import {
 	type BaseServiceState,
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService.js'
-import { Weapons } from 'minecrafthawkeye'
 
-import type { Entity, Item } from '@types'
+import { GoalFollow, GoalXZ } from '@/modules/plugins/goals.js'
 
-import { GoalFollow, GoalXZ } from '@modules/plugins/goals.js'
-
-import { hasMovementController } from '@utils/combat/movementController'
-import { canSeeEnemy } from '@utils/combat/enemyVisibility'
+import { canSeeEnemy } from '@/utils/combat/enemyVisibility'
+import { hasMovementController } from '@/utils/combat/movementController'
 
 interface MeleeAttackState extends BaseServiceState {
 	currentTarget: Entity | null
@@ -271,7 +272,10 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 			return
 		}
 
-		if (state.weapon !== loadout.weapon || state.weaponType !== loadout.weaponType) {
+		if (
+			state.weapon !== loadout.weapon ||
+			state.weaponType !== loadout.weaponType
+		) {
 			try {
 				await bot.equip(loadout.weapon, 'hand')
 				if (abortSignal.aborted) {

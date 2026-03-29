@@ -6,7 +6,7 @@
 - Imports are sorted via `@trivago/prettier-plugin-sort-imports`
 
 ## Imports
-- Prefer path aliases such as `@core/*`, `@hsm/*`, `@utils/*`, `@modules/*`, and `@/ai/*`
+- Prefer path aliases such as `@/core/*`, `@/hsm/*`, `@/utils/*`, `@/modules/*`, and `@/ai/*`
 - Avoid deep relative imports when aliases already exist
 
 ## Naming

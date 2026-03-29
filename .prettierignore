@@ -1,0 +1,14 @@
+node_modules
+dist
+build
+coverage
+data
+logs
+.git
+.codex
+.vscode
+*.lock
+*.log
+.env
+.env.local
+.DS_Store

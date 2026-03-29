@@ -33,7 +33,7 @@ Use Node 18+; current project dependencies are already aligned with modern Node 
 Before committing, run at least `npm run type-check` and `npm run build`. For HSM, AI, or memory changes, also run the relevant `tsx --test` suites under `src/tests/`.
 
 ## Coding Style & Naming Conventions
-Formatting is defined by `.prettierrc`: tabs, width 2, no semicolons, single quotes, ES modules. Prefer path aliases such as `@core/*`, `@hsm/*`, `@utils/*`, and `@/ai/*` over deep relative imports. Follow existing domain naming: classes in PascalCase, functions and variables in camelCase, and state-machine files with explicit suffixes such as `*.guards.ts`, `*.actors.ts`, `*.primitive.ts`, and `*.update.ts`.
+Formatting is defined by `.prettierrc`: tabs, width 2, no semicolons, single quotes, ES modules. Prefer path aliases such as `@/core/*`, `@/hsm/*`, `@/utils/*`, and `@/ai/*` over deep relative imports. Follow existing domain naming: classes in PascalCase, functions and variables in camelCase, and state-machine files with explicit suffixes such as `*.guards.ts`, `*.actors.ts`, `*.primitive.ts`, and `*.update.ts`.
 
 ## Testing Guidelines
 Tests already exist in `src/tests/`; do not pretend the project is untested. Add focused tests next to the affected subsystem directory. Prioritize regression tests for HSM transitions, AI tool parsing, snapshot formatting, provider clients, and memory CRUD semantics. If a bug only reproduces in the live Minecraft session, document the manual scenario precisely in `docs/` or in the change summary.

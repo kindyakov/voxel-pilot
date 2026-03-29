@@ -3,7 +3,7 @@ import {
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
 
-import type { Block } from '@types'
+import type { Block } from '@/types'
 
 interface CraftInWorkbenchState extends BaseServiceState {
 	itemName: string | null

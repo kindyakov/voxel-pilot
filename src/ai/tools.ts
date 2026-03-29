@@ -1,9 +1,9 @@
 import type { Responses } from 'openai/resources/responses/responses'
 import { Vec3 as Vec3Class } from 'vec3'
 
-import type { Bot } from '@types'
+import type { Bot } from '@/types'
 
-import type { MemoryEntryType, MemoryPosition } from '@core/memory/types.js'
+import type { MemoryEntryType, MemoryPosition } from '@/core/memory/types.js'
 
 export type AgentToolName =
 	| 'memory_save'

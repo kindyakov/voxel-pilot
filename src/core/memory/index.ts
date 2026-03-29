@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
+import BetterSqlite3 from 'better-sqlite3'
+
 import type {
 	BotMemoryData,
 	ChestLocation,
@@ -15,7 +17,6 @@ import type {
 	ReadEntriesQuery,
 	TaskStats
 } from './types.js'
-import BetterSqlite3 from 'better-sqlite3'
 
 type SqliteDatabase = InstanceType<typeof BetterSqlite3>
 
@@ -671,4 +672,3 @@ export class MemoryManager {
 		}
 	}
 }
-
