@@ -1,7 +1,7 @@
 {
   "name": "minecraft_bot",
   "version": "0.0.1",
-  "description": "",
+  "description": "An AI-assisted Minecraft bot built with mineflayer and XState.",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
@@ -16,9 +16,25 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "minecraft",
+    "mineflayer",
+    "xstate",
+    "ai",
+    "bot",
+    "typescript",
+    "openai"
+  ],
+  "author": "kindyakov <kindyakov_2016@mail.ru>",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kindyakov/minecraft_bot_ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kindyakov/minecraft_bot_ai/issues"
+  },
+  "homepage": "https://github.com/kindyakov/minecraft_bot_ai#readme",
   "dependencies": {
     "ajv": "^8.17.1",
     "better-sqlite3": "^12.8.0",
