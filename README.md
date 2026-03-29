@@ -94,13 +94,15 @@ The AI loop is deterministic on the input side:
 - execution tools transition into concrete primitives
 - failures feed back into the machine context instead of disappearing
 
-For the full architecture breakdown, read:
+Documentation:
 
-- [Architecture overview](docs/architecture.md)
-- [Task workflow](docs/tasks-guide.md)
-- [Primitive reference](docs/primitives-guide.md)
-- [Memory guide](docs/memory-guide.md)
-- [Validation guide](docs/validation-guide.md)
+- [Docs index](docs/README.md)
+- [Architecture](docs/architecture.md)
+- [Configuration](docs/configuration.md)
+- [Memory](docs/memory-guide.md)
+- [Combat visibility](docs/enemy-visibility-system.md)
+
+If a doc conflicts with code or tests, the code wins.
 
 ## Development
 

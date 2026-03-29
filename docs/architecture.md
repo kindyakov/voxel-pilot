@@ -1,136 +1,105 @@
-```
-config/
-│   └── .env.example
-data/
-│   └── bot_memory_bot.json
-docs/
-│   ├── bot_architecture_plan.md
-│   ├── enemy-visibility-system.md
-│   ├── implementation-plan.md
-│   ├── memory-guide.md
-│   ├── primitives-guide.md
-│   ├── tasks-guide.md
-│   ├── testing-enemy-visibility.md
-│   └── validation-guide.md
-logs/
-│   ├── bot.log
-│   └── error.log
-src/
-│   ├── ai/
-│   ├── config/
-│   │   ├── config.ts
-│   │   └── logger.ts
-│   ├── core/
-│   │   ├── bot.ts
-│   │   ├── commandHandler.ts
-│   │   ├── hsm.ts
-│   │   └── memory.ts
-│   ├── hsm/
-│   │   ├── actions/
-│   │   │   ├── always/
-│   │   │   │   ├── combat.always.ts
-│   │   │   │   ├── index.always.ts
-│   │   │   │   └── monitoring.always.ts
-│   │   │   ├── entry/
-│   │   │   │   ├── combat.entry.ts
-│   │   │   │   ├── index.entry.ts
-│   │   │   │   ├── mining.entry.ts
-│   │   │   │   ├── monitoring.entry.ts
-│   │   │   │   ├── tasks.entry.ts
-│   │   │   │   └── urgentNeeds.entry.ts
-│   │   │   ├── exit/
-│   │   │   │   ├── combat.exit.ts
-│   │   │   │   ├── index.exit.ts
-│   │   │   │   ├── mining.exit.ts
-│   │   │   │   ├── tasks.exit.ts
-│   │   │   │   └── urgentNeeds.exit.ts
-│   │   │   ├── save/
-│   │   │   │   ├── index.save.ts
-│   │   │   │   └── pefceful.save.ts
-│   │   │   ├── update/
-│   │   │   │   ├── combat.update.ts
-│   │   │   │   ├── index.update.ts
-│   │   │   │   ├── monitoring.update.ts
-│   │   │   │   └── root.update.ts
-│   │   │   └── index.actions.ts
-│   │   ├── actors/
-│   │   │   ├── primitives/
-│   │   │   │   ├── index.primitive.ts
-│   │   │   │   ├── primitiveBreaking.primitive.ts
-│   │   │   │   ├── primitiveNavigating.primitive.ts
-│   │   │   │   ├── primitiveSearchBlock.primitive.ts
-│   │   │   │   └── primitiveSearchEntity.primitive.ts
-│   │   │   ├── combat.actors.ts
-│   │   │   ├── index.actors.ts
-│   │   │   ├── monitoring.actors.ts
-│   │   │   └── urgentNeeds.actors.ts
-│   │   ├── config/
-│   │   │   └── priorities.ts
-│   │   ├── guards/
-│   │   │   ├── combat.guards.ts
-│   │   │   ├── index.guards.ts
-│   │   │   ├── mining.guards.ts
-│   │   │   ├── monitoring.guards.ts
-│   │   │   └── urgentNeeds.guards.ts
-│   │   ├── helpers/
-│   │   │   ├── createStatefulService.ts
-│   │   │   └── index.helpers.ts
-│   │   ├── primitives/
-│   │   │   └── registry.primitives.ts
-│   │   ├── tasks/
-│   │   │   ├── index.ts
-│   │   │   ├── registry.tasks.ts
-│   │   │   └── types.ts
-│   │   ├── utils/
-│   │   │   ├── antiLoop.ts
-│   │   │   ├── blockAnalysis.utils.ts
-│   │   │   ├── findNearbyEnemies.ts
-│   │   │   ├── getPriority.ts
-│   │   │   ├── index.ts
-│   │   │   └── isEntityOfType.ts
-│   │   ├── context.ts
-│   │   ├── machine.ts
-│   │   └── types.ts
-│   ├── modules/
-│   │   ├── connection/
-│   │   │   └── index.ts
-│   │   └── plugins/
-│   │       ├── armorManager.ts
-│   │       ├── autoEat.ts
-│   │       ├── goals.ts
-│   │       ├── hawkeye.ts
-│   │       ├── index.plugins.ts
-│   │       ├── movement.ts
-│   │       ├── pathfinder.ts
-│   │       ├── pvp.ts
-│   │       ├── tool.ts
-│   │       ├── viewer.ts
-│   │       └── webInventory.ts
-│   ├── scheduler/
-│   │   ├── index.ts
-│   │   ├── priorities.ts
-│   │   └── tasks/
-│   ├── tests/
-│   ├── types/
-│   │   ├── external/
-│   │   │   └── mineflayer-web-inventory.d.ts
-│   │   └── index.ts
-│   └── utils/
-│   │   ├── combat/
-│   │   │   ├── enemyVisibility.ts
-│   │   │   └── index.ts
-│   │   ├── general/
-│   │   │   ├── generateId.ts
-│   │   │   ├── index.general.utils.ts
-│   │   │   └── sleep.ts
-│   │   └── minecraft/
-│   │       ├── AntiStuck.js
-│   │       └── botUtils.ts
-│   └── index.ts
-│-- package.json
-│-- package-lock.json
-│-- tsconfig.json
-│-- .env
-│-- .gitignore
-│-- .prettierrc
-```
+# Architecture
+
+This bot is a Mineflayer runtime wrapped in an XState machine.
+The current design is small and explicit:
+
+- `src/index.ts` loads dotenv and starts the bot.
+- `src/core/bot.ts` handles connect, reconnect, and shutdown.
+- `src/core/CommandHandler.ts` converts chat into HSM events.
+- `src/core/hsm.ts` wires the state machine to the bot runtime.
+- `src/ai/loop.ts` runs the agent loop.
+- `src/ai/snapshot.ts` builds the model snapshot.
+- `src/core/memory/` owns persistent storage.
+
+## Runtime Flow
+
+1. The bot connects to the Minecraft server.
+2. Plugins and runtime helpers are initialized.
+3. The HSM starts with `MAIN_ACTIVITY` and `MONITORING` in parallel.
+4. A chat command becomes a goal.
+5. The AI loop either finishes the goal or returns one execution tool.
+6. Execution tools invoke a concrete primitive actor.
+7. The machine records success or failure and either continues or stops.
+
+## HSM Shape
+
+The machine does not have a task planner or plan executor.
+That old design was removed.
+
+Current top-level states:
+
+- `MAIN_ACTIVITY.IDLE`
+- `MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING`
+- `MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING`
+- `MAIN_ACTIVITY.COMBAT`
+- `MAIN_ACTIVITY.TASKS`
+- `MONITORING`
+
+`TASKS` uses this loop:
+
+- `IDLE`
+- `THINKING`
+- `EXECUTING`
+- `DECIDE_NEXT`
+
+`THINKING` calls `runAgentTurn()`.
+`EXECUTING` resolves one pending execution tool to a primitive:
+
+- `call_navigate` -> `primitiveNavigating`
+- `call_break_block` -> `primitiveBreaking`
+- `call_craft` -> `primitiveCraft`
+- `call_craft_workbench` -> `primitiveCraftInWorkbench`
+- `call_smelt` -> `primitiveSmelt`
+- `call_place_block` -> `primitivePlacing`
+- `call_follow_entity` -> `primitiveFollowing`
+
+## AI Loop
+
+`src/ai/loop.ts` does one turn at a time.
+It builds a deterministic snapshot, sends it to the model, and accepts only three kinds of outcomes:
+
+- one execution tool
+- a `finish_goal` control tool
+- inline memory/container tools that are resolved locally before the next model round
+
+The loop is intentionally strict:
+
+- one execution decision only
+- no plain text answers
+- no mixed terminal and execution actions
+- retry is limited when the model fails to return a tool call
+
+## Snapshot
+
+`src/ai/snapshot.ts` summarizes:
+
+- health, food, oxygen
+- position, dimension, biome, day/night
+- inventory, equipment, free slots
+- nearby interactable blocks
+- nearby resource blocks
+- nearby entities
+- current goal and subgoal
+- last action result and recent errors
+
+## Combat
+
+Combat is handled by dedicated actors, not by the AI loop.
+The combat layer can:
+
+- approach a target
+- flee from a target
+- melee attack
+- ranged skirmish
+
+Visibility and reachability checks are shared with guards and monitoring logic.
+
+## Memory
+
+Long-term memory is backed by SQLite under `data/`.
+The memory manager stores locations, containers, resources, danger markers, player notes, task stats, deaths, and goal history.
+
+## Source Of Truth
+
+These docs are a summary of the codebase state, not a separate specification.
+When behavior changes, update code and tests first, then update the docs.
