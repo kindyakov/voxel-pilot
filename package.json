@@ -1,7 +1,7 @@
 {
-  "name": "minecraft_bot",
+  "name": "voxel-pilot",
   "version": "0.0.1",
-  "description": "An AI-assisted Minecraft bot built with mineflayer and XState.",
+  "description": "VoxelPilot is an AI-assisted Minecraft bot built with mineflayer and XState.",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
@@ -29,12 +29,12 @@
   "license": "ISC",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kindyakov/minecraft_bot_ai.git"
+    "url": "https://github.com/kindyakov/voxel-pilot.git"
   },
   "bugs": {
-    "url": "https://github.com/kindyakov/minecraft_bot_ai/issues"
+    "url": "https://github.com/kindyakov/voxel-pilot/issues"
   },
-  "homepage": "https://github.com/kindyakov/minecraft_bot_ai#readme",
+  "homepage": "https://github.com/kindyakov/voxel-pilot#readme",
   "dependencies": {
     "ajv": "^8.17.1",
     "better-sqlite3": "^12.8.0",

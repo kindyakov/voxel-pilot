@@ -1,8 +1,8 @@
-# Minecraft Bot AI
+# VoxelPilot
 
 Language versions: [English](README.md) | [Русский](README.ru.md)
 
-An AI-assisted Minecraft bot built with [mineflayer](https://github.com/PrismarineJS/mineflayer) and [XState](https://stately.ai/docs/xstate). It connects to a Minecraft server, builds a deterministic snapshot of the world state, asks an LLM for the next tool decision, and executes the resulting action through a hierarchical state machine.
+VoxelPilot is an AI-assisted Minecraft bot built with [mineflayer](https://github.com/PrismarineJS/mineflayer) and [XState](https://stately.ai/docs/xstate). It connects to a Minecraft server, builds a deterministic snapshot of the world state, asks an LLM for the next tool decision, and executes the resulting action through a hierarchical state machine.
 
 ## What It Does
 
