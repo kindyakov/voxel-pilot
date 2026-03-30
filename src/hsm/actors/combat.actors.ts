@@ -144,6 +144,8 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 	},
 
 	onStart: async ({ bot, abortSignal }) => {
+		bot.utils.stopEating?.()
+
 		const meleeWeapon = bot.utils.getMeleeWeapon()
 
 		if (!meleeWeapon) {
@@ -207,6 +209,8 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 	},
 
 	onStart: async ({ bot, context, sendBack, setState, abortSignal }) => {
+		bot.utils.stopEating?.()
+
 		const loadout = resolveRangedLoadout(bot)
 
 		if (

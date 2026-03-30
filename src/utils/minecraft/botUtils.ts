@@ -4,8 +4,19 @@ type Priority = 'none' | 'low' | 'medium' | 'high' | 'critical'
 
 export class BotUtils {
 	private _eatingTimeoutId: NodeJS.Timeout | null = null
+	private _eatingPromise: Promise<void> | null = null
 
 	constructor(private _bot: Bot) {}
+
+	private scheduleEatingRetry(): void {
+		if (this._eatingTimeoutId) {
+			clearTimeout(this._eatingTimeoutId)
+		}
+
+		this._eatingTimeoutId = setTimeout(() => {
+			void this.eating()
+		}, 1500)
+	}
 
 	/**
 	 * Поиск ближайшего враждебного моба
@@ -188,65 +199,83 @@ export class BotUtils {
 	}
 
 	async eating(): Promise<void> {
-		if (!this._bot || this._bot?.health === 20) {
+		if (this._eatingPromise) {
+			return this._eatingPromise
+		}
+
+		if (!this._bot || this._bot.health === 20) {
 			this.stopEating()
 			return
 		}
 
-		try {
-			if (this._bot.food >= 20) {
-				console.log('Голод полный, жду регенерации здоровья...')
-				this.stopEating()
-				this._eatingTimeoutId = setTimeout(() => this.eating(), 1500)
-				return
+		this._eatingPromise = (async () => {
+			try {
+				if (this._bot.food >= 20) {
+					console.log('Голод полный, жду регенерации здоровья...')
+					if (this._bot.health < 20) {
+						this.scheduleEatingRetry()
+					}
+					return
+				}
+
+				if (this._bot.autoEat.isEating) {
+					return
+				}
+
+				console.log('Ищу еду в инвентаре...')
+
+				const allItems = this.getAllItems()
+				const foodChoices = this._bot.autoEat.findBestChoices(
+					allItems,
+					'saturation'
+				)
+
+				if (!foodChoices.length) {
+					this._bot.chat('Нет еды в инвентаре критическая ситуация!')
+					return
+				}
+
+				const bestFood = foodChoices[0]!
+				console.log(`Выбрал еду: ${bestFood.name}`)
+				console.log('🍖 Начинаю есть...')
+
+				await this._bot.autoEat.eat({
+					food: bestFood,
+					priority: 'saturation',
+					offhand: false,
+					equipOldItem: true
+				})
+
+				console.log(
+					`Поел! HP: ${this._bot.health.toFixed(1)}, Food: ${this._bot.food}, Saturation: ${this._bot.foodSaturation.toFixed(1)}`
+				)
+
+				if (this._bot.health < 20 && this._bot.food < 20) {
+					this.scheduleEatingRetry()
+				}
+			} catch (error) {
+				const errorMessage =
+					error instanceof Error ? error.message : String(error)
+				console.log(`Ошибка при еде: ${errorMessage}`)
+				if (this._bot.health < 20) {
+					this.scheduleEatingRetry()
+				}
+			} finally {
+				this._eatingPromise = null
 			}
+		})()
 
-			console.log('Ищу еду в инвентаре...')
-
-			const allItems = this.getAllItems()
-			const foodChoices = this._bot.autoEat.findBestChoices(
-				allItems,
-				'saturation'
-			)
-
-			if (!foodChoices.length) {
-				this._bot.chat('Нет еды в инвентаре критическая ситуация!')
-				return
-			}
-
-			const bestFood = foodChoices[0]!
-			console.log(`Выбрал еду: ${bestFood.name}`)
-
-			await this._bot.equip(bestFood, 'hand')
-
-			if (this._bot.autoEat.isEating) return
-
-			console.log('🍖 Начинаю есть...')
-			await this._bot.consume()
-
-			console.log(
-				`Поел! HP: ${this._bot.health.toFixed(1)}, Food: ${this._bot.food}, Saturation: ${this._bot.foodSaturation.toFixed(1)}`
-			)
-
-			if (this._bot.health < 20) {
-				this.stopEating()
-				this._eatingTimeoutId = setTimeout(() => this.eating(), 1500)
-			}
-		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error)
-			console.log(`Ошибка при еде: ${errorMessage}`)
-			if (this._bot.health < 20) {
-				this.stopEating()
-				this._eatingTimeoutId = setTimeout(() => this.eating(), 1500)
-			}
-		}
+		return this._eatingPromise
 	}
 
 	stopEating(): void {
 		if (this._eatingTimeoutId) {
 			clearTimeout(this._eatingTimeoutId)
 			this._eatingTimeoutId = null
+		}
+
+		if (this._bot.autoEat.isEating) {
+			this._bot.autoEat.cancelEat()
 		}
 	}
 

@@ -9,6 +9,7 @@ import { createActor } from 'xstate'
 
 import combatActors from '../../hsm/actors/combat.actors.js'
 import { canAttackEnemy } from '../../utils/combat/enemyVisibility.js'
+import { BotUtils } from '../../utils/minecraft/botUtils.js'
 
 const require = createRequire(import.meta.url)
 const minecraftData = require('minecraft-data')
@@ -141,6 +142,33 @@ test('regression: melee service cleanup should stop active pvp attacks', async (
 	}
 })
 
+test('regression: melee service stops active eating flow before equipping weapon', async () => {
+	const bot = new CombatServiceBot()
+	const enemy = createEnemy(205, 4)
+	let stopEatingCalls = 0
+
+	bot.utils = {
+		...bot.utils,
+		stopEating: () => {
+			stopEatingCalls += 1
+		}
+	} as any
+	bot.contextRef = createCombatContext(bot, enemy, 4)
+
+	const actor = createActor(combatActors.serviceMeleeAttack as any, {
+		input: { bot, options: {} }
+	})
+
+	try {
+		actor.start()
+		await delay(50)
+
+		assert.equal(stopEatingCalls, 1)
+	} finally {
+		actor.stop()
+	}
+})
+
 test('regression: ranged service cleanup should stop active hawkEye attacks', async () => {
 	const bot = new CombatServiceBot()
 	const enemy = createEnemy(202, 12)
@@ -244,4 +272,114 @@ test('regression: canAttackEnemy should not pathfind non-visible enemies during 
 
 	assert.equal(canAttack, false)
 	assert.equal(getPathFromToCalls(), 0)
+})
+
+test('regression: BotUtils deduplicates concurrent eating requests', async () => {
+	class FakeEatingBot extends EventEmitter {
+		health = 12
+		food = 8
+		foodSaturation = 2
+		heldItem: any = null
+		entity = {
+			position: {
+				y: 64
+			}
+		}
+		registry = {
+			isNewerOrEqualTo: () => true
+		}
+		inventory = {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => [{ name: 'cooked_porkchop', type: 320, count: 3, slot: 36 }]
+		}
+		autoEat = {
+			foodsByName: {
+				cooked_porkchop: { saturation: 12 }
+			},
+			opts: {
+				bannedFood: []
+			},
+			isEating: false,
+			findBestChoices: () => [
+				{ name: 'cooked_porkchop', type: 320, count: 3, slot: 36 }
+			],
+			eatCalls: 0,
+			cancelEatCalls: 0,
+			eat: async () => {
+				this.autoEat.eatCalls += 1
+				this.autoEat.isEating = true
+				await delay(50)
+				this.food = 20
+				this.autoEat.isEating = false
+			},
+			cancelEat: () => {
+				this.autoEat.cancelEatCalls += 1
+				this.autoEat.isEating = false
+			}
+		}
+
+		chat() {}
+		nearestEntity() {
+			return null
+		}
+		async equip(item: any) {
+			this.heldItem = item
+		}
+		async consume() {
+			throw new Error('consume should not be called directly')
+		}
+	}
+
+	const bot = new FakeEatingBot() as any
+	const utils = new BotUtils(bot)
+	bot.utils = utils
+
+	try {
+		await Promise.all([utils.eating(), utils.eating()])
+
+		assert.equal(bot.autoEat.eatCalls, 1)
+		assert.equal(bot.food, 20)
+	} finally {
+		utils.stopEating()
+	}
+})
+
+test('regression: BotUtils.stopEating cancels active autoEat session', () => {
+	class FakeEatingBot extends EventEmitter {
+		health = 12
+		food = 8
+		foodSaturation = 2
+		entity = {
+			position: {
+				y: 64
+			}
+		}
+		registry = {
+			isNewerOrEqualTo: () => true
+		}
+		inventory = {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		}
+		autoEat = {
+			foodsByName: {},
+			opts: {
+				bannedFood: []
+			},
+			isEating: true,
+			cancelEatCalls: 0,
+			cancelEat: () => {
+				this.autoEat.cancelEatCalls += 1
+				this.autoEat.isEating = false
+			}
+		}
+	}
+
+	const bot = new FakeEatingBot() as any
+	const utils = new BotUtils(bot)
+
+	utils.stopEating()
+
+	assert.equal(bot.autoEat.cancelEatCalls, 1)
+	assert.equal(bot.autoEat.isEating, false)
 })

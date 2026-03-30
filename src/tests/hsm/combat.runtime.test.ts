@@ -433,6 +433,43 @@ test('combat hands off from ranged skirmish back to melee without overlap', asyn
 	}
 })
 
+test('combat does not re-enter melee on repeated entity updates for the same close target', async () => {
+	const bot = new CombatBot()
+	bot.inventoryItems = [{ name: 'iron_sword' }]
+	const actor = createRuntimeActor(bot)
+	const enemy = createEnemy(2)
+
+	try {
+		await enterCombat(actor, enemy)
+		await delay(600)
+
+		assert.deepEqual(bot.equipCalls, ['iron_sword'])
+		assert.equal(
+			actor.getSnapshot().matches({
+				MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' }
+			} as never),
+			true
+		)
+
+		await enterCombat(actor, enemy)
+		await delay(600)
+
+		assert.deepEqual(
+			bot.equipCalls,
+			['iron_sword'],
+			'expected repeated UPDATE_ENTITIES to keep current melee invoke alive'
+		)
+		assert.equal(
+			actor.getSnapshot().matches({
+				MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' }
+			} as never),
+			true
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
 test('ranged skirmish re-equips when weapon instance changes but type stays the same', async () => {
 	const bot = new CombatBot()
 	const firstBow = { name: 'bow' }
