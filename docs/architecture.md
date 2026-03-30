@@ -11,6 +11,38 @@ The current design is small and explicit:
 - `src/ai/snapshot.ts` builds the model snapshot.
 - `src/core/memory/` owns persistent storage.
 
+## System Goal
+
+The goal of this project is not to hardcode behavior for individual requests such as "make an axe".
+The goal is to build a reliable agent runtime for a Minecraft bot.
+
+That runtime must:
+
+- accept both simple and multi-step user goals
+- decompose goals into coherent sequential actions
+- execute actions only through clear bot primitives
+- keep the bot state consistent through the HSM
+- remain resilient to failures, interruptions, and partial progress
+- allow the agent loop, tools, and primitives to evolve without rewriting the system around one-off cases
+
+In practical terms, the LLM is not the source of truth for behavior.
+The source of truth must be the runtime contract:
+
+- deterministic world snapshot in
+- one valid decision at a time
+- execution through bounded primitives
+- explicit success or failure back into the machine
+- recovery paths that preserve bot integrity
+
+## Non-Goals
+
+This system is not meant to:
+
+- solve tasks by adding prompt rules for every specific request
+- let the model improvise arbitrary behavior outside the tool and primitive contract
+- couple core architecture to isolated examples or regressions
+- trade reliability for short-term "it worked once" behavior
+
 ## Runtime Flow
 
 1. The bot connects to the Minecraft server.

@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { OpenAIResponsesClient } from '../../ai/client.js'
 import { runAgentTurn } from '../../ai/loop.js'
+import { createTaskContext } from '../../ai/taskContext.js'
 
 const createVec3 = (x: number, y: number, z: number) => ({
 	x,
@@ -108,6 +109,7 @@ test('runAgentTurn resolves inline memory tool calls before selecting one execut
 		lastResult: null,
 		lastReason: null,
 		errorHistory: [],
+		taskContext: createTaskContext('Use the crafting table', null),
 		client
 	})
 
@@ -120,5 +122,92 @@ test('runAgentTurn resolves inline memory tool calls before selecting one execut
 		position: { x: 12, y: 64, z: -4 },
 		range: 2
 	})
-	assert.deepEqual(result.transcript, ['memory_read', 'call_navigate'])
+	assert.deepEqual(result.transcript, [
+		'round_0_ms:0',
+		'memory_read',
+		'round_1_ms:0',
+		'call_navigate'
+	])
+})
+
+test('runAgentTurn rejects navigation to unsupported workstation for crafting goals', async () => {
+	const client = new OpenAIResponsesClient({
+		client: {
+			responses: {
+				create: async () =>
+					({
+						id: 'resp_1',
+						output: [
+							{
+								type: 'function_call',
+								call_id: 'call_1',
+								name: 'call_navigate',
+								arguments: JSON.stringify({
+									position: {
+										x: 2,
+										y: 64,
+										z: 0
+									}
+								})
+							}
+						]
+					}) as any
+			}
+		},
+		model: 'test-model'
+	})
+
+	const memory = {
+		readEntries: () => [],
+		saveEntry: () => null,
+		updateEntryData: () => null,
+		deleteEntry: () => false
+	} as any
+
+	const bot = {
+		memory,
+		health: 20,
+		food: 20,
+		oxygenLevel: 20,
+		entity: { position: createVec3(0, 64, 0) },
+		game: { dimension: 'overworld' },
+		time: { isDay: true, timeOfDay: 1000 },
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		},
+		getEquipmentDestSlot: () => 36,
+		blockAt: (position: { x: number; y: number; z: number }) =>
+			position.x === 2 && position.y === 64 && position.z === 0
+				? {
+						name: 'stonecutter',
+						position: createVec3(2, 64, 0)
+					}
+				: null,
+		findBlocks: () => [],
+		entities: {},
+		closeWindow: () => {}
+	} as any
+
+	const result = await runAgentTurn({
+		bot,
+		memory,
+		currentGoal: 'craft an axe',
+		subGoal: null,
+		lastAction: null,
+		lastResult: null,
+		lastReason: null,
+		errorHistory: [],
+		taskContext: createTaskContext('craft an axe', null),
+		client
+	})
+
+	assert.equal(result.kind, 'failed')
+	if (result.kind !== 'failed') {
+		assert.fail('Expected failed result')
+	}
+	assert.match(
+		result.reason,
+		/unsupported workstation for crafting tasks/i
+	)
 })

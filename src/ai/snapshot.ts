@@ -1,3 +1,5 @@
+import type { TaskContext } from './taskContext.js'
+
 const INTERACTABLE_KEYWORDS = [
 	'chest',
 	'trapped_chest',
@@ -6,14 +8,7 @@ const INTERACTABLE_KEYWORDS = [
 	'smoker',
 	'barrel',
 	'shulker_box',
-	'crafting_table',
-	'cartography_table',
-	'smithing_table',
-	'grindstone',
-	'loom',
-	'stonecutter',
-	'enchanting_table',
-	'anvil'
+	'crafting_table'
 ] as const
 
 const RESOURCE_KEYWORDS = [
@@ -106,6 +101,7 @@ interface BuildSnapshotInput {
 	bot: SnapshotBot
 	currentGoal: string | null
 	subGoal: string | null
+	taskContext?: TaskContext | null
 	lastAction: string | null
 	actionResult: 'SUCCESS' | 'FAILED' | null
 	reason: string | null
@@ -209,7 +205,17 @@ export const buildSnapshot = (input: BuildSnapshotInput): string => {
 
 	const interactables = resolvedBlocks
 		.filter(block => isInteractable(block.name))
-		.slice(0, limits.interactables)
+	const relevantInteractables =
+		input.taskContext?.relevantInteractables.length
+			? interactables.filter(block =>
+					input.taskContext!.relevantInteractables.some(keyword =>
+						block.name.includes(keyword)
+					)
+				)
+			: interactables
+	const visibleInteractables = (
+		relevantInteractables.length > 0 ? relevantInteractables : interactables
+	).slice(0, limits.interactables)
 	const resources = resolvedBlocks
 		.filter(block => isResource(block.name))
 		.slice(0, limits.resources)
@@ -262,13 +268,15 @@ export const buildSnapshot = (input: BuildSnapshotInput): string => {
 		...equipmentLines,
 		'',
 		'ENVIRONMENT',
-		`interactables: ${interactables.length ? interactables.map(block => describeBlock(block, origin)).join(' | ') : '-'}`,
+		`interactables: ${visibleInteractables.length ? visibleInteractables.map(block => describeBlock(block, origin)).join(' | ') : '-'}`,
 		`resources: ${resources.length ? resources.map(block => describeBlock(block, origin)).join(' | ') : '-'}`,
 		`entities: ${entities.length ? entities.map(entity => describeEntity(entity, origin)).join(' | ') : '-'}`,
 		'',
 		'GOAL_CONTEXT',
 		`current_goal: ${input.currentGoal ?? '-'}`,
 		`sub_goal: ${input.subGoal ?? '-'}`,
+		`task_category: ${input.taskContext?.category ?? 'unknown'}`,
+		`recent_facts: ${input.taskContext?.recentFacts.length ? input.taskContext.recentFacts.join(' | ') : '-'}`,
 		'',
 		'FEEDBACK_ERRORS',
 		`last_action: ${input.lastAction ?? '-'}`,

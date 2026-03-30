@@ -1,4 +1,5 @@
 import type { PendingExecution } from '@/ai/tools.js'
+import type { TaskContext } from '@/ai/taskContext.js'
 
 import type { Bot, Entity, Item, Vec3 } from '@/types'
 
@@ -72,6 +73,7 @@ export interface MachineContext {
 
 	currentGoal: string | null
 	subGoal: string | null
+	taskContext: TaskContext
 	lastAction: string | null
 	lastActionArgs: Record<string, unknown> | null
 	lastResult: 'SUCCESS' | 'FAILED' | null
@@ -153,6 +155,12 @@ export const context: MachineContext = {
 
 	currentGoal: null,
 	subGoal: null,
+	taskContext: {
+		category: 'unknown',
+		relevantInteractables: [],
+		recentFacts: [],
+		rejectedStepSignatures: []
+	},
 	lastAction: null,
 	lastActionArgs: null,
 	lastResult: null,

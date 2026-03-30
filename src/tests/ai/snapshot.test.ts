@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { buildSnapshot } from '../../ai/snapshot.js'
+import { createTaskContext } from '../../ai/taskContext.js'
 
 const createVec3 = (x: number, y: number, z: number) => ({
 	x,
@@ -132,6 +133,7 @@ test('buildSnapshot renders compact world, inventory, equipment, goal, and feedb
 		bot,
 		currentGoal: 'Build a 5x5 wooden box',
 		subGoal: 'Collect 30 oak logs',
+		taskContext: createTaskContext('Build a 5x5 wooden box', 'Collect 30 oak logs'),
 		lastAction: 'call_break_block',
 		actionResult: 'FAILED',
 		reason: 'Unreachable',
@@ -215,6 +217,7 @@ test('buildSnapshot caps environment sections and error history for token discip
 		bot,
 		currentGoal: 'Survive',
 		subGoal: null,
+		taskContext: createTaskContext('Survive', null),
 		lastAction: null,
 		actionResult: 'SUCCESS',
 		reason: null,
@@ -233,4 +236,75 @@ test('buildSnapshot caps environment sections and error history for token discip
 	assert.equal(snapshot.includes('error_history: a | b | c'), true)
 	assert.equal(snapshot.includes('error_history: a | b | c | d'), false)
 	assert.match(snapshot, /time: night/)
+})
+
+test('buildSnapshot excludes unsupported workstation noise for crafting tasks', () => {
+	const bot = {
+		health: 20,
+		food: 20,
+		oxygenLevel: 20,
+		entity: {
+			position: createVec3(0, 64, 0)
+		},
+		game: {
+			dimension: 'overworld'
+		},
+		time: {
+			timeOfDay: 1000,
+			isDay: true
+		},
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		},
+		getEquipmentDestSlot() {
+			return 36
+		},
+		blockAt(position: { x: number; y: number; z: number }) {
+			const key = `${position.x},${position.y},${position.z}`
+			const blocks: Record<string, any> = {
+				'0,64,0': {
+					name: 'grass_block',
+					position: createVec3(0, 64, 0),
+					biome: { name: 'plains' }
+				},
+				'1,64,0': {
+					name: 'crafting_table',
+					position: createVec3(1, 64, 0),
+					biome: { name: 'plains' }
+				},
+				'2,64,0': {
+					name: 'stonecutter',
+					position: createVec3(2, 64, 0),
+					biome: { name: 'plains' }
+				}
+			}
+			return blocks[key] ?? null
+		},
+		findBlocks({
+			matching
+		}: {
+			matching: (block: { name: string }) => boolean
+		}) {
+			return [createVec3(1, 64, 0), createVec3(2, 64, 0)].filter(position =>
+				matching(this.blockAt(position))
+			)
+		},
+		entities: {}
+	} as any
+
+	const snapshot = buildSnapshot({
+		bot,
+		currentGoal: 'craft an axe',
+		subGoal: null,
+		taskContext: createTaskContext('craft an axe', null),
+		lastAction: null,
+		actionResult: null,
+		reason: null,
+		errorHistory: []
+	})
+
+	assert.match(snapshot, /crafting_table @ 1\.0 -> 1,64,0/)
+	assert.equal(snapshot.includes('stonecutter'), false)
+	assert.match(snapshot, /task_category: craft/)
 })

@@ -1,4 +1,11 @@
 import { type AgentTurnResult, runAgentTurn } from '@/ai/loop.js'
+import {
+	appendRejectedStepSignature,
+	appendTaskFact,
+	createTaskContext,
+	getTaskFactFromExecution,
+	refreshTaskContext
+} from '@/ai/taskContext.js'
 import type { PendingExecution } from '@/ai/tools.js'
 import { Vec3 as Vec3Class } from 'vec3'
 import { assign, fromPromise, setup } from 'xstate'
@@ -88,6 +95,7 @@ const defaultThinkingActor = fromPromise<
 		lastResult: input.context.lastResult,
 		lastReason: input.context.lastReason,
 		errorHistory: input.context.errorHistory,
+		taskContext: input.context.taskContext,
 		signal
 	})
 })
@@ -448,6 +456,72 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					})
 				)
 			},
+			logThinkingStart: ({ context }) => {
+				console.log(
+					'[AI] thinking_start',
+					JSON.stringify({
+						goal: context.currentGoal,
+						subGoal: context.subGoal,
+						lastAction: context.lastAction,
+						lastResult: context.lastResult
+					})
+				)
+			},
+			logThinkingExecution: ({ event }) => {
+				const output = (event as any).output as AgentTurnResult
+				if (output.kind !== 'execute') {
+					return
+				}
+
+				console.log(
+					'[AI] thinking_done',
+					JSON.stringify({
+						kind: output.kind,
+						toolName: output.execution.toolName,
+						args: output.execution.args,
+						subGoal: output.subGoal
+					})
+				)
+			},
+			logThinkingFinish: ({ event }) => {
+				const output = (event as any).output as AgentTurnResult
+				if (output.kind !== 'finish') {
+					return
+				}
+
+				console.log(
+					'[AI] thinking_done',
+					JSON.stringify({
+						kind: output.kind,
+						message: output.message
+					})
+				)
+			},
+			logThinkingFailure: ({ event }) => {
+				const output = (event as any).output as AgentTurnResult
+				if (output.kind !== 'failed') {
+					return
+				}
+
+				console.log(
+					'[AI] thinking_done',
+					JSON.stringify({
+						kind: output.kind,
+						reason: output.reason,
+						transcript: output.transcript
+					})
+				)
+			},
+			logThinkingError: ({ event }) => {
+				const error =
+					(event as { error?: unknown }).error ?? 'Unknown thinking error'
+				console.log(
+					'[AI] thinking_error',
+					JSON.stringify({
+						error: error instanceof Error ? error.message : String(error)
+					})
+				)
+			},
 			updatePosition: assign({
 				position: ({ event }) =>
 					event.type === 'UPDATE_POSITION' ? event.position : null,
@@ -570,6 +644,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				movementOwner: 'NONE',
 				currentGoal: null,
 				subGoal: null,
+				taskContext: createTaskContext(null, null),
 				pendingExecution: null,
 				lastToolTranscript: [],
 				preferredCombatTargetId: null,
@@ -590,6 +665,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				return {
 					currentGoal: event.text,
 					subGoal: null,
+					taskContext: createTaskContext(event.text, null),
 					pendingExecution: null,
 					lastToolTranscript: [],
 					failureSignature: null,
@@ -600,6 +676,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			clearGoal: assign({
 				currentGoal: null,
 				subGoal: null,
+				taskContext: createTaskContext(null, null),
 				pendingExecution: null,
 				lastToolTranscript: [],
 				failureSignature: null,
@@ -649,7 +726,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				movementOwner: ({ context }) =>
 					hasMovementController(context.bot) ? 'MOVEMENT' : 'NONE'
 			}),
-			storeThinkingExecution: assign(({ event }) => {
+			storeThinkingExecution: assign(({ context, event }) => {
 				const output = (event as any).output as AgentTurnResult
 				if (output.kind !== 'execute') {
 					return {}
@@ -658,10 +735,15 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				return {
 					pendingExecution: output.execution,
 					subGoal: output.subGoal,
-					lastToolTranscript: output.transcript
+					lastToolTranscript: output.transcript,
+					taskContext: refreshTaskContext(
+						context.taskContext,
+						context.currentGoal,
+						output.subGoal
+					)
 				}
 			}),
-			storeThinkingFailure: assign(({ event }) => {
+			storeThinkingFailure: assign(({ context, event }) => {
 				const output = (event as any).output as AgentTurnResult
 				if (output.kind !== 'failed') {
 					return {}
@@ -671,7 +753,14 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					lastResult: 'FAILED' as const,
 					lastReason: output.reason,
 					lastToolTranscript: output.transcript,
-					pendingExecution: null
+					pendingExecution: null,
+					taskContext: appendRejectedStepSignature(
+						context.taskContext,
+						toFailureSignature(
+							context.pendingExecution,
+							output.reason
+						) ?? `thinking_failed:${output.reason}`
+					)
 				}
 			}),
 			recordExecutionSuccess: assign(({ context, event }) => ({
@@ -683,7 +772,20 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				pendingExecution: null,
 				failureSignature: null,
 				failureRepeats: 0,
-				lastToolTranscript: [event.type]
+				lastToolTranscript: [event.type],
+				taskContext: appendTaskFact(
+					refreshTaskContext(
+						context.taskContext,
+						context.currentGoal,
+						context.subGoal
+					),
+					getTaskFactFromExecution(
+						context.pendingExecution?.toolName ?? null,
+						context.pendingExecution?.args ?? null,
+						'SUCCESS',
+						null
+					)
+				)
 			})),
 			recordExecutionFailure: assign(({ context, event }) => {
 				const reason =
@@ -708,7 +810,23 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					failureSignature: signature,
 					failureRepeats: repeats,
 					errorHistory: [...context.errorHistory, reason].slice(-3),
-					lastToolTranscript: [event.type]
+					lastToolTranscript: [event.type],
+					taskContext: appendTaskFact(
+						appendRejectedStepSignature(
+							refreshTaskContext(
+								context.taskContext,
+								context.currentGoal,
+								context.subGoal
+							),
+							signature ?? `execution_failed:${reason}`
+						),
+						getTaskFactFromExecution(
+							context.pendingExecution?.toolName ?? null,
+							context.pendingExecution?.args ?? null,
+							'FAILED',
+							reason
+						)
+					)
 				}
 			}),
 			notifyGoalFinished: ({ context, event }) => {
@@ -1120,6 +1238,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 						states: {
 							IDLE: {},
 							THINKING: {
+								entry: ['logThinkingStart'],
 								invoke: {
 									src: 'agentThinking',
 									input: ({ context }: { context: MachineContext }) => ({
@@ -1130,16 +1249,21 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 										{
 											guard: 'thinkingProducedExecution',
 											target: 'EXECUTING',
-											actions: ['storeThinkingExecution']
+											actions: ['logThinkingExecution', 'storeThinkingExecution']
 										},
 										{
 											guard: 'thinkingProducedFinish',
 											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-											actions: ['notifyGoalFinished', 'clearGoal']
+											actions: [
+												'logThinkingFinish',
+												'notifyGoalFinished',
+												'clearGoal'
+											]
 										},
 										{
 											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
 											actions: [
+												'logThinkingFailure',
 												'storeThinkingFailure',
 												'notifyThinkingFailure',
 												'clearGoal'
@@ -1148,7 +1272,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									],
 									onError: {
 										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-										actions: ['clearGoal']
+										actions: ['logThinkingError', 'clearGoal']
 									}
 								}
 							},
