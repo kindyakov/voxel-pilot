@@ -4,28 +4,37 @@ import { Vec3 as Vec3Class } from 'vec3'
 import type { Bot } from '@/types'
 
 import type { MemoryEntryType, MemoryPosition } from '@/core/memory/types.js'
+import {
+	closeWindowSession,
+	closeWindowSessionSafely,
+	describePlayerInventory,
+	describeWindowSession,
+	openWindowSession,
+} from '@/ai/runtime/window.js'
 
 export type AgentToolName =
 	| 'memory_save'
 	| 'memory_read'
 	| 'memory_update_data'
 	| 'memory_delete'
-	| 'inspect_container'
+	| 'inspect_inventory'
+	| 'inspect_window'
 	| 'finish_goal'
-	| 'call_navigate'
-	| 'call_break_block'
-	| 'call_craft'
-	| 'call_craft_workbench'
-	| 'call_smelt'
-	| 'call_place_block'
-	| 'call_follow_entity'
+	| 'navigate_to'
+	| 'break_block'
+	| 'place_block'
+	| 'follow_entity'
+	| 'open_window'
+	| 'transfer_item'
+	| 'close_window'
 
 export type InlineToolName =
 	| 'memory_save'
 	| 'memory_read'
 	| 'memory_update_data'
 	| 'memory_delete'
-	| 'inspect_container'
+	| 'inspect_inventory'
+	| 'inspect_window'
 
 export type ControlToolName = 'finish_goal'
 
@@ -57,44 +66,22 @@ export const AGENT_SYSTEM_PROMPT = [
 	'Return exactly one execution decision after enough information is gathered.',
 	'Keep arguments concrete and minimal.',
 	'Never invent coordinates, blocks, entities, or containers that are not present in the snapshot or tool results.',
-	'If the user asks you to come to them, follow them, or stay near them, prefer call_follow_entity with the matching nearby player name instead of call_navigate.',
-	'SPEED IS CRITICAL: If the goal is simple movement (follow player, go to coordinates), return an execution tool IMMEDIATELY in the first round without calling informational tools.'
+	'If the user asks you to come to them, follow them, or stay near them, prefer follow_entity with the matching nearby player name instead of navigate_to.',
+	'SPEED IS CRITICAL: If the goal is simple movement (follow player, go to coordinates), return an execution tool IMMEDIATELY in the first round without calling informational tools.',
+	'Use inspect_inventory for player inventory state and inspect_window for nearby block windows before taking inventory or window actions.',
+	'Use open_window, transfer_item, and close_window for direct window interactions when the task requires moving items.'
 ].join(' ')
 
 const FUNCTION = 'function' as const
-const CONTAINER_NAMES = [
-	'chest',
-	'trapped_chest',
-	'ender_chest',
-	'furnace',
-	'blast_furnace',
-	'smoker',
-	'dispenser',
-	'dropper',
-	'hopper',
-	'barrel',
-	'shulker_box'
-]
-
-const WORKBENCH_NAMES = [
-	'crafting_table',
-	'cartography_table',
-	'smithing_table',
-	'grindstone',
-	'loom',
-	'stonecutter',
-	'enchanting_table',
-	'anvil'
-]
 
 const executionToolNames = new Set<ExecutionToolName>([
-	'call_navigate',
-	'call_break_block',
-	'call_craft',
-	'call_craft_workbench',
-	'call_smelt',
-	'call_place_block',
-	'call_follow_entity'
+	'navigate_to',
+	'break_block',
+	'place_block',
+	'follow_entity',
+	'open_window',
+	'transfer_item',
+	'close_window'
 ])
 
 const inlineToolNames = new Set<InlineToolName>([
@@ -102,7 +89,8 @@ const inlineToolNames = new Set<InlineToolName>([
 	'memory_read',
 	'memory_update_data',
 	'memory_delete',
-	'inspect_container'
+	'inspect_inventory',
+	'inspect_window'
 ])
 
 const controlToolNames = new Set<ControlToolName>(['finish_goal'])
@@ -200,18 +188,20 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 		},
 		required: []
 	}),
-	tool(
-		'inspect_container',
-		'Inspect nearby container/workstation and persist contents.',
-		{
-			type: 'object',
-			additionalProperties: false,
-			properties: {
-				position: positionSchema
-			},
-			required: ['position']
-		}
-	),
+	tool('inspect_inventory', 'Inspect the player inventory.', {
+		type: 'object',
+		additionalProperties: false,
+		properties: {},
+		required: []
+	}),
+	tool('inspect_window', 'Inspect a nearby window-bearing block.', {
+		type: 'object',
+		additionalProperties: false,
+		properties: {
+			position: positionSchema
+		},
+		required: ['position']
+	}),
 	tool('finish_goal', 'Finish the current goal.', {
 		type: 'object',
 		additionalProperties: false,
@@ -221,7 +211,7 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 		},
 		required: []
 	}),
-	tool('call_navigate', 'Navigate to a target position.', {
+	tool('navigate_to', 'Navigate to a target position.', {
 		type: 'object',
 		additionalProperties: false,
 		properties: {
@@ -230,7 +220,7 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 		},
 		required: ['position']
 	}),
-	tool('call_break_block', 'Break a block at a target position.', {
+	tool('break_block', 'Break a block at a target position.', {
 		type: 'object',
 		additionalProperties: false,
 		properties: {
@@ -238,37 +228,7 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 		},
 		required: ['position']
 	}),
-	tool('call_craft', 'Craft an inventory-only recipe.', {
-		type: 'object',
-		additionalProperties: false,
-		properties: {
-			item_name: { type: 'string' },
-			count: { type: 'number' }
-		},
-		required: ['item_name']
-	}),
-	tool('call_craft_workbench', 'Craft an item at a workbench.', {
-		type: 'object',
-		additionalProperties: false,
-		properties: {
-			item_name: { type: 'string' },
-			workbench_position: positionSchema,
-			count: { type: 'number' }
-		},
-		required: ['item_name', 'workbench_position']
-	}),
-	tool('call_smelt', 'Smelt an item at a furnace.', {
-		type: 'object',
-		additionalProperties: false,
-		properties: {
-			input_item_name: { type: 'string' },
-			fuel_item_name: { type: 'string' },
-			furnace_position: positionSchema,
-			count: { type: 'number' }
-		},
-		required: ['input_item_name', 'furnace_position']
-	}),
-	tool('call_place_block', 'Place a block from inventory.', {
+	tool('place_block', 'Place a block from inventory.', {
 		type: 'object',
 		additionalProperties: false,
 		properties: {
@@ -278,7 +238,7 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 		},
 		required: ['block_name', 'position']
 	}),
-	tool('call_follow_entity', 'Follow the nearest matching entity.', {
+	tool('follow_entity', 'Follow the nearest matching entity.', {
 		type: 'object',
 		additionalProperties: false,
 		properties: {
@@ -287,6 +247,51 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 			max_distance: { type: 'number' },
 			distance: { type: 'number' }
 		},
+		required: []
+	}),
+	tool('open_window', 'Open a nearby window-bearing block.', {
+		type: 'object',
+		additionalProperties: false,
+		properties: {
+			position: positionSchema
+		},
+		required: ['position']
+	}),
+	tool('transfer_item', 'Transfer an item between semantic window zones.', {
+		type: 'object',
+		additionalProperties: false,
+		properties: {
+			source_zone: {
+				type: 'string',
+				enum: [
+					'player_inventory',
+					'hotbar',
+					'container',
+					'input',
+					'fuel',
+					'output'
+				]
+			},
+			dest_zone: {
+				type: 'string',
+				enum: [
+					'player_inventory',
+					'hotbar',
+					'container',
+					'input',
+					'fuel',
+					'output'
+				]
+			},
+			item_name: { type: 'string' },
+			count: { type: 'number' }
+		},
+		required: ['source_zone', 'dest_zone', 'item_name', 'count']
+	}),
+	tool('close_window', 'Close the currently open window.', {
+		type: 'object',
+		additionalProperties: false,
+		properties: {},
 		required: []
 	})
 ]
@@ -302,54 +307,6 @@ const toPosition = (value: Record<string, unknown>): MemoryPosition => ({
 const toVec3 = (position: MemoryPosition) =>
 	new Vec3Class(position.x, position.y, position.z)
 
-const serializeContainerItems = (
-	items: any[]
-): Array<Record<string, unknown>> =>
-	items.filter(Boolean).map(item => ({
-		name: item.name,
-		count: item.count,
-		slot: item.slot,
-		maxDurability: item.maxDurability,
-		durabilityUsed: item.durabilityUsed
-	}))
-
-const openContainerWindow = async (bot: Bot, block: any): Promise<any> => {
-	if (CONTAINER_NAMES.some(name => block.name.includes(name))) {
-		if (block.name.includes('chest')) {
-			return bot.openChest(block)
-		}
-
-		if (
-			block.name.includes('furnace') ||
-			block.name.includes('blast_furnace') ||
-			block.name.includes('smoker')
-		) {
-			return bot.openFurnace(block)
-		}
-
-		return bot.openContainer(block)
-	}
-
-	if (WORKBENCH_NAMES.some(name => block.name.includes(name))) {
-		return bot.openBlock(block)
-	}
-
-	return bot.openContainer(block)
-}
-
-const closeWindow = (bot: Bot, window: any): void => {
-	if (!window) {
-		return
-	}
-
-	if (typeof window.close === 'function') {
-		window.close()
-		return
-	}
-
-	bot.closeWindow(window)
-}
-
 export const isExecutionToolName = (name: string): name is ExecutionToolName =>
 	executionToolNames.has(name as ExecutionToolName)
 
@@ -361,21 +318,23 @@ export const isControlToolName = (name: string): name is ControlToolName =>
 
 export const summarizeExecution = (execution: PendingExecution): string => {
 	switch (execution.toolName) {
-		case 'call_navigate':
+		case 'navigate_to':
 			return 'Move to target position'
-		case 'call_break_block':
+		case 'break_block':
 			return 'Break target block'
-		case 'call_craft':
-			return `Craft ${String(execution.args.item_name ?? 'item')}`
-		case 'call_craft_workbench':
-			return `Craft ${String(execution.args.item_name ?? 'item')} at workbench`
-		case 'call_smelt':
-			return `Smelt ${String(execution.args.input_item_name ?? 'item')}`
-		case 'call_place_block':
+		case 'place_block':
 			return `Place ${String(execution.args.block_name ?? 'block')}`
-		case 'call_follow_entity':
+		case 'follow_entity':
 			return 'Follow target entity'
+		case 'open_window':
+			return 'Open window'
+		case 'transfer_item':
+			return `Transfer ${String(execution.args.item_name ?? 'item')}`
+		case 'close_window':
+			return 'Close window'
 	}
+
+	return execution.toolName
 }
 
 export const executeInlineToolCall = async (
@@ -441,11 +400,15 @@ export const executeInlineToolCall = async (
 			})
 			return { ok: deleted, output: { deleted } }
 		}
-		case 'inspect_container': {
+		case 'inspect_inventory': {
+			const inventory = describePlayerInventory(context.bot)
+			return { ok: true, output: { inventory } }
+		}
+		case 'inspect_window': {
 			const position = toPosition(args.position as Record<string, unknown>)
 			const block = context.bot.blockAt(toVec3(position))
 			if (!block) {
-				return { ok: false, output: { reason: 'Container block not found' } }
+				return { ok: false, output: { reason: 'Window block not found' } }
 			}
 
 			const distance = context.bot.entity.position.distanceTo(block.position)
@@ -453,36 +416,42 @@ export const executeInlineToolCall = async (
 				return {
 					ok: false,
 					output: {
-						reason: `Container is too far away (${distance.toFixed(1)}m)`
+						reason: `Window is too far away (${distance.toFixed(1)}m)`
 					}
 				}
 			}
 
-			const windowRef = await openContainerWindow(context.bot, block)
+			let session: Awaited<ReturnType<typeof openWindowSession>> | null = null
+
 			try {
-				const items = serializeContainerItems(
-					typeof windowRef.containerItems === 'function'
-						? windowRef.containerItems()
-						: typeof windowRef.items === 'function'
-							? windowRef.items()
-							: []
-				)
+				session = await openWindowSession(context.bot, block, position)
 
-				const entry = memory.saveEntry({
-					type: 'container',
-					position,
-					tags: [block.name],
-					description: `Inspected ${block.name}`,
-					data: {
+				const window = describeWindowSession(session)
+				const closeResult = closeWindowSessionSafely(context.bot, session)
+
+				return {
+					ok: true,
+					output: {
 						blockName: block.name,
-						items,
-						inspectedAt: new Date().toISOString()
+						kind: session.kind,
+						window,
+						close: closeResult
 					}
-				})
+				}
+			} catch (error) {
+				if (session) {
+					closeWindowSessionSafely(context.bot, session)
+				}
 
-				return { ok: true, output: { blockName: block.name, items, entry } }
-			} finally {
-				closeWindow(context.bot, windowRef)
+				return {
+					ok: false,
+					output: {
+						reason:
+							error instanceof Error
+								? error.message
+								: 'Unsupported window block'
+					}
+				}
 			}
 		}
 	}

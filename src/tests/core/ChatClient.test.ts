@@ -30,7 +30,7 @@ test('OpenAICompatibleChatClient maps chat completion tool calls into compact to
 												id: 'call_1',
 												type: 'function',
 												function: {
-													name: 'call_navigate',
+													name: 'navigate_to',
 													arguments:
 														'{"position":{"x":12,"y":64,"z":-4},"range":2}'
 												}
@@ -58,7 +58,7 @@ test('OpenAICompatibleChatClient maps chat completion tool calls into compact to
 	assert.deepEqual(response.toolCalls satisfies ParsedToolCall[], [
 		{
 			callId: 'call_1',
-			name: 'call_navigate',
+			name: 'navigate_to',
 			arguments: {
 				position: { x: 12, y: 64, z: -4 },
 				range: 2

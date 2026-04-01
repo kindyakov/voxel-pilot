@@ -9,17 +9,17 @@ test('AgentLoopGuard aborts after three identical failures for same tool, args, 
 	})
 
 	const first = guard.recordFailure({
-		toolName: 'call_break_block',
+		toolName: 'break_block',
 		args: { x: 10, y: 64, z: 10 },
 		reason: 'Unreachable'
 	})
 	const second = guard.recordFailure({
-		toolName: 'call_break_block',
+		toolName: 'break_block',
 		args: { z: 10, y: 64, x: 10 },
 		reason: 'Unreachable'
 	})
 	const third = guard.recordFailure({
-		toolName: 'call_break_block',
+		toolName: 'break_block',
 		args: { x: 10, y: 64, z: 10 },
 		reason: 'Unreachable'
 	})
@@ -36,14 +36,14 @@ test('AgentLoopGuard resets repeat tracking after success or changed failure sig
 	})
 
 	guard.recordFailure({
-		toolName: 'call_navigate',
+		toolName: 'navigate_to',
 		args: { x: 1, y: 64, z: 1 },
 		reason: 'Path blocked'
 	})
 	guard.recordSuccess()
 
 	const afterSuccess = guard.recordFailure({
-		toolName: 'call_navigate',
+		toolName: 'navigate_to',
 		args: { x: 1, y: 64, z: 1 },
 		reason: 'Path blocked'
 	})
@@ -51,7 +51,7 @@ test('AgentLoopGuard resets repeat tracking after success or changed failure sig
 	assert.equal(afterSuccess.repeats, 1)
 
 	const changedReason = guard.recordFailure({
-		toolName: 'call_navigate',
+		toolName: 'navigate_to',
 		args: { x: 1, y: 64, z: 1 },
 		reason: 'Interrupted by combat'
 	})

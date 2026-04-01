@@ -127,20 +127,15 @@ export const getTaskFactFromExecution = (
 
 	if (result === 'SUCCESS') {
 		switch (toolName) {
-			case 'call_break_block':
+			case 'break_block':
 				return typeof args?.position === 'object'
 					? 'resource_step_succeeded'
 					: 'break_step_succeeded'
-			case 'call_craft':
-			case 'call_craft_workbench':
-				return `crafted:${String(args?.item_name ?? 'unknown')}`
-			case 'call_smelt':
-				return `smelted:${String(args?.input_item_name ?? 'unknown')}`
-			case 'call_place_block':
+			case 'place_block':
 				return `placed:${String(args?.block_name ?? 'unknown')}`
-			case 'call_navigate':
+			case 'navigate_to':
 				return 'navigation_step_succeeded'
-			case 'call_follow_entity':
+			case 'follow_entity':
 				return 'follow_step_succeeded'
 		}
 	}

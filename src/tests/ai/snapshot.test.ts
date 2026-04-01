@@ -134,7 +134,7 @@ test('buildSnapshot renders compact world, inventory, equipment, goal, and feedb
 		currentGoal: 'Build a 5x5 wooden box',
 		subGoal: 'Collect 30 oak logs',
 		taskContext: createTaskContext('Build a 5x5 wooden box', 'Collect 30 oak logs'),
-		lastAction: 'call_break_block',
+		lastAction: 'break_block',
 		actionResult: 'FAILED',
 		reason: 'Unreachable',
 		errorHistory: ['Unreachable', 'Unreachable', 'Interrupted by combat']
@@ -158,7 +158,7 @@ test('buildSnapshot renders compact world, inventory, equipment, goal, and feedb
 	assert.match(snapshot, /current_goal: Build a 5x5 wooden box/)
 	assert.match(snapshot, /sub_goal: Collect 30 oak logs/)
 	assert.match(snapshot, /FEEDBACK_ERRORS/)
-	assert.match(snapshot, /last_action: call_break_block/)
+	assert.match(snapshot, /last_action: break_block/)
 	assert.match(snapshot, /action_result: FAILED/)
 })
 

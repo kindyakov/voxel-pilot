@@ -136,7 +136,7 @@ const validateExecutionTool = (
 
 	if (
 		taskContext.category === 'craft' &&
-		execution.toolName === 'call_navigate'
+		execution.toolName === 'navigate_to'
 	) {
 		const blockName = getNavigateBlockName(bot, execution.args)
 		if (blockName === 'stonecutter') {

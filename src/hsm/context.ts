@@ -1,4 +1,5 @@
 import type { PendingExecution } from '@/ai/tools.js'
+import type { WindowSession } from '@/ai/runtime/window.js'
 import type { TaskContext } from '@/ai/taskContext.js'
 
 import type { Bot, Entity, Item, Vec3 } from '@/types'
@@ -80,6 +81,8 @@ export interface MachineContext {
 	lastReason: string | null
 	errorHistory: string[]
 	pendingExecution: PendingExecution | null
+	activeWindowSession: WindowSession | null
+	activeWindowSessionState: 'open' | 'close_failed' | null
 	lastToolTranscript: string[]
 	failureSignature: string | null
 	failureRepeats: number
@@ -167,6 +170,8 @@ export const context: MachineContext = {
 	lastReason: null,
 	errorHistory: [],
 	pendingExecution: null,
+	activeWindowSession: null,
+	activeWindowSessionState: null,
 	lastToolTranscript: [],
 	failureSignature: null,
 	failureRepeats: 0

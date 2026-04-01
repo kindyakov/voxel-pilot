@@ -142,36 +142,53 @@ class FakeBot extends EventEmitter {
 	}
 	async openChest() {
 		return {
+			slots: [],
 			close() {},
 			containerItems() {
 				return []
+			},
+			findItemRangeName() {
+				return null
 			}
 		}
 	}
 	async openContainer() {
 		return {
+			slots: [],
 			close() {},
 			containerItems() {
 				return []
+			},
+			findItemRangeName() {
+				return null
 			}
 		}
 	}
 	async openFurnace() {
 		return {
+			slots: [],
 			close() {},
 			containerItems() {
 				return []
+			},
+			findItemRangeName() {
+				return null
 			}
 		}
 	}
 	async openBlock() {
 		return {
+			slots: [],
 			close() {},
 			containerItems() {
 				return []
+			},
+			findItemRangeName() {
+				return null
 			}
 		}
 	}
+	async transfer() {}
 	closeWindow() {}
 	setControlState() {}
 }
@@ -636,14 +653,14 @@ test('thinking execution enters a concrete executing substate without crashing',
 	const thinkingActor = fromPromise(async () => ({
 		kind: 'execute' as const,
 		execution: {
-			toolName: 'call_navigate' as const,
+			toolName: 'navigate_to' as const,
 			args: {
 				position: { x: 10, y: 64, z: 10 },
 				range: 2
 			}
 		},
 		subGoal: 'Move to target',
-		transcript: ['call_navigate']
+		transcript: ['navigate_to']
 	}))
 
 	const { actor } = (() => {
@@ -694,6 +711,1300 @@ test('thinking execution enters a concrete executing substate without crashing',
 	}
 })
 
+test('open_window, transfer_item, and close_window route through the HSM with session lifecycle', async () => {
+	let thinkingCalls = 0
+	let openCalls = 0
+	let transferCalls = 0
+	let closeCalls = 0
+	let transferredArgs: any = null
+
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'open_window' as const,
+					args: {
+						position: { x: 1, y: 64, z: 1 }
+					}
+				},
+				subGoal: 'Open the window',
+				transcript: ['open_window']
+			}
+		}
+
+		if (thinkingCalls === 2) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'transfer_item' as const,
+					args: {
+						source_zone: 'player_inventory',
+						dest_zone: 'input',
+						item_name: 'iron_ore',
+						count: 1
+					}
+				},
+				subGoal: 'Move the ore',
+				transcript: ['transfer_item']
+			}
+		}
+
+		if (thinkingCalls === 3) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'close_window' as const,
+					args: {}
+				},
+				subGoal: 'Close the window',
+				transcript: ['close_window']
+			}
+		}
+
+		return await new Promise<never>(() => {})
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, (_, index) =>
+				index === 10
+					? {
+							name: 'iron_ore',
+							count: 3,
+							type: 1,
+							metadata: 0
+						}
+					: null
+			),
+			close: () => {
+				closeCalls += 1
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName(start: number, end: number, itemName: string) {
+				for (let index = start; index < end; index += 1) {
+					const slot = this.slots[index]
+					if (slot?.name === itemName) {
+						return {
+							type: slot.type ?? 1,
+							metadata: slot.metadata ?? null
+						}
+					}
+				}
+
+				return null
+			}
+		}
+	}
+	bot.transfer = async (params: unknown) => {
+		transferCalls += 1
+		transferredArgs = params
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Organize the furnace'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(openCalls, 1)
+		assert.equal(transferCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession,
+			null
+		)
+		assert.equal((transferredArgs as any)?.itemType, 1)
+		assert.equal((transferredArgs as any)?.sourceStart, 3)
+		assert.equal((transferredArgs as any)?.destStart, 0)
+		assert.equal((transferredArgs as any)?.count, 1)
+		assert.equal((transferredArgs as any)?.sourceEnd, 37)
+		assert.equal((transferredArgs as any)?.destEnd, 1)
+		assert.equal(
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: { TASKS: 'THINKING' }
+			}),
+			true
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('START_COMBAT closes an active window before entering combat', async () => {
+	let openCalls = 0
+	let closeCalls = 0
+
+	const thinkingActor = fromPromise(async () => {
+		return {
+			kind: 'execute' as const,
+			execution: {
+				toolName: 'open_window' as const,
+				args: {
+					position: { x: 1, y: 64, z: 1 }
+				}
+			},
+			subGoal: 'Open the window',
+			transcript: ['open_window']
+		}
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, () => null),
+			close: () => {
+				closeCalls += 1
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName() {
+				return null
+			}
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Open the window'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+
+		actor.send({ type: 'START_COMBAT', target: enemy as any })
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession,
+			null
+		)
+		assert.equal(
+			(actor.getSnapshot().context as any).preferredCombatTargetId,
+			enemy.id
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('UPDATE_ENTITIES closes an active window before auto-combat preemption', async () => {
+	let openCalls = 0
+	let closeCalls = 0
+
+	const thinkingActor = fromPromise(async () => {
+		return {
+			kind: 'execute' as const,
+			execution: {
+				toolName: 'open_window' as const,
+				args: {
+					position: { x: 1, y: 64, z: 1 }
+				}
+			},
+			subGoal: 'Open the window',
+			transcript: ['open_window']
+		}
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, () => null),
+			close: () => {
+				closeCalls += 1
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName() {
+				return null
+			}
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Open the window'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+
+		actor.send({
+			type: 'UPDATE_ENTITIES',
+			entities: [enemy as any],
+			enemies: [enemy as any],
+			players: [],
+			nearestEnemy: { entity: enemy as any, distance: 2 }
+		})
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession,
+			null
+		)
+		assert.equal(
+			(actor.getSnapshot().context as any).preferredCombatTargetId,
+			null
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('START_URGENT_NEEDS closes an active window before urgent handling', async () => {
+	let openCalls = 0
+	let closeCalls = 0
+
+	const thinkingActor = fromPromise(async () => {
+		return {
+			kind: 'execute' as const,
+			execution: {
+				toolName: 'open_window' as const,
+				args: {
+					position: { x: 1, y: 64, z: 1 }
+				}
+			},
+			subGoal: 'Open the window',
+			transcript: ['open_window']
+		}
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, () => null),
+			close: () => {
+				closeCalls += 1
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName() {
+				return null
+			}
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Open the window'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+
+		actor.send({ type: 'START_URGENT_NEEDS', need: 'food' })
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession,
+			null
+		)
+		assert.equal(
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: { URGENT_NEEDS: 'EMERGENCY_EATING' }
+			}),
+			true
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('failed window close marks the session retryable until a confirmed close succeeds', async () => {
+	let thinkingCalls = 0
+	let openCalls = 0
+	let closeCalls = 0
+	let releaseRetry: () => void = () => {}
+	const retryGate = new Promise<void>(resolve => {
+		releaseRetry = resolve
+	})
+
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'open_window' as const,
+					args: {
+						position: { x: 1, y: 64, z: 1 }
+					}
+				},
+				subGoal: 'Open the window',
+				transcript: ['open_window']
+			}
+		}
+
+		if (thinkingCalls === 2) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'close_window' as const,
+					args: {}
+				},
+				subGoal: 'Close the window',
+				transcript: ['close_window']
+			}
+		}
+
+		if (thinkingCalls === 3) {
+			await retryGate
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'close_window' as const,
+					args: {}
+				},
+				subGoal: 'Retry the close',
+				transcript: ['close_window']
+			}
+		}
+
+		if (thinkingCalls === 4) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'open_window' as const,
+					args: {
+						position: { x: 1, y: 64, z: 1 }
+					}
+				},
+				subGoal: 'Reopen the window',
+				transcript: ['open_window']
+			}
+		}
+
+		return await new Promise<never>(() => {})
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, () => null),
+			close: () => {
+				closeCalls += 1
+				if (closeCalls === 1) {
+					throw new Error('close failed')
+				}
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName() {
+				return null
+			}
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Retry the window'
+		})
+
+		for (let i = 0; i < 6; i += 1) {
+			await waitForTurn()
+			if (closeCalls === 1 && thinkingCalls >= 3) {
+				break
+			}
+		}
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSessionState,
+			'close_failed'
+		)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession !== null,
+			true
+		)
+
+		releaseRetry()
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(openCalls, 2)
+		assert.equal(closeCalls, 2)
+		assert.equal((actor.getSnapshot().context as any).activeWindowSessionState, 'open')
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession !== null,
+			true
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('transfer_item is rejected while the window close is unconfirmed', async () => {
+	let thinkingCalls = 0
+	let openCalls = 0
+	let closeCalls = 0
+	let transferCalls = 0
+
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'open_window' as const,
+					args: {
+						position: { x: 1, y: 64, z: 1 }
+					}
+				},
+				subGoal: 'Open the window',
+				transcript: ['open_window']
+			}
+		}
+
+		if (thinkingCalls === 2) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'close_window' as const,
+					args: {}
+				},
+				subGoal: 'Close the window',
+				transcript: ['close_window']
+			}
+		}
+
+		if (thinkingCalls === 3) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'transfer_item' as const,
+					args: {
+						source_zone: 'player_inventory',
+						dest_zone: 'input',
+						item_name: 'iron_ore',
+						count: 1
+					}
+				},
+				subGoal: 'Try to move ore',
+				transcript: ['transfer_item']
+			}
+		}
+
+		return await new Promise<never>(() => {})
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, () => null),
+			close: () => {
+				closeCalls += 1
+				if (closeCalls === 1) {
+					throw new Error('close failed')
+				}
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName() {
+				return null
+			}
+		}
+	}
+	bot.transfer = async () => {
+		transferCalls += 1
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Retry the window'
+		})
+
+		for (let i = 0; i < 8; i += 1) {
+			await waitForTurn()
+			if (thinkingCalls >= 3) {
+				break
+			}
+		}
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(transferCalls, 0)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSessionState,
+			'close_failed'
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('open_window abort after open preserves the session when close fails', async () => {
+	let thinkingCalls = 0
+	let openCalls = 0
+	let closeCalls = 0
+
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'open_window' as const,
+					args: {
+						position: { x: 1, y: 64, z: 1 }
+					}
+				},
+				subGoal: 'Open the window',
+				transcript: ['open_window']
+			}
+		}
+
+		return await new Promise<never>(() => {})
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return await new Promise(resolve => {
+			setImmediate(() => {
+				process.nextTick(() => {
+					actor.send({
+						type: 'START_COMBAT',
+						target: enemy as any
+					})
+				})
+				resolve({
+					slots: Array.from({ length: 46 }, () => null),
+					close: () => {
+						closeCalls += 1
+						throw new Error('close failed')
+					},
+					containerItems() {
+						return []
+					},
+					findItemRangeName() {
+						return null
+					}
+				})
+			})
+		})
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context,
+		send: (event: any) => actor.send(event)
+	}
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Open the window'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession !== null,
+			true
+		)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSessionState,
+			'close_failed'
+		)
+		assert.equal(
+			(actor.getSnapshot().context as any).lastResult,
+			'FAILED'
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('DEATH clears active window session state and closes any open window', async () => {
+	let openCalls = 0
+	let closeCalls = 0
+
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'open_window' as const,
+					args: {
+						position: { x: 1, y: 64, z: 1 }
+					}
+				},
+				subGoal: 'Open the window',
+				transcript: ['open_window']
+			}
+		}
+
+		return await new Promise<never>(() => {})
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, () => null),
+			close: () => {
+				closeCalls += 1
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName() {
+				return null
+			}
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Open the window'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+
+		actor.send({ type: 'DEATH' })
+		await waitForTurn()
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession,
+			null
+		)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSessionState,
+			null
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('STOP_CURRENT_GOAL clears active window session state and closes any open window', async () => {
+	let openCalls = 0
+	let closeCalls = 0
+
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'open_window' as const,
+					args: {
+						position: { x: 1, y: 64, z: 1 }
+					}
+				},
+				subGoal: 'Open the window',
+				transcript: ['open_window']
+			}
+		}
+
+		return await new Promise<never>(() => {})
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, () => null),
+			close: () => {
+				closeCalls += 1
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName() {
+				return null
+			}
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Open the window'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+
+		actor.send({ type: 'STOP_CURRENT_GOAL' })
+		await waitForTurn()
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession,
+			null
+		)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSessionState,
+			null
+		)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never),
+			true
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('thinking finish clears active window session state and closes any open window', async () => {
+	let thinkingCalls = 0
+	let openCalls = 0
+	let closeCalls = 0
+
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'open_window' as const,
+					args: {
+						position: { x: 1, y: 64, z: 1 }
+					}
+				},
+				subGoal: 'Open the window',
+				transcript: ['open_window']
+			}
+		}
+
+		if (thinkingCalls === 2) {
+			return {
+				kind: 'finish' as const,
+				message: 'Finished',
+				transcript: ['finish_goal']
+			}
+		}
+
+		return await new Promise<never>(() => {})
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, () => null),
+			close: () => {
+				closeCalls += 1
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName() {
+				return null
+			}
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Open then finish'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession,
+			null
+		)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSessionState,
+			null
+		)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never),
+			true
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('thinking failure clears active window session state and closes any open window', async () => {
+	let thinkingCalls = 0
+	let openCalls = 0
+	let closeCalls = 0
+
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'execute' as const,
+				execution: {
+					toolName: 'open_window' as const,
+					args: {
+						position: { x: 1, y: 64, z: 1 }
+					}
+				},
+				subGoal: 'Open the window',
+				transcript: ['open_window']
+			}
+		}
+
+		if (thinkingCalls === 2) {
+			return {
+				kind: 'failed' as const,
+				reason: 'Cannot proceed',
+				transcript: ['failure']
+			}
+		}
+
+		return await new Promise<never>(() => {})
+	})
+
+	const bot = new FakeBot() as any
+	bot.blockAt = (position: { x: number; y: number; z: number }) =>
+		position.x === 1 && position.y === 64 && position.z === 1
+			? {
+					name: 'furnace',
+					position: createVec3(1, 64, 1)
+				}
+			: null
+	bot.openFurnace = async () => {
+		openCalls += 1
+		return {
+			slots: Array.from({ length: 46 }, () => null),
+			close: () => {
+				closeCalls += 1
+			},
+			containerItems() {
+				return []
+			},
+			findItemRangeName() {
+				return null
+			}
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Open then fail'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(openCalls, 1)
+		assert.equal(closeCalls, 1)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSession,
+			null
+		)
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSessionState,
+			null
+		)
+		assert.equal(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' } as never),
+			true
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
 test('invalid navigate args do not default to world zero', async () => {
 	let thinkingCalls = 0
 	const setGoalCalls: unknown[] = []
@@ -703,11 +2014,11 @@ test('invalid navigate args do not default to world zero', async () => {
 			return {
 				kind: 'execute' as const,
 				execution: {
-					toolName: 'call_navigate' as const,
+					toolName: 'navigate_to' as const,
 					args: {}
 				},
 				subGoal: 'Move to target',
-				transcript: ['call_navigate']
+				transcript: ['navigate_to']
 			}
 		}
 

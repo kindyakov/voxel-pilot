@@ -39,7 +39,7 @@ test('runAgentTurn resolves inline memory tool calls before selecting one execut
 				{
 					type: 'function_call',
 					call_id: 'call_2',
-					name: 'call_navigate',
+					name: 'navigate_to',
 					arguments: JSON.stringify({
 						position: {
 							x: 12,
@@ -117,17 +117,15 @@ test('runAgentTurn resolves inline memory tool calls before selecting one execut
 	if (result.kind !== 'execute') {
 		assert.fail('Expected execution result')
 	}
-	assert.equal(result.execution.toolName, 'call_navigate')
+	assert.equal(result.execution.toolName, 'navigate_to')
 	assert.deepEqual(result.execution.args, {
 		position: { x: 12, y: 64, z: -4 },
 		range: 2
 	})
-	assert.deepEqual(result.transcript, [
-		'round_0_ms:0',
-		'memory_read',
-		'round_1_ms:0',
-		'call_navigate'
-	])
+	assert.equal(result.transcript[1]!, 'memory_read')
+	assert.equal(result.transcript[3]!, 'navigate_to')
+	assert.match(result.transcript[0]!, /^round_0_ms:\d+$/)
+	assert.match(result.transcript[2]!, /^round_1_ms:\d+$/)
 })
 
 test('runAgentTurn rejects navigation to unsupported workstation for crafting goals', async () => {
@@ -141,7 +139,7 @@ test('runAgentTurn rejects navigation to unsupported workstation for crafting go
 							{
 								type: 'function_call',
 								call_id: 'call_1',
-								name: 'call_navigate',
+								name: 'navigate_to',
 								arguments: JSON.stringify({
 									position: {
 										x: 2,

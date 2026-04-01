@@ -46,6 +46,12 @@ export type PrimitiveEvents =
 	| { type: 'BREAKING_FAILED'; reason?: string }
 	| { type: 'OPENED'; container: any; block: Block }
 	| { type: 'OPEN_FAILED'; reason: string }
+	| { type: 'WINDOW_OPENED'; session: any }
+	| { type: 'WINDOW_OPEN_FAILED'; reason: string }
+	| { type: 'WINDOW_ITEM_TRANSFERRED'; transferred: any }
+	| { type: 'WINDOW_TRANSFER_FAILED'; reason: string }
+	| { type: 'WINDOW_CLOSED' }
+	| { type: 'WINDOW_CLOSE_FAILED'; reason: string }
 	| { type: 'CRAFTED'; itemName: string; count: number }
 	| { type: 'CRAFT_FAILED'; reason: string }
 	| {

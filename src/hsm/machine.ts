@@ -14,13 +14,14 @@ import type { Bot, Entity } from '@/types'
 
 import combatActors from '@/hsm/actors/combat.actors'
 import monitoringActors from '@/hsm/actors/monitoring.actors'
+import { closeWindowSession } from '@/ai/runtime/window.js'
+import { primitiveCloseWindow } from '@/hsm/actors/primitives/primitiveCloseWindow.primitive'
 import { primitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive'
-import { primitiveCraft } from '@/hsm/actors/primitives/primitiveCraft.primitive'
-import { primitiveCraftInWorkbench } from '@/hsm/actors/primitives/primitiveCraftInWorkbench.primitive'
 import { primitiveFollowing } from '@/hsm/actors/primitives/primitiveFollowing.primitive'
 import { primitiveNavigating } from '@/hsm/actors/primitives/primitiveNavigating.primitive'
+import { primitiveOpenWindow } from '@/hsm/actors/primitives/primitiveOpenWindow.primitive'
 import { primitivePlacing } from '@/hsm/actors/primitives/primitivePlacing.primitive'
-import { primitiveSmelt } from '@/hsm/actors/primitives/primitiveSmelt.primitive'
+import { primitiveTransferItem } from '@/hsm/actors/primitives/primitiveTransferItem.primitive'
 import { type MachineContext, context } from '@/hsm/context'
 import combatGuards from '@/hsm/guards/combat.guards'
 import type { MachineEvent } from '@/hsm/types'
@@ -149,21 +150,39 @@ const toFailureSignature = (
 	return `${execution.toolName}:${JSON.stringify(orderedArgs)}:${reason}`
 }
 
+const tryCloseActiveWindowSession = (context: MachineContext): boolean => {
+	const session = context.activeWindowSession
+	if (!session || !context.bot) {
+		return false
+	}
+
+	try {
+		closeWindowSession(context.bot, session)
+		return true
+	} catch (error) {
+		console.error(
+			'[HSM] failed to close active window session',
+			error instanceof Error ? error.message : String(error)
+		)
+		return false
+	}
+}
+
 const resolveExecutionActor = (context: MachineContext) => {
 	switch (context.pendingExecution?.toolName) {
-		case 'call_navigate':
+		case 'navigate_to':
 			return primitiveNavigating
-		case 'call_break_block':
+		case 'break_block':
 			return primitiveBreaking
-		case 'call_craft':
-			return primitiveCraft
-		case 'call_craft_workbench':
-			return primitiveCraftInWorkbench
-		case 'call_smelt':
-			return primitiveSmelt
-		case 'call_place_block':
+		case 'open_window':
+			return primitiveOpenWindow
+		case 'transfer_item':
+			return primitiveTransferItem
+		case 'close_window':
+			return primitiveCloseWindow
+		case 'place_block':
 			return primitivePlacing
-		case 'call_follow_entity':
+		case 'follow_entity':
 			return primitiveFollowing
 		default:
 			return fallbackExecutionActor
@@ -182,7 +201,7 @@ const resolveExecutionInput = (context: MachineContext) => {
 	}
 
 	switch (execution.toolName) {
-		case 'call_navigate':
+		case 'navigate_to':
 			return {
 				bot,
 				options: {
@@ -193,7 +212,7 @@ const resolveExecutionInput = (context: MachineContext) => {
 							: undefined
 				}
 			}
-		case 'call_break_block': {
+		case 'break_block': {
 			const targetPosition = tryGetPositionArg(execution, 'position')
 			const block = targetPosition ? bot.blockAt(targetPosition) : null
 			return {
@@ -203,10 +222,19 @@ const resolveExecutionInput = (context: MachineContext) => {
 				}
 			}
 		}
-		case 'call_craft':
+		case 'open_window':
 			return {
 				bot,
 				options: {
+					position: tryGetPositionArg(execution, 'position') as any
+				}
+			}
+		case 'transfer_item':
+			return {
+				bot,
+				options: {
+					sourceZone: String(execution.args.source_zone ?? ''),
+					destZone: String(execution.args.dest_zone ?? ''),
 					itemName: String(execution.args.item_name ?? ''),
 					count:
 						typeof execution.args.count === 'number'
@@ -214,46 +242,12 @@ const resolveExecutionInput = (context: MachineContext) => {
 							: undefined
 				}
 			}
-		case 'call_craft_workbench': {
-			const workbenchPosition = tryGetPositionArg(
-				execution,
-				'workbench_position'
-			)
-			const craftingTable = workbenchPosition
-				? bot.blockAt(workbenchPosition)
-				: null
+		case 'close_window':
 			return {
 				bot,
-				options: {
-					itemName: String(execution.args.item_name ?? ''),
-					count:
-						typeof execution.args.count === 'number'
-							? execution.args.count
-							: undefined,
-					craftingTable: craftingTable as any
-				}
+				options: {}
 			}
-		}
-		case 'call_smelt': {
-			const furnacePosition = tryGetPositionArg(execution, 'furnace_position')
-			const furnace = furnacePosition ? bot.blockAt(furnacePosition) : null
-			return {
-				bot,
-				options: {
-					inputItemName: String(execution.args.input_item_name ?? ''),
-					fuelItemName:
-						typeof execution.args.fuel_item_name === 'string'
-							? execution.args.fuel_item_name
-							: undefined,
-					count:
-						typeof execution.args.count === 'number'
-							? execution.args.count
-							: undefined,
-					furnace: furnace as any
-				}
-			}
-		}
-		case 'call_place_block':
+		case 'place_block':
 			return {
 				bot,
 				options: {
@@ -266,7 +260,7 @@ const resolveExecutionInput = (context: MachineContext) => {
 							: undefined
 				}
 			}
-		case 'call_follow_entity': {
+		case 'follow_entity': {
 			const maxDistance =
 				typeof execution.args.max_distance === 'number'
 					? execution.args.max_distance
@@ -311,6 +305,11 @@ const resolveExecutionInput = (context: MachineContext) => {
 				}
 			}
 		}
+		default:
+			return {
+				bot,
+				options: {}
+			}
 	}
 }
 
@@ -415,19 +414,19 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			thinkingProducedFinish: ({ event }: any) =>
 				event.output?.kind === 'finish',
 			isNavigateExecution: ({ context }) =>
-				context.pendingExecution?.toolName === 'call_navigate',
+				context.pendingExecution?.toolName === 'navigate_to',
 			isBreakExecution: ({ context }) =>
-				context.pendingExecution?.toolName === 'call_break_block',
-			isCraftExecution: ({ context }) =>
-				context.pendingExecution?.toolName === 'call_craft',
-			isCraftWorkbenchExecution: ({ context }) =>
-				context.pendingExecution?.toolName === 'call_craft_workbench',
-			isSmeltExecution: ({ context }) =>
-				context.pendingExecution?.toolName === 'call_smelt',
+				context.pendingExecution?.toolName === 'break_block',
+			isOpenWindowExecution: ({ context }) =>
+				context.pendingExecution?.toolName === 'open_window',
+			isTransferItemExecution: ({ context }) =>
+				context.pendingExecution?.toolName === 'transfer_item',
+			isCloseWindowExecution: ({ context }) =>
+				context.pendingExecution?.toolName === 'close_window',
 			isPlaceExecution: ({ context }) =>
-				context.pendingExecution?.toolName === 'call_place_block',
+				context.pendingExecution?.toolName === 'place_block',
 			isFollowExecution: ({ context }) =>
-				context.pendingExecution?.toolName === 'call_follow_entity'
+				context.pendingExecution?.toolName === 'follow_entity'
 		},
 		actions: {
 			logStateEntry: ({ context, event }, params: { state: string }) => {
@@ -646,6 +645,8 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				subGoal: null,
 				taskContext: createTaskContext(null, null),
 				pendingExecution: null,
+				activeWindowSession: null,
+				activeWindowSessionState: null,
 				lastToolTranscript: [],
 				preferredCombatTargetId: null,
 				combatStopRequested: false
@@ -673,17 +674,62 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					errorHistory: []
 				}
 			}),
-			clearGoal: assign({
-				currentGoal: null,
-				subGoal: null,
-				taskContext: createTaskContext(null, null),
-				pendingExecution: null,
-				lastToolTranscript: [],
-				failureSignature: null,
-				failureRepeats: 0,
-				movementOwner: 'NONE',
-				preferredCombatTargetId: null,
-				combatStopRequested: false
+			clearGoal: assign(() => {
+				return {
+					currentGoal: null,
+					subGoal: null,
+					taskContext: createTaskContext(null, null),
+					pendingExecution: null,
+					lastToolTranscript: [],
+					failureSignature: null,
+					failureRepeats: 0,
+					movementOwner: 'NONE',
+					preferredCombatTargetId: null,
+					combatStopRequested: false
+				}
+			}),
+			markWindowCloseFailed: assign(({ context }) => {
+				if (!context.activeWindowSession) {
+					return {
+						activeWindowSessionState: null
+					}
+				}
+
+				return {
+					activeWindowSessionState: 'close_failed'
+				}
+			}),
+			closeActiveWindowSession: assign(({ context }) => {
+				const closed = tryCloseActiveWindowSession(context)
+
+				if (!context.activeWindowSession) {
+					return {
+						activeWindowSessionState: null
+					}
+				}
+
+				return closed
+					? {
+							activeWindowSession: null,
+							activeWindowSessionState: null
+						}
+					: {
+							activeWindowSessionState: 'close_failed'
+						}
+			}),
+			storeWindowSession: assign(({ event }) => {
+				if (event.type !== 'WINDOW_OPENED') {
+					return {}
+				}
+
+				return {
+					activeWindowSession: event.session,
+					activeWindowSessionState: 'open'
+				}
+			}),
+			clearWindowSession: assign({
+				activeWindowSession: null,
+				activeWindowSessionState: null
 			}),
 			setCombatTargetFromEvent: assign(({ context, event }) => {
 				if (event.type !== 'START_COMBAT' || !event.target) {
@@ -872,19 +918,19 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			},
 			DEATH: {
 				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-				actions: ['updateAfterDeath']
+				actions: ['closeActiveWindowSession', 'updateAfterDeath']
 			},
 			USER_COMMAND: {
 				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.THINKING',
-				actions: ['setGoalFromUserCommand']
+				actions: ['closeActiveWindowSession', 'setGoalFromUserCommand']
 			},
 			STOP_CURRENT_GOAL: {
 				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-				actions: ['clearGoal']
+				actions: ['closeActiveWindowSession', 'clearGoal']
 			},
 			START_COMBAT: {
 				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
-				actions: ['setCombatTargetFromEvent']
+				actions: ['closeActiveWindowSession', 'setCombatTargetFromEvent']
 			},
 			STOP_COMBAT: [
 				{
@@ -901,14 +947,22 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				{
 					guard: ({ event }) =>
 						event.type === 'START_URGENT_NEEDS' && event.need === 'food',
+					actions: ['closeActiveWindowSession'],
 					target: '#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING'
 				},
 				{
 					guard: ({ event }) =>
 						event.type === 'START_URGENT_NEEDS' && event.need === 'health',
+					actions: ['closeActiveWindowSession'],
 					target: '#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING'
 				}
-			]
+			],
+			WINDOW_OPENED: {
+				actions: ['recordExecutionSuccess', 'storeWindowSession']
+			},
+			WINDOW_CLOSE_FAILED: {
+				actions: ['recordExecutionFailure', 'markWindowCloseFailed']
+			}
 		},
 		states: {
 			MAIN_ACTIVITY: {
@@ -919,8 +973,8 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 							UPDATE_ENTITIES: [
 								{
 									guard: eventCanAutoEnterCombat,
+									actions: ['closeActiveWindowSession', 'updateEntities'],
 									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
-									actions: ['updateEntities']
 								},
 								{
 									actions: ['updateEntities']
@@ -933,8 +987,8 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 							UPDATE_ENTITIES: [
 								{
 									guard: eventCanAutoEnterCombat,
+									actions: ['closeActiveWindowSession', 'updateEntities'],
 									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
-									actions: ['updateEntities']
 								},
 								{
 									actions: ['updateEntities']
@@ -1226,8 +1280,8 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 							UPDATE_ENTITIES: [
 								{
 									guard: eventCanAutoEnterCombat,
+									actions: ['closeActiveWindowSession', 'updateEntities'],
 									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
-									actions: ['updateEntities']
 								},
 								{
 									actions: ['updateEntities']
@@ -1251,28 +1305,34 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											target: 'EXECUTING',
 											actions: ['logThinkingExecution', 'storeThinkingExecution']
 										},
-										{
-											guard: 'thinkingProducedFinish',
-											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-											actions: [
-												'logThinkingFinish',
-												'notifyGoalFinished',
-												'clearGoal'
-											]
-										},
-										{
-											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-											actions: [
-												'logThinkingFailure',
-												'storeThinkingFailure',
-												'notifyThinkingFailure',
-												'clearGoal'
+								{
+									guard: 'thinkingProducedFinish',
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: [
+										'closeActiveWindowSession',
+										'logThinkingFinish',
+										'notifyGoalFinished',
+										'clearGoal'
+									]
+								},
+								{
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+									actions: [
+										'closeActiveWindowSession',
+										'logThinkingFailure',
+										'storeThinkingFailure',
+										'notifyThinkingFailure',
+										'clearGoal'
 											]
 										}
 									],
 									onError: {
 										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-										actions: ['logThinkingError', 'clearGoal']
+										actions: [
+											'closeActiveWindowSession',
+											'logThinkingError',
+											'clearGoal'
+										]
 									}
 								}
 							},
@@ -1283,12 +1343,9 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 										always: [
 											{ guard: 'isNavigateExecution', target: 'NAVIGATING' },
 											{ guard: 'isBreakExecution', target: 'BREAKING' },
-											{ guard: 'isCraftExecution', target: 'CRAFTING' },
-											{
-												guard: 'isCraftWorkbenchExecution',
-												target: 'CRAFTING_WORKBENCH'
-											},
-											{ guard: 'isSmeltExecution', target: 'SMELTING' },
+											{ guard: 'isOpenWindowExecution', target: 'OPEN_WINDOW' },
+											{ guard: 'isTransferItemExecution', target: 'TRANSFER_ITEM' },
+											{ guard: 'isCloseWindowExecution', target: 'CLOSE_WINDOW' },
 											{ guard: 'isPlaceExecution', target: 'PLACING' },
 											{ guard: 'isFollowExecution', target: 'FOLLOWING' },
 											{
@@ -1346,19 +1403,19 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											}
 										}
 									},
-									CRAFTING: {
+									OPEN_WINDOW: {
 										invoke: {
-											src: primitiveCraft,
+											src: primitiveOpenWindow,
 											input: ({ context }: { context: MachineContext }) =>
 												resolveExecutionInput(context)
 										},
 										on: {
-											CRAFTED: {
+											WINDOW_OPENED: {
 												target:
 													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
-												actions: ['recordExecutionSuccess']
+												actions: ['recordExecutionSuccess', 'storeWindowSession']
 											},
-											CRAFT_FAILED: {
+											WINDOW_OPEN_FAILED: {
 												target:
 													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
@@ -1370,19 +1427,19 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											}
 										}
 									},
-									CRAFTING_WORKBENCH: {
+									TRANSFER_ITEM: {
 										invoke: {
-											src: primitiveCraftInWorkbench,
+											src: primitiveTransferItem,
 											input: ({ context }: { context: MachineContext }) =>
 												resolveExecutionInput(context)
 										},
 										on: {
-											CRAFTED: {
+											WINDOW_ITEM_TRANSFERRED: {
 												target:
 													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionSuccess']
 											},
-											CRAFT_FAILED: {
+											WINDOW_TRANSFER_FAILED: {
 												target:
 													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
 												actions: ['recordExecutionFailure']
@@ -1394,22 +1451,25 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											}
 										}
 									},
-									SMELTING: {
+									CLOSE_WINDOW: {
 										invoke: {
-											src: primitiveSmelt,
+											src: primitiveCloseWindow,
 											input: ({ context }: { context: MachineContext }) =>
 												resolveExecutionInput(context)
 										},
 										on: {
-											SMELTED: {
+											WINDOW_CLOSED: {
 												target:
 													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
-												actions: ['recordExecutionSuccess']
+												actions: ['recordExecutionSuccess', 'clearWindowSession']
 											},
-											SMELT_FAILED: {
+											WINDOW_CLOSE_FAILED: {
 												target:
 													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
-												actions: ['recordExecutionFailure']
+												actions: [
+													'recordExecutionFailure',
+													'markWindowCloseFailed'
+												]
 											},
 											ERROR: {
 												target:
@@ -1473,7 +1533,11 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									{
 										guard: 'isAgentLoopStuck',
 										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-										actions: ['notifyLoopAbort', 'clearGoal']
+										actions: [
+											'closeActiveWindowSession',
+											'notifyLoopAbort',
+											'clearGoal'
+										]
 									},
 									{
 										guard: 'hasCurrentGoal',
