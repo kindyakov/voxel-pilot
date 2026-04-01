@@ -8,7 +8,7 @@ class FakeBot extends EventEmitter {
 	username = 'Bot'
 }
 
-test('CommandHandler forwards plain chat messages as USER_COMMAND', () => {
+test('CommandHandler ignores plain chat messages without command prefix', () => {
 	const bot = new FakeBot() as any
 	const events: unknown[] = []
 	const hsm = {
@@ -20,11 +20,47 @@ test('CommandHandler forwards plain chat messages as USER_COMMAND', () => {
 	new CommandHandler(bot, hsm)
 	bot.emit('chat', 'Steve', 'Build a 5x5 wooden box')
 
+	assert.deepEqual(events, [])
+})
+
+test('CommandHandler forwards prefixed chat messages as USER_COMMAND without prefix', () => {
+	const bot = new FakeBot() as any
+	const events: unknown[] = []
+	const hsm = {
+		send: (event: unknown) => {
+			events.push(event)
+		}
+	} as any
+
+	new CommandHandler(bot, hsm)
+	bot.emit('chat', 'Steve', ':Build a 5x5 wooden box')
+
 	assert.deepEqual(events, [
 		{
 			type: 'USER_COMMAND',
 			username: 'Steve',
 			text: 'Build a 5x5 wooden box'
+		}
+	])
+})
+
+test('CommandHandler trims whitespace around prefixed command payload', () => {
+	const bot = new FakeBot() as any
+	const events: unknown[] = []
+	const hsm = {
+		send: (event: unknown) => {
+			events.push(event)
+		}
+	} as any
+
+	new CommandHandler(bot, hsm)
+	bot.emit('chat', 'Steve', '   :   smelt iron   ')
+
+	assert.deepEqual(events, [
+		{
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'smelt iron'
 		}
 	])
 })
@@ -47,4 +83,20 @@ test('CommandHandler treats :stop as STOP_CURRENT_GOAL override', () => {
 			username: 'Steve'
 		}
 	])
+})
+
+test('CommandHandler ignores empty prefixed command payloads', () => {
+	const bot = new FakeBot() as any
+	const events: unknown[] = []
+	const hsm = {
+		send: (event: unknown) => {
+			events.push(event)
+		}
+	} as any
+
+	new CommandHandler(bot, hsm)
+	bot.emit('chat', 'Steve', ':')
+	bot.emit('chat', 'Steve', '   :   ')
+
+	assert.deepEqual(events, [])
 })

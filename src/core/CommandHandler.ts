@@ -23,8 +23,12 @@ export default class CommandHandler {
 
 		const text = message.trim()
 		if (!text) return
+		if (!text.startsWith(':')) return
 
-		if (text === ':stop') {
+		const commandText = text.slice(1).trim()
+		if (!commandText) return
+
+		if (commandText === 'stop') {
 			logger.playerCommand(username, 'stop', [])
 			this.hsm.send({
 				type: 'STOP_CURRENT_GOAL',
@@ -33,11 +37,11 @@ export default class CommandHandler {
 			return
 		}
 
-		logger.playerCommand(username, 'goal', [text])
+		logger.playerCommand(username, 'goal', [commandText])
 		this.hsm.send({
 			type: 'USER_COMMAND',
 			username,
-			text
+			text: commandText
 		})
 	}
 }
