@@ -1,7 +1,11 @@
+data/
 logs/
+markdown/
+dist/
+.tsbuildinfo
 node_modules
 .env
 .continue
-commit.txt
-start_promt_ai.md
 Desktop.ini
+*.ps1
+.vs

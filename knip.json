@@ -1,0 +1,46 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/tests/**/*.test.ts"
+  ],
+  "project": [
+    "src/**/*.ts"
+  ],
+  "ignore": [],
+  "paths": {
+    "@/*": [
+      "src/*"
+    ],
+    "@/types": [
+      "src/types/index.ts"
+    ],
+    "@/hsm/*": [
+      "src/hsm/*"
+    ],
+    "@/config/*": [
+      "src/config/*"
+    ],
+    "@/utils/*": [
+      "src/utils/*"
+    ],
+    "@/modules/*": [
+      "src/modules/*"
+    ],
+    "@/core/*": [
+      "src/core/*"
+    ]
+  },
+  "ignoreDependencies": [],
+  "rules": {
+    "files": "error",
+    "dependencies": "error",
+    "unlisted": "error",
+    "binaries": "error",
+    "unresolved": "error",
+    "exports": "warn",
+    "types": "warn",
+    "nsExports": "warn",
+    "nsTypes": "warn",
+    "enumMembers": "warn"
+  }
+}

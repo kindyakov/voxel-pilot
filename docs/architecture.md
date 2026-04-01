@@ -1,163 +1,137 @@
-# 🤖 Архитектура Minecraft-бота
+# Architecture
 
-## 🎯 Основные принципы
+This bot is a Mineflayer runtime wrapped in an XState machine.
+The current design is small and explicit:
 
-### Система числовых приоритетов
+- `src/index.ts` loads dotenv and starts the bot.
+- `src/core/bot.ts` handles connect, reconnect, and shutdown.
+- `src/core/CommandHandler.ts` converts chat into HSM events.
+- `src/core/hsm.ts` wires the state machine to the bot runtime.
+- `src/ai/loop.ts` runs the agent loop.
+- `src/ai/snapshot.ts` builds the model snapshot.
+- `src/core/memory/` owns persistent storage.
 
-```
-Приоритет | Компонент           | Описание
-----------|--------------------|---------------------------------
-10        | Команды игрока     | Абсолютный приоритет, прерывают всё
-9         | FollowState        | Неприкосновенное состояние, выше выживания
-8         | Критическое выживание | Прерывает состояния 7 уровня и ниже
-7         | MineState/BuildState/FarmState | Прерывается критическими задачами
-6         | CombatState        | Автоматические переходы при угрозе
-5         | Обычные задачи     | Из стека задач
-1         | IdleState          | Базовое состояние ожидания
-```
+## System Goal
 
-### Правила прерывания
+The goal of this project is not to hardcode behavior for individual requests such as "make an axe".
+The goal is to build a reliable agent runtime for a Minecraft bot.
 
-| Состояние           | Прерывается критическими | Прерывается командами | Особенности                      |
-| ------------------- | ------------------------ | --------------------- | -------------------------------- |
-| **FollowState (9)** | ❌ **НЕТ**               | ✅ Только игроком     | Защита + следование одновременно |
-| **MineState (7)**   | ✅ ДА                    | ✅ ДА                 | Сохранение контекста при паузе   |
-| **BuildState (7)**  | ✅ ДА                    | ✅ ДА                 | Сохранение схемы и прогресса     |
-| **FarmState (7)**   | ✅ ДА                    | ✅ ДА                 | Сохранение области фарма         |
-| **CombatState (6)** | ✅ ДА                    | ✅ ДА                 | Возврат в предыдущее состояние   |
-| **IdleState (1)**   | ✅ ДА                    | ✅ ДА                 | Обработка стека задач            |
+That runtime must:
 
-## 🏗️ Компоненты системы
+- accept both simple and multi-step user goals
+- decompose goals into coherent sequential actions
+- execute actions only through clear bot primitives
+- keep the bot state consistent through the HSM
+- remain resilient to failures, interruptions, and partial progress
+- allow the agent loop, tools, and primitives to evolve without rewriting the system around one-off cases
 
-### FSM (Finite State Machine)
+In practical terms, the LLM is not the source of truth for behavior.
+The source of truth must be the runtime contract:
 
-- **Основные состояния:** IdleState, FollowState, MineState, FarmState, BuildState, CombatState
-- **Переходы между состояниями:** `IdleState` и `CombatState` могут происходить автоматически, а `FollowState`, `MineState`, `FarmState`, `BuildState` только по команде игрока
-- **Хранение стека состояний** для возврата после прерываний
+- deterministic world snapshot in
+- one valid decision at a time
+- execution through bounded primitives
+- explicit success or failure back into the machine
+- recovery paths that preserve bot integrity
 
-### SurvivalSystem
+## Non-Goals
 
-- **Роль:** фоновый мониторинг жизненно важных показателей
-- **Функции:** проверка голода, здоровья, прочности предметов, брони
-- **Не управляет ботом напрямую** - добавляет задачи в общий стек
-- **Аналогия:** как сердцебиение у человека - работает фоново, не мешая основной деятельности
+This system is not meant to:
 
-### Стек задач бота
+- solve tasks by adding prompt rules for every specific request
+- let the model improvise arbitrary behavior outside the tool and primitive contract
+- couple core architecture to isolated examples or regressions
+- trade reliability for short-term "it worked once" behavior
 
-- **Источники задач:** SurvivalSystem, состояния FSM
-- **Приоритеты задач:**
-  - **Критический (8):** низкое здоровье (< 3 сердец), отсутствие еды при голоде
-  - **Высокий (5):** починка брони, пополнение ресурсов
-  - **Средний/Низкий (5):** оптимизация инвентаря, улучшения
+## Runtime Flow
 
-## 🔄 Механизм работы состояний
+1. The bot connects to the Minecraft server.
+2. Plugins and runtime helpers are initialized.
+3. The HSM starts with `MAIN_ACTIVITY` and `MONITORING` in parallel.
+4. A chat command becomes a goal.
+5. The AI loop either finishes the goal or returns one execution tool.
+6. Execution tools invoke a concrete primitive actor.
+7. The machine records success or failure and either continues or stops.
 
-### Правила переходов
+## HSM Shape
 
-#### Команды игрока (Приоритет 10)
+The machine does not have a task planner or plan executor.
+That old design was removed.
 
-- **FollowState:** Вход только по команде, выход только по команде игрока
-- **MineState/FarmState/BuildState:** Вход по команде, выход по завершению задачи или команде игрока
-- **Любая команда прерывает любое состояние** включая FollowState
+Current top-level states:
 
-#### Автоматические переходы
+- `MAIN_ACTIVITY.IDLE`
+- `MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING`
+- `MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING`
+- `MAIN_ACTIVITY.COMBAT`
+- `MAIN_ACTIVITY.TASKS`
+- `MONITORING`
 
-- **В CombatState:** при обнаружении угрозы из всех состояний **кроме FollowState**
-- **В FollowState:** защита происходит без смены состояния
-- **Возврат из CombatState:** в предыдущее состояние (через стек состояний)
+`TASKS` uses this loop:
 
-#### Критические прерывания (Приоритет 8)
+- `IDLE`
+- `THINKING`
+- `EXECUTING`
+- `DECIDE_NEXT`
 
-- **Прерывают состояния 7 уровня и ниже** (MineState, BuildState, FarmState, CombatState)
-- **НЕ прерывают FollowState** - только уведомления в чат
-- **Механизм:** pause/resume состояний с сохранением контекста
-- **Примеры критических:** здоровье < 3 сердец, отсутствие еды при голоде
+`THINKING` calls `runAgentTurn()`.
+`EXECUTING` resolves one pending execution tool to a primitive:
 
-### Система pause/resume
+- `call_navigate` -> `primitiveNavigating`
+- `call_break_block` -> `primitiveBreaking`
+- `call_craft` -> `primitiveCraft`
+- `call_craft_workbench` -> `primitiveCraftInWorkbench`
+- `call_smelt` -> `primitiveSmelt`
+- `call_place_block` -> `primitivePlacing`
+- `call_follow_entity` -> `primitiveFollowing`
 
-#### BaseState методы
+## AI Loop
 
-```javascript
-pause(bot) {
-  // Остановка таймеров и действий
-  // Сохранение текущего контекста
-}
+`src/ai/loop.ts` does one turn at a time.
+It builds a deterministic snapshot, sends it to the model, and accepts only three kinds of outcomes:
 
-resume(bot) {
-  // Проверка валидности сохранённых данных
-  // Возобновление или поиск альтернатив
-}
-```
+- one execution tool
+- a `finish_goal` control tool
+- inline memory/container tools that are resolved locally before the next model round
 
-#### Контекст состояний
+The loop is intentionally strict:
 
-- **MineState:** целевые блоки, прогресс, координаты
-- **CombatState:** текущий противник (this.currentEnemy)
-- **FarmState:** список культур, область фарма
-- **BuildState:** схема постройки, материалы, прогресс
+- one execution decision only
+- no plain text answers
+- no mixed terminal and execution actions
+- retry is limited when the model fails to return a tool call
 
-## 🎮 Сценарии работы
+## Snapshot
 
-### Обычная работа
+`src/ai/snapshot.ts` summarizes:
 
-1. **Игрок дает команду** → FSM переходит в соответствующее состояние
-2. **Состояние выполняется** до завершения или новой команды
-3. **При отсутствии команд** → переход в IdleState → обработка стека задач
+- health, food, oxygen
+- position, dimension, biome, day/night
+- inventory, equipment, free slots
+- nearby interactable blocks
+- nearby resource blocks
+- nearby entities
+- current goal and subgoal
+- last action result and recent errors
 
-### Критическая ситуация
+## Combat
 
-1. **SurvivalSystem обнаруживает угрозу** → добавляет задачу в стек
-2. **Если критично** → FSM ставит текущее состояние на паузу (кроме FollowState)
-3. **Выполнение критической задачи** → возврат к приостановленному состоянию
-4. **Если выполняется FollowState** → уведомление в чат, но выполнение продолжается
+Combat is handled by dedicated actors, not by the AI loop.
+The combat layer can:
 
-### Боевые ситуации
+- approach a target
+- flee from a target
+- melee attack
+- ranged skirmish
 
-1. **В FollowState:** защита + следование одновременно, без перехода в CombatState
-2. **В других состояниях:** переход в CombatState → сохранение в стек → бой → возврат
-3. **Критическое здоровье в FollowState:** уведомления в чат, но продолжение следования
-4. **Ответственность игрока** за безопасность бота в FollowState
+Visibility and reachability checks are shared with guards and monitoring logic.
 
-## 🔧 Технические решения
+## Memory
 
-### Управление приоритетами
+Long-term memory is backed by SQLite under `data/`.
+The memory manager stores locations, containers, resources, danger markers, player notes, task stats, deaths, and goal history.
 
-- **Команды игрока (10):** абсолютный приоритет, прерывают любые состояния
-- **FollowState (9):** неприкосновенное состояние, выше выживания
-- **Критические задачи (8):** прерывают состояния 7 уровня и ниже
-- **Обычные состояния (7):** прерываются критическими задачами и командами
-- **Стек задач (5):** обрабатывается только в IdleState
+## Source Of Truth
 
-### Обработка конфликтов
-
-- **Перегрузка стека:** уведомления в чат игроку
-- **Потеря цели:** поиск альтернатив или уведомление о провале
-- **Невалидные данные при resume:** получение новых данных или переход к альтернативам
-
-### Коммуникация с игроком
-
-- **Критические ситуации в FollowState:** "Я вот-вот умру!", "Нужна починка!"
-- **Потеря целей:** "Потерял алмаз", "Не могу найти материалы"
-- **Завершение задач:** отчеты о выполнении
-
-## 🎯 Будущие расширения
-
-### AI система
-
-- **Роль:** интерпретация сложных команд игрока
-- **Пример:** "Беги за мной, по пути стриги овец" → разбор на конкретные инструкции
-- **Интеграция:** команды AI имеют тот же приоритет (10), что и команды игрока
-
-### Модификации состояний
-
-- **Принцип:** расширение базовой функциональности состояний
-- **Примеры:** guard-модификация для FollowState, stealth-модификация для CombatState
-- **Реализация:** декораторы или композиция состояний
-
-## 🔑 Ключевые архитектурные решения
-
-1. **FollowState неприкосновенен** - приоритет 9, выше выживания
-2. **Команды игрока** - абсолютный приоритет 10, прерывают всё
-3. **Критические задачи** - прерывают только состояния ≤7 уровня
-4. **Защита + следование** - без смены состояния в FollowState
-5. **Ответственность игрока** - за безопасность бота в FollowState
+These docs are a summary of the codebase state, not a separate specification.
+When behavior changes, update code and tests first, then update the docs.
