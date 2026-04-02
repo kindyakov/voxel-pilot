@@ -155,11 +155,13 @@ export const inspectNearbyBlocks = (
 	bot: Bot,
 	options?: {
 		scope?: InspectBlocksScope
+		targetBlockNames?: string[]
 		maxDistance?: number
 		limit?: number
 	}
 ): BlockInspectionFact[] => {
 	const scope = options?.scope ?? 'all'
+	const targetBlockNames = options?.targetBlockNames
 	const maxDistance = normalizeMaxDistance(options?.maxDistance)
 	const limit = normalizeLimit(options?.limit, DEFAULT_BLOCK_LIMIT)
 	const origin = toPosition(bot.entity?.position)
@@ -172,6 +174,10 @@ export const inspectNearbyBlocks = (
 		matching: (block: { name?: string }) => {
 			if (!block?.name) {
 				return false
+			}
+
+			if (targetBlockNames) {
+				return targetBlockNames.includes(block.name)
 			}
 
 			const kind = classifyBlockKind(block.name)
@@ -194,13 +200,14 @@ export const inspectNearbyBlocks = (
 			}
 
 			const kind = classifyBlockKind(block.name)
-			if (!kind || !matchesBlockScope(scope, kind)) {
+			const isTargetMatch = targetBlockNames?.includes(block.name)
+			if (!isTargetMatch && (!kind || !matchesBlockScope(scope, kind))) {
 				return null
 			}
 
 			return {
 				name: block.name,
-				kind,
+				kind: kind ?? 'resource',
 				position: resolvedPosition,
 				distance: roundDistance(
 					bot.entity.position.distanceTo(block.position)

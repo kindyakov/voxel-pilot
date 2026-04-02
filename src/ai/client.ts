@@ -166,9 +166,9 @@ const toChatTools = (
 const serializeChatInput = (input: Array<Record<string, unknown>>): string =>
 	input.map(item => JSON.stringify(item)).join('\n')
 
-const getFirstChatChoiceMessage = (
-	response: { choices?: Array<{ message: ChatCompletionMessageLike }> }
-): ChatCompletionMessageLike => {
+const getFirstChatChoiceMessage = (response: {
+	choices?: Array<{ message: ChatCompletionMessageLike }>
+}): ChatCompletionMessageLike => {
 	if (!Array.isArray(response.choices) || response.choices.length === 0) {
 		return {}
 	}
@@ -221,19 +221,7 @@ export class OpenAIResponsesClient implements AgentModelClient {
 	async createResponse(
 		request: AgentResponseRequest
 	): Promise<CreateResponseResult> {
-		const startedAt = Date.now()
-		const meta = getInputDebugMeta(request.input)
-		console.log(
-			'[AI] model_request_start',
-			JSON.stringify({
-				client: 'responses',
-				model: this.model,
-				timeoutMs: this.timeoutMs,
-				maxOutputTokens: this.maxOutputTokens,
-				previousResponseId: request.previousResponseId ?? null,
-				...meta
-			})
-		)
+		// debug: model_request_start
 
 		try {
 			const response = await this.client.responses.create(
@@ -253,15 +241,7 @@ export class OpenAIResponsesClient implements AgentModelClient {
 				}
 			)
 
-			console.log(
-				'[AI] model_request_success',
-				JSON.stringify({
-					client: 'responses',
-					model: this.model,
-					durationMs: Date.now() - startedAt,
-					responseId: response.id
-				})
-			)
+			// debug: model_request_success
 
 			return {
 				id: response.id,
@@ -269,16 +249,7 @@ export class OpenAIResponsesClient implements AgentModelClient {
 				toolCalls: mapParsedToolCalls(response)
 			}
 		} catch (error) {
-			console.log(
-				'[AI] model_request_error',
-				JSON.stringify({
-					client: 'responses',
-					model: this.model,
-					timeoutMs: this.timeoutMs,
-					durationMs: Date.now() - startedAt,
-					error: error instanceof Error ? error.message : String(error)
-				})
-			)
+			// debug: model_request_error
 			throw error
 		}
 	}
@@ -369,20 +340,7 @@ export class OpenAICompatibleChatClient implements AgentModelClient {
 	): Promise<CreateResponseResult> {
 		this.ensureSession(request.instructions)
 		this.appendInput(request.input)
-		const startedAt = Date.now()
-		const meta = getInputDebugMeta(request.input)
-		console.log(
-			'[AI] model_request_start',
-			JSON.stringify({
-				client: 'chat_completions',
-				model: this.model,
-				timeoutMs: this.timeoutMs,
-				maxTokens: this.maxTokens,
-				previousResponseId: request.previousResponseId ?? null,
-				historyLength: this.history.length,
-				...meta
-			})
-		)
+		// debug: model_request_start
 
 		try {
 			const response = await this.client.chat.completions.create(
@@ -415,17 +373,7 @@ export class OpenAICompatibleChatClient implements AgentModelClient {
 				this.pendingToolCalls.set(toolCall.id, toolCall)
 			}
 
-			console.log(
-				'[AI] model_request_success',
-				JSON.stringify({
-					client: 'chat_completions',
-					model: this.model,
-					durationMs: Date.now() - startedAt,
-					responseId: response.id,
-					toolCalls: toolCalls.map(toolCall => toolCall.name),
-					outputTextLength: outputText.length
-				})
-			)
+			// debug: model_request_success
 
 			return {
 				id: response.id,
@@ -433,17 +381,7 @@ export class OpenAICompatibleChatClient implements AgentModelClient {
 				toolCalls
 			}
 		} catch (error) {
-			console.log(
-				'[AI] model_request_error',
-				JSON.stringify({
-					client: 'chat_completions',
-					model: this.model,
-					timeoutMs: this.timeoutMs,
-					durationMs: Date.now() - startedAt,
-					historyLength: this.history.length,
-					error: error instanceof Error ? error.message : String(error)
-				})
-			)
+			// debug: model_request_error
 			throw error
 		}
 	}

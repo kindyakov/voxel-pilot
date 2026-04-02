@@ -568,16 +568,7 @@ export const runAgentTurn = async (
 	let modelRetries = 0
 	const groundedFacts = createGroundedTurnFacts()
 
-	console.log(
-		'[AI] turn_start',
-		JSON.stringify({
-			goal: input.currentGoal,
-			subGoal: input.subGoal,
-			lastAction: input.lastAction,
-			lastResult: input.lastResult,
-			lastReason: input.lastReason
-		})
-	)
+	// debug: turn_start
 
 	for (let round = 0; round < MAX_INLINE_TOOL_ROUNDS; round += 1) {
 		if (input.signal?.aborted) {
@@ -594,18 +585,7 @@ export const runAgentTurn = async (
 		})
 		const duration = Date.now() - roundStart
 		transcript.push(`round_${round}_ms:${duration}`)
-		console.log(
-			'[AI] round_complete',
-			JSON.stringify({
-				round,
-				responseId: response.id,
-				durationMs: duration,
-				toolCalls: response.toolCalls.map(toolCall => toolCall.name),
-				outputText: response.outputText
-					? toLogString(response.outputText, 160)
-					: ''
-			})
-		)
+		// debug: round_complete
 
 		if (response.toolCalls.length === 0) {
 			const plainTextOutput =
@@ -674,14 +654,7 @@ export const runAgentTurn = async (
 
 		for (const toolCall of response.toolCalls) {
 			transcript.push(toolCall.name)
-			console.log(
-				'[AI] tool_call',
-				JSON.stringify({
-					round,
-					name: toolCall.name,
-					args: toolCall.arguments
-				})
-			)
+			// debug: tool_call
 
 			if (isExecutionToolName(toolCall.name)) {
 				if (execution || sawInlineTool || finishMessage) {
@@ -817,15 +790,7 @@ export const runAgentTurn = async (
 					activeWindowSessionState: input.activeWindowSessionState ?? null
 				}
 			)
-			console.log(
-				'[AI] tool_result',
-				JSON.stringify({
-					round,
-					name: toolCall.name,
-					ok: result.ok,
-					output: toLogString(result.output)
-				})
-			)
+			// debug: tool_result
 			inlineOutputs.push({
 				type: 'function_call_output',
 				call_id: toolCall.callId,
