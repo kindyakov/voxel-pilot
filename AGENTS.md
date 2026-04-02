@@ -19,6 +19,8 @@ Project-specific subagent definitions live in `.codex/agents/`. Current agents a
 
 Use them when the task matches their ownership. Keep agent roles narrow, concrete, and non-overlapping. If you add a new subagent, document its purpose in the TOML clearly and keep it aligned with the actual repo architecture.
 
+When subagents need to orient themselves in the codebase, prefer Serena MCP for symbol lookup, references, and targeted file discovery before falling back to plain text search such as `rg`. This is a recommendation, not a hard requirement: `rg` is still fine for broad text hunts or non-code files. The reason is simple: Serena usually gives more precise symbol-level navigation, reduces accidental grep-driven guesses, and helps agents touch fewer irrelevant files.
+
 ## Build, Test, and Development Commands
 Use Node 18+; current project dependencies are already aligned with modern Node and ESM. Core commands:
 
