@@ -67,6 +67,34 @@ test('OpenAICompatibleChatClient maps chat completion tool calls into compact to
 	])
 })
 
+test('OpenAICompatibleChatClient tolerates missing choices without throwing', async () => {
+	const client = new OpenAICompatibleChatClient({
+		apiKey: 'router-key',
+		model: 'qwen/qwen3.5-flash-02-23',
+		timeoutMs: 5000,
+		client: {
+			chat: {
+				completions: {
+					create: async () =>
+						({
+							id: 'chatcmpl_empty'
+						}) as any
+				}
+			}
+		} as any
+	})
+
+	const response = await client.createResponse({
+		instructions: 'Use tools only',
+		input: 'Goal: inspect inventory',
+		tools: []
+	})
+
+	assert.equal(response.id, 'chatcmpl_empty')
+	assert.equal(response.outputText, '')
+	assert.deepEqual(response.toolCalls, [])
+})
+
 test('createAgentClient selects chat completions client for routerai provider', () => {
 	const previousEnv = {
 		AI_PROVIDER: process.env.AI_PROVIDER,

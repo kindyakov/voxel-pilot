@@ -1,16 +1,16 @@
+import {
+	closeWindowSession,
+	closeWindowSessionSafely,
+	describePlayerInventory,
+	describeWindowSession,
+	openWindowSession
+} from '@/ai/runtime/window.js'
 import type { Responses } from 'openai/resources/responses/responses'
 import { Vec3 as Vec3Class } from 'vec3'
 
 import type { Bot } from '@/types'
 
 import type { MemoryEntryType, MemoryPosition } from '@/core/memory/types.js'
-import {
-	closeWindowSession,
-	closeWindowSessionSafely,
-	describePlayerInventory,
-	describeWindowSession,
-	openWindowSession,
-} from '@/ai/runtime/window.js'
 
 export type AgentToolName =
 	| 'memory_save'
@@ -67,7 +67,6 @@ export const AGENT_SYSTEM_PROMPT = [
 	'Keep arguments concrete and minimal.',
 	'Never invent coordinates, blocks, entities, or containers that are not present in the snapshot or tool results.',
 	'If the user asks you to come to them, follow them, or stay near them, prefer follow_entity with the matching nearby player name instead of navigate_to.',
-	'SPEED IS CRITICAL: If the goal is simple movement (follow player, go to coordinates), return an execution tool IMMEDIATELY in the first round without calling informational tools.',
 	'Use inspect_inventory for player inventory state and inspect_window for nearby block windows before taking inventory or window actions.',
 	'Use open_window, transfer_item, and close_window for direct window interactions when the task requires moving items.'
 ].join(' ')

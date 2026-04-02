@@ -85,7 +85,7 @@ interface OpenAICompatibleChatSdkLike {
 				}
 			) => Promise<{
 				id: string
-				choices: Array<{
+				choices?: Array<{
 					message: ChatCompletionMessageLike
 				}>
 			}>
@@ -166,6 +166,32 @@ const toChatTools = (
 const serializeChatInput = (input: Array<Record<string, unknown>>): string =>
 	input.map(item => JSON.stringify(item)).join('\n')
 
+const getFirstChatChoiceMessage = (
+	response: { choices?: Array<{ message: ChatCompletionMessageLike }> }
+): ChatCompletionMessageLike => {
+	if (!Array.isArray(response.choices) || response.choices.length === 0) {
+		return {}
+	}
+
+	return response.choices[0]?.message ?? {}
+}
+
+const getInputDebugMeta = (
+	input: AgentResponseRequest['input']
+): { inputType: 'text' | 'tool_output'; inputSize: number } => {
+	if (typeof input === 'string') {
+		return {
+			inputType: 'text',
+			inputSize: input.length
+		}
+	}
+
+	return {
+		inputType: 'tool_output',
+		inputSize: serializeChatInput(input).length
+	}
+}
+
 export class OpenAIResponsesClient implements AgentModelClient {
 	private readonly client: OpenAIResponsesSdkLike
 	private readonly model: string
@@ -195,27 +221,65 @@ export class OpenAIResponsesClient implements AgentModelClient {
 	async createResponse(
 		request: AgentResponseRequest
 	): Promise<CreateResponseResult> {
-		const response = await this.client.responses.create(
-			{
+		const startedAt = Date.now()
+		const meta = getInputDebugMeta(request.input)
+		console.log(
+			'[AI] model_request_start',
+			JSON.stringify({
+				client: 'responses',
 				model: this.model,
-				instructions: request.instructions,
-				input: request.input as unknown as Responses.ResponseInput,
-				tools: request.tools,
-				parallel_tool_calls: false,
-				previous_response_id: request.previousResponseId ?? undefined,
-				max_output_tokens: this.maxOutputTokens,
-				tool_choice: 'auto'
-			},
-			{
-				timeout: this.timeoutMs,
-				signal: request.signal
-			}
+				timeoutMs: this.timeoutMs,
+				maxOutputTokens: this.maxOutputTokens,
+				previousResponseId: request.previousResponseId ?? null,
+				...meta
+			})
 		)
 
-		return {
-			id: response.id,
-			outputText: response.output_text ?? '',
-			toolCalls: mapParsedToolCalls(response)
+		try {
+			const response = await this.client.responses.create(
+				{
+					model: this.model,
+					instructions: request.instructions,
+					input: request.input as unknown as Responses.ResponseInput,
+					tools: request.tools,
+					parallel_tool_calls: false,
+					previous_response_id: request.previousResponseId ?? undefined,
+					max_output_tokens: this.maxOutputTokens,
+					tool_choice: 'auto'
+				},
+				{
+					timeout: this.timeoutMs,
+					signal: request.signal
+				}
+			)
+
+			console.log(
+				'[AI] model_request_success',
+				JSON.stringify({
+					client: 'responses',
+					model: this.model,
+					durationMs: Date.now() - startedAt,
+					responseId: response.id
+				})
+			)
+
+			return {
+				id: response.id,
+				outputText: response.output_text ?? '',
+				toolCalls: mapParsedToolCalls(response)
+			}
+		} catch (error) {
+			console.log(
+				'[AI] model_request_error',
+				JSON.stringify({
+					client: 'responses',
+					model: this.model,
+					timeoutMs: this.timeoutMs,
+					durationMs: Date.now() - startedAt,
+					error: error instanceof Error ? error.message : String(error)
+				})
+			)
+			throw error
 		}
 	}
 }
@@ -305,41 +369,82 @@ export class OpenAICompatibleChatClient implements AgentModelClient {
 	): Promise<CreateResponseResult> {
 		this.ensureSession(request.instructions)
 		this.appendInput(request.input)
-
-		const response = await this.client.chat.completions.create(
-			{
+		const startedAt = Date.now()
+		const meta = getInputDebugMeta(request.input)
+		console.log(
+			'[AI] model_request_start',
+			JSON.stringify({
+				client: 'chat_completions',
 				model: this.model,
-				messages: this.history,
-				tools: toChatTools(request.tools),
-				tool_choice: 'auto',
-				max_tokens: this.maxTokens,
-				temperature: 0,
-				stream: false
-			},
-			{
-				timeout: this.timeoutMs,
-				signal: request.signal
-			}
+				timeoutMs: this.timeoutMs,
+				maxTokens: this.maxTokens,
+				previousResponseId: request.previousResponseId ?? null,
+				historyLength: this.history.length,
+				...meta
+			})
 		)
 
-		const message = response.choices[0]?.message ?? {}
-		const outputText = extractTextContent(message.content)
-		const toolCalls = mapChatToolCalls(message.tool_calls)
+		try {
+			const response = await this.client.chat.completions.create(
+				{
+					model: this.model,
+					messages: this.history,
+					tools: toChatTools(request.tools),
+					tool_choice: 'auto',
+					max_tokens: this.maxTokens,
+					temperature: 0,
+					stream: false
+				},
+				{
+					timeout: this.timeoutMs,
+					signal: request.signal
+				}
+			)
 
-		this.history.push({
-			role: 'assistant',
-			content: outputText,
-			tool_calls: message.tool_calls ?? []
-		})
+			const message = getFirstChatChoiceMessage(response)
+			const outputText = extractTextContent(message.content)
+			const toolCalls = mapChatToolCalls(message.tool_calls)
 
-		for (const toolCall of message.tool_calls ?? []) {
-			this.pendingToolCalls.set(toolCall.id, toolCall)
-		}
+			this.history.push({
+				role: 'assistant',
+				content: outputText,
+				tool_calls: message.tool_calls ?? []
+			})
 
-		return {
-			id: response.id,
-			outputText,
-			toolCalls
+			for (const toolCall of message.tool_calls ?? []) {
+				this.pendingToolCalls.set(toolCall.id, toolCall)
+			}
+
+			console.log(
+				'[AI] model_request_success',
+				JSON.stringify({
+					client: 'chat_completions',
+					model: this.model,
+					durationMs: Date.now() - startedAt,
+					responseId: response.id,
+					toolCalls: toolCalls.map(toolCall => toolCall.name),
+					outputTextLength: outputText.length
+				})
+			)
+
+			return {
+				id: response.id,
+				outputText,
+				toolCalls
+			}
+		} catch (error) {
+			console.log(
+				'[AI] model_request_error',
+				JSON.stringify({
+					client: 'chat_completions',
+					model: this.model,
+					timeoutMs: this.timeoutMs,
+					durationMs: Date.now() - startedAt,
+					historyLength: this.history.length,
+					error: error instanceof Error ? error.message : String(error)
+				})
+			)
+			throw error
 		}
 	}
 }

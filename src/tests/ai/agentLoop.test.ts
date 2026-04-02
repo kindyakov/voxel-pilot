@@ -209,3 +209,215 @@ test('runAgentTurn rejects navigation to unsupported workstation for crafting go
 		/unsupported workstation for crafting tasks/i
 	)
 })
+
+test('runAgentTurn still fails when the first model response is plain text without any tool call', async () => {
+	const client = new OpenAIResponsesClient({
+		client: {
+			responses: {
+				create: async () =>
+					({
+						id: 'resp_plain_text',
+						output_text: 'В моем инвентаре есть кирка и еда.',
+						output: []
+					}) as any
+			}
+		},
+		model: 'test-model'
+	})
+
+	const memory = {
+		readEntries: () => [],
+		saveEntry: () => null,
+		updateEntryData: () => null,
+		deleteEntry: () => false
+	} as any
+
+	const bot = {
+		memory,
+		health: 20,
+		food: 20,
+		oxygenLevel: 20,
+		entity: { position: createVec3(0, 64, 0) },
+		game: { dimension: 'overworld' },
+		time: { isDay: true, timeOfDay: 1000 },
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		},
+		getEquipmentDestSlot: () => 36,
+		blockAt: () => null,
+		findBlocks: () => [],
+		entities: {},
+		closeWindow: () => {}
+	} as any
+
+	const result = await runAgentTurn({
+		bot,
+		memory,
+		currentGoal: 'Что у тебя в инвентаре?',
+		subGoal: null,
+		lastAction: null,
+		lastResult: null,
+		lastReason: null,
+		errorHistory: [],
+		taskContext: createTaskContext('Что у тебя в инвентаре?', null),
+		client
+	})
+
+	assert.equal(result.kind, 'failed')
+	if (result.kind !== 'failed') {
+		assert.fail('Expected failed result')
+	}
+	assert.equal(result.reason, 'Model did not return a tool call')
+	assert.match(result.transcript[0]!, /^round_0_ms:\d+$/)
+	assert.match(result.transcript[1]!, /^round_1_ms:\d+$/)
+})
+
+test('runAgentTurn still fails when the model returns no tool call and no plain-text response', async () => {
+	const responses = [
+		{
+			id: 'resp_empty_1',
+			output: []
+		},
+		{
+			id: 'resp_empty_2',
+			output: []
+		}
+	]
+
+	const client = new OpenAIResponsesClient({
+		client: {
+			responses: {
+				create: async () => responses.shift() as any
+			}
+		},
+		model: 'test-model'
+	})
+
+	const memory = {
+		readEntries: () => [],
+		saveEntry: () => null,
+		updateEntryData: () => null,
+		deleteEntry: () => false
+	} as any
+
+	const bot = {
+		memory,
+		health: 20,
+		food: 20,
+		oxygenLevel: 20,
+		entity: { position: createVec3(0, 64, 0) },
+		game: { dimension: 'overworld' },
+		time: { isDay: true, timeOfDay: 1000 },
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		},
+		getEquipmentDestSlot: () => 36,
+		blockAt: () => null,
+		findBlocks: () => [],
+		entities: {},
+		closeWindow: () => {}
+	} as any
+
+	const result = await runAgentTurn({
+		bot,
+		memory,
+		currentGoal: 'Что у тебя в инвентаре?',
+		subGoal: null,
+		lastAction: null,
+		lastResult: null,
+		lastReason: null,
+		errorHistory: [],
+		taskContext: createTaskContext('Что у тебя в инвентаре?', null),
+		client
+	})
+
+	assert.equal(result.kind, 'failed')
+	if (result.kind !== 'failed') {
+		assert.fail('Expected failed result')
+	}
+	assert.equal(result.reason, 'Model did not return a tool call')
+	assert.match(result.transcript[0]!, /^round_0_ms:\d+$/)
+	assert.match(result.transcript[1]!, /^round_1_ms:\d+$/)
+})
+
+test('runAgentTurn accepts plain-text finish after an inline tool round grounded the response', async () => {
+	const responses = [
+		{
+			id: 'resp_1',
+			output: [
+				{
+					type: 'function_call',
+					call_id: 'call_1',
+					name: 'inspect_inventory',
+					arguments: JSON.stringify({})
+				}
+			]
+		},
+		{
+			id: 'resp_2',
+			output_text: 'В моем инвентаре есть кирка и еда.',
+			output: []
+		}
+	]
+
+	const client = new OpenAIResponsesClient({
+		client: {
+			responses: {
+				create: async () => responses.shift() as any
+			}
+		},
+		model: 'test-model'
+	})
+
+	const memory = {
+		readEntries: () => [],
+		saveEntry: () => null,
+		updateEntryData: () => null,
+		deleteEntry: () => false
+	} as any
+
+	const bot = {
+		memory,
+		health: 20,
+		food: 20,
+		oxygenLevel: 20,
+		entity: { position: createVec3(0, 64, 0) },
+		game: { dimension: 'overworld' },
+		time: { isDay: true, timeOfDay: 1000 },
+		inventory: {
+			slots: Array.from({ length: 46 }, (_, index) =>
+				index === 36 ? { name: 'iron_pickaxe', count: 1, durabilityUsed: 5 } : null
+			),
+			items: () => [{ name: 'iron_pickaxe', count: 1, durabilityUsed: 5 }]
+		},
+		getEquipmentDestSlot: () => 36,
+		blockAt: () => null,
+		findBlocks: () => [],
+		entities: {},
+		closeWindow: () => {}
+	} as any
+
+	const result = await runAgentTurn({
+		bot,
+		memory,
+		currentGoal: 'Что у тебя в инвентаре?',
+		subGoal: null,
+		lastAction: null,
+		lastResult: null,
+		lastReason: null,
+		errorHistory: [],
+		taskContext: createTaskContext('Что у тебя в инвентаре?', null),
+		client
+	})
+
+	assert.equal(result.kind, 'finish')
+	if (result.kind !== 'finish') {
+		assert.fail('Expected finish result')
+	}
+	assert.equal(result.message, 'В моем инвентаре есть кирка и еда.')
+	assert.match(result.transcript[0]!, /^round_0_ms:\d+$/)
+	assert.equal(result.transcript[1]!, 'inspect_inventory')
+	assert.match(result.transcript[2]!, /^round_1_ms:\d+$/)
+})

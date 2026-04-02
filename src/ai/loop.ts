@@ -172,6 +172,7 @@ export const runAgentTurn = async (
 		snapshot
 	].join('\n')
 	let modelRetries = 0
+	let hasGroundedInlineContext = false
 
 	console.log(
 		'[AI] turn_start',
@@ -213,6 +214,35 @@ export const runAgentTurn = async (
 		)
 
 		if (response.toolCalls.length === 0) {
+			const plainTextOutput =
+				typeof response.outputText === 'string'
+					? response.outputText.trim()
+					: ''
+			if (plainTextOutput && hasGroundedInlineContext) {
+				console.log(
+					'[AI] plain_text_fallback_finish',
+					JSON.stringify({
+						round,
+						responseId: response.id,
+						message: plainTextOutput
+					})
+				)
+				const result: AgentTurnResult = {
+					kind: 'finish',
+					message: plainTextOutput,
+					transcript
+				}
+				console.log(
+					'[AI] turn_finish',
+					JSON.stringify({
+						kind: result.kind,
+						message: result.message,
+						transcript
+					})
+				)
+				return result
+			}
+
 			if (modelRetries < MAX_MODEL_RETRIES) {
 				console.log(
 					'[AI] retry_no_tool_call',
@@ -462,6 +492,7 @@ export const runAgentTurn = async (
 		}
 
 		previousResponseId = response.id
+		hasGroundedInlineContext = true
 		nextInput = inlineOutputs
 	}
 
