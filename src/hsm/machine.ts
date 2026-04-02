@@ -97,6 +97,8 @@ const defaultThinkingActor = fromPromise<
 		lastReason: input.context.lastReason,
 		errorHistory: input.context.errorHistory,
 		taskContext: input.context.taskContext,
+		activeWindowSession: input.context.activeWindowSession,
+		activeWindowSessionState: input.context.activeWindowSessionState,
 		signal
 	})
 })
@@ -107,6 +109,15 @@ const fallbackExecutionActor = fromPromise(async () => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const normalizeEntitySelector = (value: unknown): string | null => {
+	if (typeof value !== 'string') {
+		return null
+	}
+
+	const normalized = value.trim().toLowerCase()
+	return normalized.length > 0 ? normalized : null
+}
 
 const tryGetPositionArg = (
 	execution: PendingExecution,
@@ -261,6 +272,8 @@ const resolveExecutionInput = (context: MachineContext) => {
 				}
 			}
 		case 'follow_entity': {
+			const requestedName = normalizeEntitySelector(execution.args.entity_name)
+			const requestedType = normalizeEntitySelector(execution.args.entity_type)
 			const maxDistance =
 				typeof execution.args.max_distance === 'number'
 					? execution.args.max_distance
@@ -278,21 +291,18 @@ const resolveExecutionInput = (context: MachineContext) => {
 					return false
 				}
 
-				if (typeof execution.args.entity_name === 'string') {
-					return (
-						entity.username === execution.args.entity_name ||
-						entity.name === execution.args.entity_name
-					)
-				}
+				const entityUsername = normalizeEntitySelector(entity.username)
+				const entityName = normalizeEntitySelector(entity.name)
+				const entityType = normalizeEntitySelector(entity.type)
 
-				if (typeof execution.args.entity_type === 'string') {
-					return (
-						entity.type === execution.args.entity_type ||
-						entity.name === execution.args.entity_type
-					)
-				}
+				const matchesName = requestedName
+					? entityUsername === requestedName || entityName === requestedName
+					: true
+				const matchesType = requestedType
+					? entityType === requestedType || entityName === requestedType
+					: true
 
-				return false
+				return Boolean(requestedName || requestedType) && matchesName && matchesType
 			})
 			return {
 				bot,

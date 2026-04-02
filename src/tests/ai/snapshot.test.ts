@@ -2,21 +2,23 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { buildSnapshot } from '../../ai/snapshot.js'
-import { createTaskContext } from '../../ai/taskContext.js'
 
 const createVec3 = (x: number, y: number, z: number) => ({
 	x,
 	y,
-	z,
-	distanceTo(other: { x: number; y: number; z: number }) {
-		const dx = x - other.x
-		const dy = y - other.y
-		const dz = z - other.z
-		return Math.sqrt(dx * dx + dy * dy + dz * dz)
-	}
+	z
 })
 
-test('buildSnapshot renders compact world, inventory, equipment, goal, and feedback sections', () => {
+const createZoneMap = () => ({
+	container: [],
+	input: [0],
+	fuel: [1],
+	output: [2],
+	player_inventory: [],
+	hotbar: []
+})
+
+test('buildSnapshot renders runtime-only sections and active window summary', () => {
 	const bot = {
 		health: 18,
 		food: 7,
@@ -26,190 +28,75 @@ test('buildSnapshot renders compact world, inventory, equipment, goal, and feedb
 		},
 		game: {
 			dimension: 'overworld'
-		},
-		time: {
-			timeOfDay: 1000,
-			isDay: true
-		},
-		inventory: {
-			slots: Array.from({ length: 46 }, () => null),
-			items: () => [
-				{
-					name: 'iron_pickaxe',
-					count: 1,
-					maxDurability: 100,
-					durabilityUsed: 60
-				},
-				{
-					name: 'oak_log',
-					count: 14
-				}
-			]
-		},
-		getEquipmentDestSlot(destination: string) {
-			const mapping: Record<string, number> = {
-				hand: 36,
-				'off-hand': 45,
-				head: 5,
-				torso: 6,
-				legs: 7,
-				feet: 8
-			}
-			return mapping[destination]!
-		},
-		blockAt(position: { x: number; y: number; z: number }) {
-			const key = `${position.x},${position.y},${position.z}`
-			const blocks: Record<string, any> = {
-				'10,64,-5': {
-					name: 'grass_block',
-					position: createVec3(10, 64, -5),
-					biome: {
-						name: 'plains'
-					}
-				},
-				'12,64,-4': {
-					name: 'crafting_table',
-					position: createVec3(12, 64, -4),
-					biome: {
-						name: 'plains'
-					}
-				},
-				'14,64,-3': {
-					name: 'oak_log',
-					position: createVec3(14, 64, -3),
-					biome: {
-						name: 'plains'
-					}
-				}
-			}
-			return blocks[key] ?? null
-		},
-		findBlocks({
-			matching
-		}: {
-			matching: (block: { name: string }) => boolean
-		}) {
-			return [createVec3(12, 64, -4), createVec3(14, 64, -3)].filter(
-				position => {
-					const block = this.blockAt(position)
-					return block ? matching(block) : false
-				}
-			)
-		},
-		entities: {
-			1: {
-				type: 'hostile',
-				name: 'zombie',
-				position: createVec3(15, 64, -5)
-			},
-			2: {
-				type: 'mob',
-				name: 'pig',
-				position: createVec3(11, 64, -2)
-			},
-			3: {
-				type: 'player',
-				username: 'Steve',
-				name: 'player',
-				position: createVec3(13, 64, -5)
-			}
 		}
 	} as any
 
-	bot.inventory.slots[36] = {
-		name: 'iron_pickaxe',
-		count: 1,
-		maxDurability: 100,
-		durabilityUsed: 60
-	}
-	bot.inventory.slots[45] = {
-		name: 'shield',
-		count: 1,
-		maxDurability: 336,
-		durabilityUsed: 36
-	}
+	const activeWindowSession = {
+		kind: 'furnace_family',
+		descriptor: {
+			kind: 'furnace_family',
+			label: 'furnace',
+			openWindow: async () => null,
+			resolveZones: createZoneMap
+		},
+		window: {
+			slots: []
+		},
+		blockName: 'furnace',
+		position: createVec3(12, 64, -4),
+		openedAt: '2026-01-01T00:00:00.000Z'
+	} as any
 
 	const snapshot = buildSnapshot({
 		bot,
-		currentGoal: 'Build a 5x5 wooden box',
-		subGoal: 'Collect 30 oak logs',
-		taskContext: createTaskContext('Build a 5x5 wooden box', 'Collect 30 oak logs'),
-		lastAction: 'break_block',
-		actionResult: 'FAILED',
-		reason: 'Unreachable',
-		errorHistory: ['Unreachable', 'Unreachable', 'Interrupted by combat']
+		currentGoal: 'Smelt iron',
+		subGoal: 'Inspect furnace',
+		lastAction: 'inspect_window',
+		lastResult: 'FAILED',
+		lastReason: 'Window is too far away (5.2m)',
+		errorHistory: ['Window is too far away (5.2m)', 'No coal'],
+		activeWindowSession,
+		activeWindowSessionState: 'open'
 	})
 
 	assert.match(snapshot, /STATUS/)
-	assert.match(snapshot, /dimension: overworld/)
-	assert.match(snapshot, /biome: plains/)
-	assert.match(snapshot, /time: day/)
-	assert.match(snapshot, /INVENTORY_EQUIPMENT/)
-	assert.match(snapshot, /free_slots: 34/)
-	assert.match(snapshot, /iron_pickaxe x1 \(40%\)/)
-	assert.match(snapshot, /main_hand: iron_pickaxe \(40%\)/)
-	assert.match(snapshot, /off_hand: shield \(89%\)/)
-	assert.match(snapshot, /ENVIRONMENT/)
-	assert.match(snapshot, /crafting_table @ 2\.2 -> 12,64,-4/)
-	assert.match(snapshot, /oak_log @ 4\.5 -> 14,64,-3/)
-	assert.match(snapshot, /zombie @ 5\.0 -> 15,64,-5/)
-	assert.match(snapshot, /player:Steve @ 3\.0 -> 13,64,-5/)
+	assert.match(snapshot, /ACTIVE_WINDOW_SESSION/)
 	assert.match(snapshot, /GOAL_CONTEXT/)
-	assert.match(snapshot, /current_goal: Build a 5x5 wooden box/)
-	assert.match(snapshot, /sub_goal: Collect 30 oak logs/)
 	assert.match(snapshot, /FEEDBACK_ERRORS/)
-	assert.match(snapshot, /last_action: break_block/)
-	assert.match(snapshot, /action_result: FAILED/)
+
+	assert.match(snapshot, /health: 18\/20/)
+	assert.match(snapshot, /food: 7\/20/)
+	assert.match(snapshot, /oxygen: 20\/20/)
+	assert.match(snapshot, /position: 10,64,-5/)
+	assert.match(snapshot, /dimension: overworld/)
+
+	assert.match(snapshot, /is_open: true/)
+	assert.match(snapshot, /window_kind: furnace_family/)
+	assert.match(snapshot, /block_name: furnace/)
+	assert.match(snapshot, /position: 12,64,-4/)
+	assert.match(snapshot, /close_failed: false/)
+
+	assert.match(snapshot, /current_goal: Smelt iron/)
+	assert.match(snapshot, /sub_goal: Inspect furnace/)
+	assert.match(snapshot, /last_action: inspect_window/)
+	assert.match(snapshot, /last_result: FAILED/)
+	assert.match(snapshot, /last_reason: Window is too far away \(5.2m\)/)
+	assert.match(snapshot, /error_history: Window is too far away \(5.2m\) \| No coal/)
+
+	assert.equal(snapshot.includes('INVENTORY_EQUIPMENT'), false)
+	assert.equal(snapshot.includes('ENVIRONMENT'), false)
+	assert.equal(snapshot.includes('time:'), false)
+	assert.equal(snapshot.includes('biome:'), false)
+	assert.equal(snapshot.includes('action_result:'), false)
 })
 
-test('buildSnapshot caps environment sections and error history for token discipline', () => {
+test('buildSnapshot caps error history and reports close_failed state without session', () => {
 	const bot = {
 		health: 20,
 		food: 20,
 		oxygenLevel: 20,
 		entity: {
 			position: createVec3(0, 64, 0)
-		},
-		game: {
-			dimension: 'overworld'
-		},
-		time: {
-			timeOfDay: 18000,
-			isDay: false
-		},
-		inventory: {
-			slots: Array.from({ length: 46 }, () => null),
-			items: () => []
-		},
-		getEquipmentDestSlot() {
-			return 36
-		},
-		blockAt(position: { x: number; y: number; z: number }) {
-			return {
-				name: position.x < 3 ? 'chest' : 'oak_log',
-				position,
-				biome: {
-					name: 'forest'
-				}
-			}
-		},
-		findBlocks({
-			matching
-		}: {
-			matching: (block: { name: string }) => boolean
-		}) {
-			return [
-				createVec3(1, 64, 0),
-				createVec3(2, 64, 0),
-				createVec3(3, 64, 0),
-				createVec3(4, 64, 0)
-			].filter(position => matching(this.blockAt(position)))
-		},
-		entities: {
-			1: { type: 'hostile', name: 'zombie', position: createVec3(1, 64, 0) },
-			2: { type: 'hostile', name: 'skeleton', position: createVec3(2, 64, 0) },
-			3: { type: 'mob', name: 'cow', position: createVec3(3, 64, 0) },
-			4: { type: 'mob', name: 'pig', position: createVec3(4, 64, 0) }
 		}
 	} as any
 
@@ -217,94 +104,19 @@ test('buildSnapshot caps environment sections and error history for token discip
 		bot,
 		currentGoal: 'Survive',
 		subGoal: null,
-		taskContext: createTaskContext('Survive', null),
 		lastAction: null,
-		actionResult: 'SUCCESS',
-		reason: null,
+		lastResult: null,
+		lastReason: null,
 		errorHistory: ['a', 'b', 'c', 'd'],
-		limits: {
-			interactables: 1,
-			resources: 1,
-			entities: 2,
-			errorHistory: 3
-		}
+		activeWindowSession: null,
+		activeWindowSessionState: 'close_failed'
 	})
 
-	assert.equal((snapshot.match(/chest @/g) || []).length, 1)
-	assert.equal((snapshot.match(/oak_log @/g) || []).length, 1)
-	assert.equal((snapshot.match(/@ [0-9.]+ ->/g) || []).length >= 4, true)
-	assert.equal(snapshot.includes('error_history: a | b | c'), true)
+	assert.match(snapshot, /is_open: false/)
+	assert.match(snapshot, /window_kind: -/)
+	assert.match(snapshot, /block_name: -/)
+	assert.match(snapshot, /position: -/)
+	assert.match(snapshot, /close_failed: true/)
+	assert.match(snapshot, /error_history: a \| b \| c/)
 	assert.equal(snapshot.includes('error_history: a | b | c | d'), false)
-	assert.match(snapshot, /time: night/)
-})
-
-test('buildSnapshot excludes unsupported workstation noise for crafting tasks', () => {
-	const bot = {
-		health: 20,
-		food: 20,
-		oxygenLevel: 20,
-		entity: {
-			position: createVec3(0, 64, 0)
-		},
-		game: {
-			dimension: 'overworld'
-		},
-		time: {
-			timeOfDay: 1000,
-			isDay: true
-		},
-		inventory: {
-			slots: Array.from({ length: 46 }, () => null),
-			items: () => []
-		},
-		getEquipmentDestSlot() {
-			return 36
-		},
-		blockAt(position: { x: number; y: number; z: number }) {
-			const key = `${position.x},${position.y},${position.z}`
-			const blocks: Record<string, any> = {
-				'0,64,0': {
-					name: 'grass_block',
-					position: createVec3(0, 64, 0),
-					biome: { name: 'plains' }
-				},
-				'1,64,0': {
-					name: 'crafting_table',
-					position: createVec3(1, 64, 0),
-					biome: { name: 'plains' }
-				},
-				'2,64,0': {
-					name: 'stonecutter',
-					position: createVec3(2, 64, 0),
-					biome: { name: 'plains' }
-				}
-			}
-			return blocks[key] ?? null
-		},
-		findBlocks({
-			matching
-		}: {
-			matching: (block: { name: string }) => boolean
-		}) {
-			return [createVec3(1, 64, 0), createVec3(2, 64, 0)].filter(position =>
-				matching(this.blockAt(position))
-			)
-		},
-		entities: {}
-	} as any
-
-	const snapshot = buildSnapshot({
-		bot,
-		currentGoal: 'craft an axe',
-		subGoal: null,
-		taskContext: createTaskContext('craft an axe', null),
-		lastAction: null,
-		actionResult: null,
-		reason: null,
-		errorHistory: []
-	})
-
-	assert.match(snapshot, /crafting_table @ 1\.0 -> 1,64,0/)
-	assert.equal(snapshot.includes('stonecutter'), false)
-	assert.match(snapshot, /task_category: craft/)
 })
