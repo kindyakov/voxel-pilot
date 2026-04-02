@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { executeInlineToolCall } from '../../ai/tools.js'
+import type { WindowSession } from '../../ai/runtime/window.js'
 import {
 	describePlayerInventory,
 	inferWindowKindFromBlockName
@@ -18,6 +19,36 @@ const createVec3 = (x: number, y: number, z: number) => ({
 		return Math.sqrt(dx * dx + dy * dy + dz * dz)
 	}
 })
+
+const createActiveWindowSession = (
+	position: { x: number; y: number; z: number }
+): WindowSession =>
+	({
+		kind: 'furnace_family',
+		descriptor: {
+			kind: 'furnace_family',
+			label: 'furnace',
+			openWindow: async () => ({ slots: [] }),
+			resolveZones: () => ({
+				container: [],
+				input: [0],
+				fuel: [1],
+				output: [2],
+				player_inventory: [],
+				hotbar: []
+			})
+		},
+		window: {
+			slots: [
+				{ name: 'iron_ore', count: 3 },
+				{ name: 'coal', count: 1 },
+				{ name: 'iron_ingot', count: 2 }
+			]
+		},
+		blockName: 'furnace',
+		position,
+		openedAt: '2026-01-01T00:00:00.000Z'
+	}) as WindowSession
 
 test('inferWindowKindFromBlockName classifies furnace-family and crafting-table windows', () => {
 	assert.equal(inferWindowKindFromBlockName('furnace'), 'furnace_family')
@@ -136,7 +167,7 @@ test('inspect_window opens, snapshots, and closes a furnace-family window', asyn
 	)
 })
 
-test('inspect_window preserves the snapshot when temporary close fails', async () => {
+test('inspect_window fails when temporary close fails', async () => {
 	let openCalls = 0
 	let closeCalls = 0
 	const window = {
@@ -179,17 +210,141 @@ test('inspect_window preserves the snapshot when temporary close fails', async (
 		bot
 	})
 
-	assert.equal(result.ok, true)
+	assert.equal(result.ok, false)
 	assert.equal(openCalls, 1)
 	assert.equal(closeCalls, 1)
+	assert.match(
+		String((result.output as any).reason),
+		/runtime window state is untrusted/i
+	)
+	assert.equal((result.output as any).close.ok, false)
+	assert.match(String((result.output as any).close.reason), /close failed/)
+	assert.equal('window' in (result.output as any), false)
+})
 
-	const output = result.output as any
-	assert.equal(output.close.ok, false)
-	assert.match(String(output.close.reason), /close failed/)
-	assert.equal(output.window.kind, 'furnace_family')
+test('inspect_window rejects stale close_failed sessions', async () => {
+	let openCalls = 0
+	const activeSession = createActiveWindowSession({ x: 1, y: 64, z: 1 })
+
+	const bot = {
+		memory: {
+			saveEntry: () => null,
+			readEntries: () => [],
+			updateEntryData: () => null,
+			deleteEntry: () => false
+		},
+		entity: { position: createVec3(0, 64, 0) },
+		blockAt: () => null,
+		openFurnace: async () => {
+			openCalls += 1
+			return { slots: [], close: () => {} }
+		},
+		closeWindow: () => {},
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		}
+	} as any
+
+	const result = await executeInlineToolCall('inspect_window', {
+		position: { x: 1, y: 64, z: 1 }
+	}, {
+		bot,
+		activeWindowSession: activeSession,
+		activeWindowSessionState: 'close_failed'
+	})
+
+	assert.equal(result.ok, false)
+	assert.match(
+		String((result.output as any).reason),
+		/stale \(previous close failed\)/i
+	)
+	assert.equal(openCalls, 0)
+})
+
+test('inspect_window rejects different-position inspect when another session is active', async () => {
+	let openCalls = 0
+	const activeSession = createActiveWindowSession({ x: 1, y: 64, z: 1 })
+
+	const bot = {
+		memory: {
+			saveEntry: () => null,
+			readEntries: () => [],
+			updateEntryData: () => null,
+			deleteEntry: () => false
+		},
+		entity: { position: createVec3(0, 64, 0) },
+		blockAt: () => null,
+		openFurnace: async () => {
+			openCalls += 1
+			return { slots: [], close: () => {} }
+		},
+		closeWindow: () => {},
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		}
+	} as any
+
+	const result = await executeInlineToolCall('inspect_window', {
+		position: { x: 2, y: 64, z: 2 }
+	}, {
+		bot,
+		activeWindowSession: activeSession,
+		activeWindowSessionState: 'open'
+	})
+
+	assert.equal(result.ok, false)
+	assert.match(
+		String((result.output as any).reason),
+		/different position/i
+	)
+	assert.equal(openCalls, 0)
+})
+
+test('inspect_window reuses same-position active sessions', async () => {
+	let openCalls = 0
+	const activeSession = createActiveWindowSession({ x: 1, y: 64, z: 1 })
+
+	const bot = {
+		memory: {
+			saveEntry: () => null,
+			readEntries: () => [],
+			updateEntryData: () => null,
+			deleteEntry: () => false
+		},
+		entity: { position: createVec3(0, 64, 0) },
+		blockAt: () => null,
+		openFurnace: async () => {
+			openCalls += 1
+			return { slots: [], close: () => {} }
+		},
+		closeWindow: () => {},
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		}
+	} as any
+
+	const result = await executeInlineToolCall('inspect_window', {
+		position: { x: 1, y: 64, z: 1 }
+	}, {
+		bot,
+		activeWindowSession: activeSession,
+		activeWindowSessionState: 'open'
+	})
+
+	assert.equal(result.ok, true)
+	assert.equal(openCalls, 0)
+	assert.equal((result.output as any).reusedActiveSession, true)
+	assert.equal((result.output as any).kind, 'furnace_family')
+	assert.equal((result.output as any).blockName, 'furnace')
+	assert.equal((result.output as any).closeFailed, false)
+	assert.equal((result.output as any).window.kind, 'furnace_family')
 	assert.equal(
-		output.window.zones.find((zone: { zone: string }) => zone.zone === 'input')
-			?.items[0]?.name,
+		(result.output as any).window.zones.find(
+			(zone: { zone: string }) => zone.zone === 'input'
+		)?.items[0]?.name,
 		'iron_ore'
 	)
 })
@@ -257,6 +412,6 @@ test('inspect_window rejects unsupported workstation blocks explicitly', async (
 	})
 
 	assert.equal(result.ok, false)
-	assert.match(String(result.output.reason), /Unsupported window block/)
+	assert.match(String((result.output as any).reason), /Unsupported window block/)
 	assert.equal(openCalls, 0)
 })

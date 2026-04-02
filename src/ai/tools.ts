@@ -1,10 +1,15 @@
 import {
-	closeWindowSession,
 	closeWindowSessionSafely,
 	describePlayerInventory,
 	describeWindowSession,
-	openWindowSession
+	openWindowSession,
+	type WindowSession
 } from '@/ai/runtime/window.js'
+import {
+	inspectNearbyBlocks,
+	inspectNearbyEntities,
+	type InspectBlocksScope
+} from '@/ai/runtime/inspect.js'
 import type { Responses } from 'openai/resources/responses/responses'
 import { Vec3 as Vec3Class } from 'vec3'
 
@@ -18,6 +23,8 @@ export type AgentToolName =
 	| 'memory_update_data'
 	| 'memory_delete'
 	| 'inspect_inventory'
+	| 'inspect_blocks'
+	| 'inspect_entities'
 	| 'inspect_window'
 	| 'finish_goal'
 	| 'navigate_to'
@@ -34,6 +41,8 @@ export type InlineToolName =
 	| 'memory_update_data'
 	| 'memory_delete'
 	| 'inspect_inventory'
+	| 'inspect_blocks'
+	| 'inspect_entities'
 	| 'inspect_window'
 
 export type ControlToolName = 'finish_goal'
@@ -50,6 +59,8 @@ export interface PendingExecution {
 
 interface InlineToolExecutionContext {
 	bot: Bot
+	activeWindowSession?: WindowSession | null
+	activeWindowSessionState?: 'open' | 'close_failed' | null
 }
 
 interface InlineToolExecutionResult {
@@ -65,9 +76,11 @@ export const AGENT_SYSTEM_PROMPT = [
 	'Use memory tools for retrieval and updates, execution tools for one concrete action, and finish_goal when the goal is complete.',
 	'Return exactly one execution decision after enough information is gathered.',
 	'Keep arguments concrete and minimal.',
-	'Never invent coordinates, blocks, entities, or containers that are not present in the snapshot or tool results.',
+	'Snapshot is runtime-only and does not include nearby world facts.',
+	'Use inspect_blocks and inspect_entities for world facts, inspect_inventory for player inventory, and inspect_window for container state.',
+	'Before using navigate_to, break_block, place_block, follow_entity, or open_window, call memory_read or inspect tools in this turn to ground world facts.',
+	'Never invent coordinates, blocks, entities, or containers that are not present in inspect/memory tool results.',
 	'If the user asks you to come to them, follow them, or stay near them, prefer follow_entity with the matching nearby player name instead of navigate_to.',
-	'Use inspect_inventory for player inventory state and inspect_window for nearby block windows before taking inventory or window actions.',
 	'Use open_window, transfer_item, and close_window for direct window interactions when the task requires moving items.'
 ].join(' ')
 
@@ -89,6 +102,8 @@ const inlineToolNames = new Set<InlineToolName>([
 	'memory_update_data',
 	'memory_delete',
 	'inspect_inventory',
+	'inspect_blocks',
+	'inspect_entities',
 	'inspect_window'
 ])
 
@@ -193,14 +208,42 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 		properties: {},
 		required: []
 	}),
-	tool('inspect_window', 'Inspect a nearby window-bearing block.', {
+	tool(
+		'inspect_blocks',
+		'Inspect nearby interactable/resource blocks from live world state.',
+		{
+			type: 'object',
+			additionalProperties: false,
+			properties: {
+				scope: {
+					type: 'string',
+					enum: ['interactables', 'resources', 'all']
+				},
+				max_distance: { type: 'number' }
+			},
+			required: []
+		}
+	),
+	tool('inspect_entities', 'Inspect nearby entities from live world state.', {
 		type: 'object',
 		additionalProperties: false,
 		properties: {
-			position: positionSchema
+			max_distance: { type: 'number' }
 		},
-		required: ['position']
+		required: []
 	}),
+	tool(
+		'inspect_window',
+		'Inspect an active window session or a nearby window-bearing block.',
+		{
+			type: 'object',
+			additionalProperties: false,
+			properties: {
+				position: positionSchema
+			},
+			required: []
+		}
+	),
 	tool('finish_goal', 'Finish the current goal.', {
 		type: 'object',
 		additionalProperties: false,
@@ -303,8 +346,50 @@ const toPosition = (value: Record<string, unknown>): MemoryPosition => ({
 	z: Number(value.z ?? 0)
 })
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const tryToPosition = (value: unknown): MemoryPosition | null => {
+	if (!isRecord(value)) {
+		return null
+	}
+
+	const x = Number(value.x)
+	const y = Number(value.y)
+	const z = Number(value.z)
+	if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+		return null
+	}
+
+	return {
+		x,
+		y,
+		z
+	}
+}
+
 const toVec3 = (position: MemoryPosition) =>
 	new Vec3Class(position.x, position.y, position.z)
+
+const positionsEqual = (
+	left: MemoryPosition | null | undefined,
+	right: MemoryPosition | null | undefined
+): boolean =>
+	Boolean(
+		left &&
+			right &&
+			left.x === right.x &&
+			left.y === right.y &&
+			left.z === right.z
+	)
+
+const toBlocksScope = (value: unknown): InspectBlocksScope => {
+	if (value === 'interactables' || value === 'resources' || value === 'all') {
+		return value
+	}
+
+	return 'all'
+}
 
 export const isExecutionToolName = (name: string): name is ExecutionToolName =>
 	executionToolNames.has(name as ExecutionToolName)
@@ -403,9 +488,97 @@ export const executeInlineToolCall = async (
 			const inventory = describePlayerInventory(context.bot)
 			return { ok: true, output: { inventory } }
 		}
+		case 'inspect_blocks': {
+			const scope = toBlocksScope(args.scope)
+			const maxDistance =
+				typeof args.max_distance === 'number' ? args.max_distance : undefined
+			const blocks = inspectNearbyBlocks(context.bot, {
+				scope,
+				maxDistance
+			})
+
+			return {
+				ok: true,
+				output: {
+					scope,
+					maxDistance: maxDistance ?? null,
+					blocks
+				}
+			}
+		}
+		case 'inspect_entities': {
+			const maxDistance =
+				typeof args.max_distance === 'number' ? args.max_distance : undefined
+			const entities = inspectNearbyEntities(context.bot, {
+				maxDistance
+			})
+
+			return {
+				ok: true,
+				output: {
+					maxDistance: maxDistance ?? null,
+					entities
+				}
+			}
+		}
 		case 'inspect_window': {
-			const position = toPosition(args.position as Record<string, unknown>)
-			const block = context.bot.blockAt(toVec3(position))
+			const requestedPosition = tryToPosition(args.position)
+			const activeSession = context.activeWindowSession ?? null
+			const activeSessionState = context.activeWindowSessionState ?? null
+			const isStaleActiveSession = activeSessionState === 'close_failed'
+			const canReuseActiveSession =
+				Boolean(activeSession) &&
+				(!requestedPosition ||
+					positionsEqual(activeSession?.position, requestedPosition))
+
+			if (isStaleActiveSession) {
+				return {
+					ok: false,
+					output: {
+						reason:
+							'Active window session is stale (previous close failed). Resolve with close_window before inspect_window.'
+					}
+				}
+			}
+
+			if (
+				activeSession &&
+				requestedPosition &&
+				!positionsEqual(activeSession.position, requestedPosition)
+			) {
+				return {
+					ok: false,
+					output: {
+						reason:
+							'Active window session is already open at a different position. Close it with close_window before inspect_window at another location.'
+					}
+				}
+			}
+
+			if (activeSession && canReuseActiveSession) {
+				return {
+					ok: true,
+					output: {
+						reusedActiveSession: true,
+						kind: activeSession.kind,
+						blockName: activeSession.blockName,
+						window: describeWindowSession(activeSession),
+						closeFailed: false
+					}
+				}
+			}
+
+			if (!requestedPosition) {
+				return {
+					ok: false,
+					output: {
+						reason:
+							'No active window session. Provide position to inspect nearby window block.'
+					}
+				}
+			}
+
+			const block = context.bot.blockAt(toVec3(requestedPosition))
 			if (!block) {
 				return { ok: false, output: { reason: 'Window block not found' } }
 			}
@@ -423,14 +596,25 @@ export const executeInlineToolCall = async (
 			let session: Awaited<ReturnType<typeof openWindowSession>> | null = null
 
 			try {
-				session = await openWindowSession(context.bot, block, position)
+				session = await openWindowSession(context.bot, block, requestedPosition)
 
 				const window = describeWindowSession(session)
 				const closeResult = closeWindowSessionSafely(context.bot, session)
+				if (!closeResult.ok) {
+					return {
+						ok: false,
+						output: {
+							reason:
+								'Failed to close temporary window session after inspect_window; runtime window state is untrusted.',
+							close: closeResult
+						}
+					}
+				}
 
 				return {
 					ok: true,
 					output: {
+						reusedActiveSession: false,
 						blockName: block.name,
 						kind: session.kind,
 						window,
