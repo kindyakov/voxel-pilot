@@ -711,6 +711,107 @@ test('thinking execution enters a concrete executing substate without crashing',
 	}
 })
 
+test('follow_entity runtime selector requires entity_name and entity_type to match the same entity', async () => {
+	const thinkingActor = fromPromise(async () => ({
+		kind: 'execute' as const,
+		execution: {
+			toolName: 'follow_entity' as const,
+			args: {
+				entity_name: 'Steve',
+				entity_type: 'player',
+				distance: 2,
+				max_distance: 32
+			}
+		},
+		subGoal: 'Follow Steve',
+		transcript: ['follow_entity']
+	}))
+
+	const bot = new FakeBot() as any
+	const selectedEntityIds: number[] = []
+	const candidateEntities = [
+		{
+			id: 1,
+			username: 'Steve',
+			name: 'steve_skin',
+			type: 'cow',
+			position: createVec3(2, 64, 0),
+			height: 1.8
+		},
+		{
+			id: 2,
+			username: 'Alex',
+			name: 'alex',
+			type: 'player',
+			position: createVec3(3, 64, 0),
+			height: 1.8
+		},
+		{
+			id: 3,
+			username: 'Steve',
+			name: 'Steve',
+			type: 'player',
+			position: createVec3(4, 64, 0),
+			height: 1.8
+		}
+	]
+
+	bot.entities = Object.fromEntries(
+		candidateEntities.map(entity => [String(entity.id), entity])
+	)
+	bot.nearestEntity = (predicate: (entity: any) => boolean) => {
+		const target =
+			candidateEntities.find(entity => predicate(entity)) ?? null
+		selectedEntityIds.push(target?.id ?? -1)
+		return target
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Follow Steve'
+		})
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(selectedEntityIds.length > 0, true)
+		assert.equal(selectedEntityIds[0], 3)
+		assert.equal(
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: { TASKS: { EXECUTING: 'FOLLOWING' } }
+			}),
+			true
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
 test('open_window, transfer_item, and close_window route through the HSM with session lifecycle', async () => {
 	let thinkingCalls = 0
 	let openCalls = 0
