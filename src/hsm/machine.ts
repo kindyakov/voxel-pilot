@@ -1263,9 +1263,10 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											actions: ['updateEntities']
 										},
 										{
-											guard: ({ event }) =>
+											guard: ({ event, context }) =>
 												isEntityUpdateEvent(event) &&
-												Boolean(event.nearestEnemy.entity),
+												Boolean(event.nearestEnemy.entity) &&
+												!eventCanSkirmishRanged({ event, context }),
 											target: 'APPROACHING',
 											actions: ['updateEntities']
 										},
