@@ -228,12 +228,7 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 				return
 			}
 
-			if (hasMovementController(bot)) {
-				bot.movement.setGoal(bot.movement.goals.Default)
-				bot.setControlState('forward', true)
-				bot.setControlState('sprint', true)
-				bot.setControlState('jump', true)
-			}
+			clearMicroMovement(bot)
 			setState(loadout)
 		} catch {
 			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
@@ -277,7 +272,7 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 		}
 
 		if (
-			state.weapon !== loadout.weapon ||
+			state.weapon?.name !== loadout.weapon.name ||
 			state.weaponType !== loadout.weaponType
 		) {
 			try {
@@ -291,25 +286,10 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 			}
 		}
 
-		if (hasMovementController(bot)) {
-			const proximity = bot.movement.heuristic.get('proximity')
-			proximity.target(enemy.position)
-			proximity.avoid(
-				context.nearestEnemy.distance <= context.preferences.enemyRangedRange
-			)
-
-			const yaw = bot.movement.getYaw(240, 15, 1)
-			void bot.movement.steer(yaw, true).catch(() => {
-				if (!abortSignal.aborted) {
-					sendBack({ type: 'ENEMY_BECAME_CLOSE' })
-				}
-			})
-		}
-
 		if (
 			!state.currentTarget ||
 			state.currentTarget.id !== enemy.id ||
-			state.weapon !== loadout.weapon ||
+			state.weapon?.name !== loadout.weapon.name ||
 			state.weaponType !== loadout.weaponType
 		) {
 			if (state.currentTarget) {
