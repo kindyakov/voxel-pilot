@@ -1119,7 +1119,8 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									{
 										target: 'FLEEING',
 										guard: ({ context }) =>
-											context.preferences.combatMode === 'retreat'
+											context.preferences.combatMode === 'retreat' ||
+											context.health < context.preferences.healthEmergency
 									},
 									{
 										target: 'MELEE_ATTACKING',

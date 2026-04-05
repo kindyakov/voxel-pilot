@@ -275,7 +275,11 @@ export class BotUtils {
 		}
 
 		if (this._bot.autoEat.isEating) {
-			this._bot.autoEat.cancelEat()
+			try {
+				this._bot.autoEat.cancelEat()
+			} catch (error) {
+				// Исключение при отмене еды игнорируется
+			}
 		}
 	}
 

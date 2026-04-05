@@ -317,6 +317,8 @@ const serviceFleeing = createStatefulService({
 	tickInterval: 500,
 
 	onStart: ({ bot }) => {
+		bot.utils.stopEating?.()
+
 		if (bot.movements) {
 			bot.movements.allowSprinting = true
 		}
