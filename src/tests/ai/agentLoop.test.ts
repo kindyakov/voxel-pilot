@@ -1150,3 +1150,29 @@ test('runAgentTurn accepts plain-text finish after a grounded world inspection i
 	assert.equal(result.transcript[1]!, 'inspect_entities')
 	assert.match(result.transcript[2]!, /^round_1_ms:\d+$/)
 })
+
+test('loop facade re-exports dedicated loop ownership modules', async () => {
+	const [contracts, groundingModule, validationModule, policyModule, transcriptModule, runAgentTurnModule, facade] =
+		await Promise.all([
+			import('../../ai/contracts/agentTurn.js'),
+			import('../../ai/loop/grounding.js'),
+			import('../../ai/loop/validation.js'),
+			import('../../ai/loop/policy.js'),
+			import('../../ai/loop/transcript.js'),
+			import('../../ai/loop/runAgentTurn.js'),
+			import('../../ai/loop.js')
+		])
+
+	assert.equal(typeof contracts.AgentTurnResult, 'undefined')
+	assert.equal(typeof groundingModule.collectGroundedFacts, 'function')
+	assert.equal(typeof validationModule.validateExecutionTool, 'function')
+	assert.equal(policyModule.MAX_INLINE_TOOL_ROUNDS, 4)
+	assert.equal(
+		transcriptModule.executionSignature(
+			'navigate_to',
+			{ position: { x: 1, y: 2, z: 3 } }
+		),
+		'navigate_to:{"position":{"x":1,"y":2,"z":3}}'
+	)
+	assert.equal(runAgentTurnModule.runAgentTurn, facade.runAgentTurn)
+})

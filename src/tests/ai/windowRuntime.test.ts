@@ -415,3 +415,28 @@ test('inspect_window rejects unsupported workstation blocks explicitly', async (
 	assert.match(String((result.output as any).reason), /Unsupported window block/)
 	assert.equal(openCalls, 0)
 })
+
+test('tools facade re-exports dedicated tool ownership modules', async () => {
+	const [contracts, promptModule, catalogModule, namesModule, summaryModule, sharedModule, inlineExecutorModule, facade] =
+		await Promise.all([
+			import('../../ai/contracts/execution.js'),
+			import('../../ai/tools/prompt.js'),
+			import('../../ai/tools/catalog.js'),
+			import('../../ai/tools/names.js'),
+			import('../../ai/tools/summary.js'),
+			import('../../ai/tools/shared.js'),
+			import('../../ai/tools/inlineExecutor.js'),
+			import('../../ai/tools.js')
+		])
+
+	assert.equal(typeof contracts.PendingExecution, 'undefined')
+	assert.equal(typeof promptModule.AGENT_SYSTEM_PROMPT, 'string')
+	assert.equal(catalogModule.AGENT_TOOLS, facade.AGENT_TOOLS)
+	assert.equal(namesModule.isExecutionToolName, facade.isExecutionToolName)
+	assert.equal(summaryModule.summarizeExecution, facade.summarizeExecution)
+	assert.equal(sharedModule.toBlocksScope({}), 'all')
+	assert.equal(
+		inlineExecutorModule.executeInlineToolCall,
+		facade.executeInlineToolCall
+	)
+})

@@ -126,3 +126,28 @@ test('createAgentClient selects chat completions client for routerai provider', 
 		}
 	}
 })
+
+test('client facade keeps stable exports while dedicated client modules own the implementation', async () => {
+	const [contracts, factory, chatModule, responsesModule, facade] =
+		await Promise.all([
+			import('../../ai/contracts/agentClient.js'),
+			import('../../ai/client/factory.js'),
+			import('../../ai/client/chatClient.js'),
+			import('../../ai/client/responsesClient.js'),
+			import('../../ai/client.js')
+		])
+
+	assert.equal(typeof contracts.parseArguments, 'undefined')
+	assert.equal(typeof factory.createAgentClient, 'function')
+	assert.equal(typeof chatModule.OpenAICompatibleChatClient, 'function')
+	assert.equal(typeof responsesModule.OpenAIResponsesClient, 'function')
+	assert.equal(facade.createAgentClient, factory.createAgentClient)
+	assert.equal(
+		facade.OpenAICompatibleChatClient,
+		chatModule.OpenAICompatibleChatClient
+	)
+	assert.equal(
+		facade.OpenAIResponsesClient,
+		responsesModule.OpenAIResponsesClient
+	)
+})
