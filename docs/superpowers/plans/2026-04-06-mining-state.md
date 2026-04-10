@@ -10,6 +10,19 @@
 
 ---
 
+## Implementation Corrections From Codebase Review
+
+The original draft had several unsafe assumptions. Treat this section as authoritative if any older snippet below conflicts with it.
+
+- Do **not** use `FOUND` for batch search results. `src/hsm/types.ts` already has `FOUND` for older primitive payloads. Add a distinct `BLOCKS_FOUND` event with `blocks: Block[]` and wire MINING to `BLOCKS_FOUND`.
+- Do **not** implement a pickaxe-only `hasRequiredTool` guard. `mine_resource` is also intended for logs and other resources, and `primitiveBreaking` already delegates harvest/tool selection to `bot.tool.equipForBlock(block, { requireHarvest: true })`. Preconditions should validate that the bot exists, the resource name is known, and there is inventory capacity; tool failures belong in BREAKING via `BREAKING_FAILED`.
+- Follow the repo's current HSM import style: existing HSM alias imports usually omit `.js` extensions, e.g. `@/hsm/context`, `@/types`, `@/hsm/helpers/createStatefulService`.
+- The search primitive file must be `src/hsm/actors/primitives/primitiveSearchBlock.primitive.ts`. Do not create `primitiveSearchBlock.ts`.
+- Tests in this repo use Node's built-in `node:test` and `node:assert/strict`, not Vitest. Do not add `vitest` imports.
+- `mine_resource` uses the existing tool-schema convention `block_name`, not `blockName`. The machine should normalize from `pendingExecution.args.block_name`.
+- Adding the AI tool is not just an `AGENT_TOOLS` edit. Also update `AgentToolName`, `executionToolNames`, `summarizeExecution`, and `validateExecutionTool` so `mine_resource` is accepted without a grounded coordinate.
+- MINING completion must record success/failure before returning to `DECIDE_NEXT`. Do not use a parent `onDone` that loses whether the final state was success or failure.
+
 ## Problem Statement
 
 **Current behavior:** Every action (find → navigate → break) triggers an LLM call:
@@ -63,9 +76,8 @@ MAIN_ACTIVITY.TASKS
 | `src/hsm/actions/mining.actions.ts`                           | Create | Actions for MINING state                                      |
 | `src/hsm/machine.ts`                                          | Modify | Add MINING state to EXECUTING, register actors/guards/actions |
 | `src/hsm/types.ts`                                            | Modify | Add MiningTaskData type, MINING events                        |
-| `src/hsm/context.ts`                                          | Modify | Add mining-related context fields                             |
 | `src/tests/hsm/blockAnalysis.test.ts`                         | Create | Unit tests for block analysis utilities                       |
-| `src/tests/hsm/primitiveSearchBlock.test.ts`                  | Create | Tests for search primitive                                    |
+| `src/tests/hsm/primitiveSearchBlock.primitive.test.ts`        | Create | Tests for search primitive                                    |
 
 ---
 
@@ -94,13 +106,13 @@ interface YRangeFilter {
 
 - Input: `{ blockName: 'chest', maxDistance: 32 }`
 - Returns: nearest block, no Y-filter, no safety checks
-- Event: `{ type: 'FOUND', blocks: [Block] }`
+- Event: `{ type: 'BLOCKS_FOUND', blocks: [Block] }`
 
 **Mining mode** (for ores, resources):
 
 - Input: `{ blockName: 'iron_ore', count: 10, maxYDiffAbove: 6, maxYDiffBelow: 2, prioritizeSafety: true }`
 - Returns: N best blocks with Y-filter, safety checks, priority scoring
-- Event: `{ type: 'FOUND', blocks: Block[] }`
+- Event: `{ type: 'BLOCKS_FOUND', blocks: Block[] }`
 
 ### 3. Batch Search
 
@@ -144,156 +156,87 @@ When inventory fills during mining:
 **Files:**
 
 - Create: `src/hsm/utils/blockAnalysis.ts`
-- `primitiveSearchBlock.primitive.ts`
 - Test: `src/tests/hsm/blockAnalysis.test.ts`
 
 - [ ] **Step 1: Write tests using node:test (not vitest)**
-      type AnalyzedBlock,
-      calculateBlockScore,
-      checkBlockSafety,
-      filterByYRange,
-      filterSafeBlocks,
-      isBlockDirectlyBelowBot,
-      selectBestBlocks,
-      sortBlocksByPriority
-      } from '@/hsm/utils/blockAnalysis.js'
 
-describe('filterByYRange', () => {
-const createBlock = (y: number, yDiff: number): AnalyzedBlock => ({
-block: {} as any,
-position: { x: 0, y, z: 0 } as any,
-distanceHorizontal: 5,
-distanceTotal: 5,
-yDiff
+```typescript
+import assert from 'node:assert/strict'
+import test from 'node:test'
+
+import {
+	type AnalyzedBlock,
+	calculateBlockScore,
+	filterByYRange,
+	selectBestBlocks,
+	sortBlocksByPriority
+} from '../../hsm/utils/blockAnalysis.js'
+
+const createBlock = (y: number, yDiff: number, distance = 5): AnalyzedBlock => ({
+	block: {} as any,
+	position: { x: 0, y, z: 0 } as any,
+	distanceHorizontal: distance,
+	distanceTotal: distance,
+	yDiff
 })
 
-    it('filters blocks within asymmetric Y range', () => {
-    	const blocks: AnalyzedBlock[] = [
-    		createBlock(64, 0), // at bot level
-    		createBlock(68, 4), // +4 above
-    		createBlock(70, 6), // +6 above (outside)
-    		createBlock(62, -2), // -2 below
-    		createBlock(60, -4) // -4 below (outside)
-    	]
+test('filterByYRange keeps blocks within an asymmetric Y range', () => {
+	const blocks: AnalyzedBlock[] = [
+		createBlock(64, 0),
+		createBlock(68, 4),
+		createBlock(70, 6),
+		createBlock(62, -2),
+		createBlock(60, -4)
+	]
 
-    	const result = filterByYRange(blocks, 64, { above: 4, below: 2 })
-    	expect(result).toHaveLength(3)
-    	expect(result.map(b => b.yDiff)).toEqual([0, 4, -2])
-    })
+	const result = filterByYRange(blocks, 64, { above: 4, below: 2 })
 
-    it('returns all blocks when no Y filter specified', () => {
-    	const blocks: AnalyzedBlock[] = [
-    		createBlock(64, 0),
-    		createBlock(70, 6),
-    		createBlock(60, -4)
-    	]
-
-    	const result = filterByYRange(blocks, 64)
-    	expect(result).toHaveLength(3)
-    })
-
+	assert.equal(result.length, 3)
+	assert.deepEqual(
+		result.map(block => block.yDiff),
+		[0, 4, -2]
+	)
 })
 
-describe('calculateBlockScore', () => {
-const createBlock = (yDiff: number, distance: number): AnalyzedBlock => ({
-block: {} as any,
-position: {} as any,
-distanceHorizontal: distance,
-distanceTotal: distance,
-yDiff
+test('filterByYRange returns all blocks when no Y filter is specified', () => {
+	const blocks = [createBlock(64, 0), createBlock(70, 6), createBlock(60, -4)]
+
+	const result = filterByYRange(blocks, 64)
+
+	assert.equal(result.length, 3)
 })
 
-    it('prefers blocks at bot level', () => {
-    	const atLevel = createBlock(0, 5)
-    	const above = createBlock(4, 5)
-    	expect(calculateBlockScore(atLevel)).toBeGreaterThan(
-    		calculateBlockScore(above)
-    	)
-    })
-
-    it('penalizes blocks below more than above', () => {
-    	const above = createBlock(4, 5)
-    	const below = createBlock(-4, 5)
-    	expect(calculateBlockScore(above)).toBeGreaterThan(
-    		calculateBlockScore(below)
-    	)
-    })
-
-    it('prefers closer blocks', () => {
-    	const near = createBlock(0, 2)
-    	const far = createBlock(0, 20)
-    	expect(calculateBlockScore(near)).toBeGreaterThan(calculateBlockScore(far))
-    })
-
+test('calculateBlockScore prefers level, above, and nearer blocks', () => {
+	assert.ok(calculateBlockScore(createBlock(64, 0)) > calculateBlockScore(createBlock(68, 4)))
+	assert.ok(calculateBlockScore(createBlock(68, 4)) > calculateBlockScore(createBlock(60, -4)))
+	assert.ok(calculateBlockScore(createBlock(64, 0, 2)) > calculateBlockScore(createBlock(64, 0, 20)))
 })
 
-describe('sortBlocksByPriority', () => {
-it('sorts by score descending', () => {
-const blocks: AnalyzedBlock[] = [
-{
-block: {} as any,
-position: {} as any,
-distanceHorizontal: 20,
-distanceTotal: 20,
-yDiff: 4
-},
-{
-block: {} as any,
-position: {} as any,
-distanceHorizontal: 2,
-distanceTotal: 2,
-yDiff: 0
-},
-{
-block: {} as any,
-position: {} as any,
-distanceHorizontal: 10,
-distanceTotal: 10,
-yDiff: 2
-}
-]
-const sorted = sortBlocksByPriority(blocks)
-expect(sorted[0].distanceTotal).toBe(2)
-expect(sorted[0].yDiff).toBe(0)
-})
+test('sortBlocksByPriority sorts by descending score', () => {
+	const sorted = sortBlocksByPriority([
+		createBlock(68, 4, 20),
+		createBlock(64, 0, 2),
+		createBlock(66, 2, 10)
+	])
+
+	assert.equal(sorted[0].distanceTotal, 2)
+	assert.equal(sorted[0].yDiff, 0)
 })
 
-describe('selectBestBlocks', () => {
-it('returns top N blocks by priority', () => {
-const blocks: AnalyzedBlock[] = [
-{
-block: {} as any,
-position: {} as any,
-distanceHorizontal: 1,
-distanceTotal: 1,
-yDiff: 0
-},
-{
-block: {} as any,
-position: {} as any,
-distanceHorizontal: 2,
-distanceTotal: 2,
-yDiff: 0
-},
-{
-block: {} as any,
-position: {} as any,
-distanceHorizontal: 3,
-distanceTotal: 3,
-yDiff: 0
-}
-]
-const result = selectBestBlocks(blocks, 2)
-expect(result).toHaveLength(2)
-expect(result[0].distanceTotal).toBe(1)
-})
-})
+test('selectBestBlocks returns the top N prioritized blocks', () => {
+	const result = selectBestBlocks(
+		[createBlock(64, 0, 1), createBlock(64, 0, 2), createBlock(64, 0, 3)],
+		2
+	)
 
-````
+	assert.equal(result.length, 2)
+	assert.equal(result[0].distanceTotal, 1)
+})
+```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npx tsx --test src/tests/hsm/blockAnalysis.test.ts`
+Run: `node --import tsx --test src/tests/hsm/blockAnalysis.test.ts`
 Expected: FAIL - module not found
 
 - [ ] **Step 3: Implement block analysis utilities**
@@ -472,11 +415,11 @@ export function analyzeBlock(pos: Vec3, bot: Bot): AnalyzedBlock | null {
 		yDiff
 	}
 }
-````
+```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx tsx --test src/tests/hsm/blockAnalysis.test.ts`
+Run: `node --import tsx --test src/tests/hsm/blockAnalysis.test.ts`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -492,10 +435,25 @@ git commit -m "feat: add block analysis utilities with Y-filtering and scoring"
 
 **Files:**
 
-- Create: `src/hsm/actors/primitives/primitiveSearchBlock.ts`
+- Create: `src/hsm/actors/primitives/primitiveSearchBlock.primitive.ts`
 - Test: `src/tests/hsm/primitiveSearchBlock.primitive.test.ts`
 
-- [ ] **Step 1: Implement primitiveSearchBlock**
+- [ ] **Step 1: Write failing primitiveSearchBlock tests**
+
+Create `src/tests/hsm/primitiveSearchBlock.primitive.test.ts` with Node `node:test` coverage for these behaviours:
+
+- Unknown `blockName` emits `NOT_FOUND`.
+- Simple mode emits `BLOCKS_FOUND` with the nearest matching block.
+- Mining mode applies Y filtering and returns at most `count` prioritized blocks.
+
+Use a small parent test machine that invokes `primitiveSearchBlock`; do not instantiate the callback actor without a parent, because `sendBack` events must be observed by the invoking machine.
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `node --import tsx --test src/tests/hsm/primitiveSearchBlock.primitive.test.ts`
+Expected: FAIL because `src/hsm/actors/primitives/primitiveSearchBlock.primitive.ts` does not exist yet.
+
+- [ ] **Step 3: Implement primitiveSearchBlock**
 
 ```typescript
 // src/hsm/actors/primitives/primitiveSearchBlock.primitive.ts
@@ -504,7 +462,7 @@ import type { Block } from '@/types'
 import {
 	type BaseServiceState,
 	createStatefulService
-} from '@/hsm/helpers/createStatefulService.js'
+} from '@/hsm/helpers/createStatefulService'
 import {
 	type AnalyzedBlock,
 	type YRangeFilter,
@@ -512,7 +470,7 @@ import {
 	filterByYRange,
 	filterSafeBlocks,
 	selectBestBlocks
-} from '@/hsm/utils/blockAnalysis.js'
+} from '@/hsm/utils/blockAnalysis'
 
 interface SearchBlockState extends BaseServiceState {
 	blockName: string
@@ -710,21 +668,26 @@ export const primitiveSearchBlock = createStatefulService<
 
 		api.setState({ searching: false })
 		api.sendBack({
-			type: 'FOUND',
+			type: 'BLOCKS_FOUND',
 			blocks: resultBlocks
 		})
 	},
 
 	onCleanup: () => {
-		console.log('🧹 [primitiveSearchBlock] Cleanup')
+		console.log('[primitiveSearchBlock] Cleanup')
 	}
 })
 ```
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `node --import tsx --test src/tests/hsm/primitiveSearchBlock.primitive.test.ts`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/hsm/actors/primitives/primitiveSearchBlock.ts
+git add src/hsm/actors/primitives/primitiveSearchBlock.primitive.ts src/tests/hsm/primitiveSearchBlock.primitive.test.ts
 git commit -m "feat: add primitiveSearchBlock with simple and mining modes"
 ```
 
@@ -741,29 +704,32 @@ git commit -m "feat: add primitiveSearchBlock with simple and mining modes"
 
 ```typescript
 // src/hsm/guards/mining.guards.ts
-import type { MachineContext } from '@/hsm/context.js'
-import type { MiningTaskData } from '@/hsm/types.js'
+import type { MachineContext } from '@/hsm/context'
+import type { MiningTaskData } from '@/hsm/types'
+
+const getMiningTaskData = (context: MachineContext): MiningTaskData | null =>
+	(context.taskData as MiningTaskData | null) ?? null
+
+const countPlayerInventoryEmptySlots = (context: MachineContext): number => {
+	const slots = context.bot?.inventory.slots ?? []
+	return slots
+		.slice(9, 45)
+		.filter(slot => slot === null).length
+}
 
 export const miningGuards = {
-	hasRequiredTool: ({ context }: { context: MachineContext }) => {
-		const taskData = context.taskData as MiningTaskData | null
+	canAttemptMining: ({ context }: { context: MachineContext }) => {
+		const taskData = getMiningTaskData(context)
 		if (!taskData || !context.bot) return false
 
-		const blockName = taskData.blockName
-		const blockData = context.bot.registry.blocksByName[blockName]
+		const blockData = context.bot.registry.blocksByName[taskData.blockName]
 		if (!blockData) return false
 
-		// Check if bot has appropriate tool
-		const inventory = context.bot.inventory.slots
-		const hasPickaxe = inventory.some(
-			slot => slot?.name?.includes('pickaxe') ?? false
-		)
-
-		return hasPickaxe
+		return taskData.count > 0 && countPlayerInventoryEmptySlots(context) > 2
 	},
 
 	isBlockNearby: ({ context }: { context: MachineContext }) => {
-		const taskData = context.taskData as MiningTaskData | null
+		const taskData = getMiningTaskData(context)
 		if (!taskData || !context.bot?.entity) return false
 
 		const targetBlock = taskData.targetBlocks?.[taskData.targetIndex]
@@ -776,30 +742,25 @@ export const miningGuards = {
 	},
 
 	isMiningGoalComplete: ({ context }: { context: MachineContext }) => {
-		const taskData = context.taskData as MiningTaskData | null
+		const taskData = getMiningTaskData(context)
 		if (!taskData) return false
 
 		return taskData.collected >= taskData.count
 	},
 
 	hasMoreBlocksToMine: ({ context }: { context: MachineContext }) => {
-		const taskData = context.taskData as MiningTaskData | null
+		const taskData = getMiningTaskData(context)
 		if (!taskData) return false
 
 		return taskData.targetIndex < (taskData.targetBlocks?.length ?? 0)
 	},
 
 	isInventoryFull: ({ context }: { context: MachineContext }) => {
-		if (!context.bot) return false
-
-		const emptySlots = context.bot.inventory.slots.filter(
-			slot => slot === null
-		).length
-		return emptySlots <= 2
+		return countPlayerInventoryEmptySlots(context) <= 2
 	},
 
 	maxNavigationAttemptsReached: ({ context }: { context: MachineContext }) => {
-		const taskData = context.taskData as MiningTaskData | null
+		const taskData = getMiningTaskData(context)
 		if (!taskData) return false
 
 		return (taskData.navigationAttempts ?? 0) >= 3
@@ -813,19 +774,19 @@ export const miningGuards = {
 // src/hsm/actions/mining.actions.ts
 import { assign } from 'xstate'
 
-import type { MachineContext, MachineEvent } from '@/hsm/types.js'
-import type { MiningTaskData } from '@/hsm/types.js'
+import type { MachineContext } from '@/hsm/context'
+import type { MachineEvent, MiningTaskData } from '@/hsm/types'
 
 export const miningActions = {
 	entryMining: ({ context }: { context: MachineContext }) => {
 		const data = context.taskData as MiningTaskData
 		console.log(
-			`⛏️ [MINING] Starting mining task: ${data.blockName} x${data.count}`
+			`[MINING] Starting mining task: ${data.blockName} x${data.count}`
 		)
 	},
 
 	exitMining: ({ context }: { context: MachineContext }) => {
-		console.log(`🏁 [MINING] Exiting mining state`)
+		console.log('[MINING] Exiting mining state')
 	},
 
 	storeFoundBlocks: assign({
@@ -834,7 +795,7 @@ export const miningActions = {
 			event
 		}: {
 			context: MachineContext
-			event: Extract<MachineEvent, { type: 'FOUND' }>
+			event: Extract<MachineEvent, { type: 'BLOCKS_FOUND' }>
 		}) => {
 			const currentData = context.taskData as MiningTaskData | null
 			return {
@@ -892,18 +853,18 @@ export const miningActions = {
 	taskMiningCompleted: ({ context }: { context: MachineContext }) => {
 		const data = context.taskData as MiningTaskData
 		console.log(
-			`✅ [MINING] Task completed! Collected ${data.collected}/${data.count} ${data.blockName}`
+			`[MINING] Task completed: collected ${data.collected}/${data.count} ${data.blockName}`
 		)
-		context.bot?.chat(`✅ Добыто ${data.collected} ${data.blockName}`)
+		context.bot?.chat(`Добыто ${data.collected} ${data.blockName}`)
 	},
 
 	taskMiningFailed: ({ context }: { context: MachineContext }) => {
 		const data = context.taskData as MiningTaskData
 		console.log(
-			`❌ [MINING] Task failed. Collected ${data.collected ?? 0}/${data.count} ${data.blockName}`
+			`[MINING] Task failed: collected ${data.collected ?? 0}/${data.count} ${data.blockName}`
 		)
 		context.bot?.chat(
-			`❌ Не удалось завершить добычу ${data.blockName}. Собрано: ${data.collected ?? 0}/${data.count}`
+			`Не удалось завершить добычу ${data.blockName}. Собрано: ${data.collected ?? 0}/${data.count}`
 		)
 	}
 }
@@ -918,20 +879,19 @@ git commit -m "feat: add mining guards and actions"
 
 ---
 
-## Task 4: Update Types and Context
+## Task 4: Update Types
 
 **Files:**
 
 - Modify: `src/hsm/types.ts`
-- Modify: `src/hsm/context.ts`
 
-- [ ] **Step 1: Add MiningTaskData and FOUND blocks event**
+- [ ] **Step 1: Add MiningTaskData and BLOCKS_FOUND event**
 
 Read `src/hsm/types.ts` and add:
 
 ```typescript
 // Add to PrimitiveEvents union
-| { type: 'FOUND'; blocks: Block[] }
+| { type: 'BLOCKS_FOUND'; blocks: Block[] }
 | { type: 'INVENTORY_FULL' }
 
 // Add MiningTaskData interface at end of file
@@ -949,7 +909,7 @@ export interface MiningTaskData {
 
 ```bash
 git add src/hsm/types.ts
-git commit -m "feat: add MiningTaskData type and FOUND blocks event"
+git commit -m "feat: add MiningTaskData type and block search event"
 ```
 
 ---
@@ -965,9 +925,9 @@ git commit -m "feat: add MiningTaskData type and FOUND blocks event"
 Add at top of imports section in `src/hsm/machine.ts`:
 
 ```typescript
-import { miningActions } from '@/hsm/actions/mining.actions.js'
-import { primitiveSearchBlock } from '@/hsm/actors/primitives/primitiveSearchBlock.js'
-import { miningGuards } from '@/hsm/guards/mining.guards.js'
+import { miningActions } from '@/hsm/actions/mining.actions'
+import { primitiveSearchBlock } from '@/hsm/actors/primitives/primitiveSearchBlock.primitive'
+import { miningGuards } from '@/hsm/guards/mining.guards'
 ```
 
 - [ ] **Step 2: Register in guards and actions**
@@ -995,17 +955,11 @@ MINING: {
   initial: 'CHECKING_PRECONDITIONS',
   entry: ['entryMining'],
   exit: ['exitMining'],
-  onDone: {
-    target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
-    actions: assign({
-      taskData: () => null
-    })
-  },
   states: {
     CHECKING_PRECONDITIONS: {
       always: [
         {
-          guard: 'hasRequiredTool',
+          guard: 'canAttemptMining',
           target: 'SEARCHING'
         },
         {
@@ -1030,11 +984,12 @@ MINING: {
         })
       },
       on: {
-        FOUND: {
+        BLOCKS_FOUND: {
           target: 'CHECKING_DISTANCE',
           actions: ['storeFoundBlocks']
         },
-        NOT_FOUND: 'TASK_FAILED'
+        NOT_FOUND: 'TASK_FAILED',
+        ERROR: 'TASK_FAILED'
       }
     },
     CHECKING_DISTANCE: {
@@ -1075,7 +1030,8 @@ MINING: {
             target: 'SEARCHING',
             actions: ['incrementNavigationAttempts']
           }
-        ]
+        ],
+        ERROR: 'TASK_FAILED'
       }
     },
     BREAKING: {
@@ -1097,7 +1053,8 @@ MINING: {
           target: 'CHECKING_GOAL',
           actions: ['incrementCollected', 'resetNavigationAttempts']
         },
-        BREAKING_FAILED: 'SEARCHING'
+        BREAKING_FAILED: 'SEARCHING',
+        ERROR: 'TASK_FAILED'
       }
     },
     CHECKING_GOAL: {
@@ -1121,12 +1078,20 @@ MINING: {
       ]
     },
     TASK_COMPLETED: {
-      type: 'final',
-      entry: ['taskMiningCompleted']
+      entry: [
+        'taskMiningCompleted',
+        'recordExecutionSuccess',
+        assign({ taskData: () => null })
+      ],
+      always: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT'
     },
     TASK_FAILED: {
-      type: 'final',
-      entry: ['taskMiningFailed']
+      entry: [
+        'taskMiningFailed',
+        'recordExecutionFailure',
+        assign({ taskData: () => null })
+      ],
+      always: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT'
     }
   }
 }
@@ -1143,8 +1108,11 @@ In EXECUTING.states.RESOLVE.always array, add (before fallback):
   actions: [
     assign({
       taskData: ({ context }) => ({
-        blockName: context.pendingExecution?.args.blockName ?? '',
-        count: context.pendingExecution?.args.count ?? 1,
+        blockName: String(context.pendingExecution?.args.block_name ?? ''),
+        count:
+          typeof context.pendingExecution?.args.count === 'number'
+            ? context.pendingExecution.args.count
+            : 1,
         targetBlocks: [],
         targetIndex: 0,
         collected: 0,
@@ -1169,6 +1137,7 @@ git commit -m "feat: integrate MINING state into EXECUTING with full lifecycle"
 **Files:**
 
 - Modify: `src/ai/tools.ts`
+- Modify: `src/ai/loop.ts`
 
 - [ ] **Step 1: Add mine_resource tool schema**
 
@@ -1194,12 +1163,45 @@ tool(
 
 - [ ] **Step 2: Handle in resolveExecutionActor**
 
-In `src/hsm/machine.ts`, the guard `isMiningExecution` already routes to MINING state. Ensure the execution resolver passes the correct args.
+- [ ] **Step 2: Register mine_resource as an execution tool**
 
-- [ ] **Step 3: Commit**
+In `src/ai/tools.ts`:
+
+- Add `'mine_resource'` to `AgentToolName`.
+- Add `'mine_resource'` to `executionToolNames`.
+- Add a `summarizeExecution` case:
+
+```typescript
+case 'mine_resource':
+	return `Mine ${String(execution.args.count ?? 1)} ${String(execution.args.block_name ?? 'blocks')}`
+```
+
+- Update `AGENT_SYSTEM_PROMPT` to prefer `mine_resource` for repeated resource gathering after inventory inspection. Do not require `inspect_blocks` before `mine_resource`; the MINING primitive performs its own world search.
+
+- [ ] **Step 3: Let the AI loop validate mine_resource correctly**
+
+In `src/ai/loop.ts`, update `validateExecutionTool`:
+
+```typescript
+case 'mine_resource': {
+	const blockName = normalizeFactValue(execution.args.block_name)
+	const count = execution.args.count
+	if (!blockName) {
+		return 'Execution tool "mine_resource" requires block_name'
+	}
+	if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) {
+		return 'Execution tool "mine_resource" requires a positive count'
+	}
+	return null
+}
+```
+
+Do not add a grounded-position requirement for `mine_resource`. That would defeat the purpose of the batch-search state.
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add src/ai/tools.ts
+git add src/ai/tools.ts src/ai/loop.ts
 git commit -m "feat: add mine_resource tool to AI agent"
 ```
 
@@ -1209,48 +1211,110 @@ git commit -m "feat: add mine_resource tool to AI agent"
 
 **Files:**
 
-- Create: `src/tests/hsm/miningIntegration.test.ts`
+- Modify: `src/tests/hsm/machine.test.ts`
 
-- [ ] **Step 1: Write integration test**
+- [ ] **Step 1: Add a real MINING routing integration test**
 
 ```typescript
-// src/tests/hsm/miningIntegration.test.ts
-import { describe, expect, it } from 'vitest'
+test('mine_resource execution routes into MINING search state', async () => {
+	const thinkingActor = fromPromise(async () => ({
+		kind: 'execute' as const,
+		execution: {
+			toolName: 'mine_resource' as const,
+			args: {
+				block_name: 'iron_ore',
+				count: 2
+			}
+		},
+		subGoal: 'Mine iron ore',
+		transcript: ['mine_resource']
+	}))
 
-describe('MINING state integration', () => {
-	it('placeholder - requires live bot connection', () => {
-		// Full integration tests require:
-		// - Mock bot with inventory, position, registry
-		// - Mock findBlocks returning positions
-		// - Mock blockAt returning blocks
-		// - HSM interpreter with test machine
-		expect(true).toBe(true)
-	})
+	const bot = new FakeBot() as any
+	bot.registry = {
+		...bot.registry,
+		blocksByName: {
+			iron_ore: { id: 15, name: 'iron_ore' }
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Mine 2 iron ore'
+		})
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: {
+					TASKS: { EXECUTING: { MINING: 'SEARCHING' } }
+				}
+			}),
+			true
+		)
+		assert.equal((actor.getSnapshot().context.taskData as any).blockName, 'iron_ore')
+		assert.equal((actor.getSnapshot().context.taskData as any).count, 2)
+	} finally {
+		actor.stop()
+	}
 })
 ```
 
 - [ ] **Step 2: Run full test suite**
 
-Run: `npx tsx --test src/tests/hsm/`
+Run: `node --import tsx --test src/tests/hsm/machine.test.ts`
 Expected: All tests pass
 
 - [ ] **Step 3: Run type check and build**
 
-Run: `npm run type-check && npm run build`
+Run separately so failures are attributable:
+
+```bash
+npm run type-check
+npm run build
+```
+
 Expected: No errors
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/tests/hsm/miningIntegration.test.ts
-git commit -m "test: add MINING state integration tests placeholder"
+git add src/tests/hsm/machine.test.ts
+git commit -m "test: cover mine_resource HSM routing"
 ```
 
 ---
 
 ## Verification Checklist
 
-- [ ] All tests pass: `npx tsx --test src/tests/hsm/`
+- [ ] All tests pass: `node --import tsx --test src/tests/hsm/*.test.ts`
 - [ ] Type check passes: `npm run type-check`
 - [ ] Build succeeds: `npm run build`
 - [ ] No unused exports: `npm run knip`
