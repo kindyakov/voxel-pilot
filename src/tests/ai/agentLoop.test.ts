@@ -128,6 +128,152 @@ test('runAgentTurn resolves inline memory tool calls before selecting one execut
 	assert.match(result.transcript[2]!, /^round_1_ms:\d+$/)
 })
 
+test('runAgentTurn accepts mine_resource without a grounded block position', async () => {
+	const client = new OpenAIResponsesClient({
+		client: {
+			responses: {
+				create: async () =>
+					({
+						id: 'resp_1',
+						output: [
+							{
+								type: 'function_call',
+								call_id: 'call_1',
+								name: 'mine_resource',
+								arguments: JSON.stringify({
+									block_name: 'iron_ore',
+									count: 2
+								})
+							}
+						]
+					}) as any
+			}
+		},
+		model: 'test-model'
+	})
+
+	const memory = {
+		readEntries: () => [],
+		saveEntry: () => null,
+		updateEntryData: () => null,
+		deleteEntry: () => false
+	} as any
+
+	const bot = {
+		memory,
+		health: 20,
+		food: 20,
+		oxygenLevel: 20,
+		entity: { position: createVec3(0, 64, 0) },
+		game: { dimension: 'overworld' },
+		time: { isDay: true, timeOfDay: 1000 },
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		},
+		getEquipmentDestSlot: () => 36,
+		blockAt: () => null,
+		findBlocks: () => [],
+		entities: {},
+		closeWindow: () => {}
+	} as any
+
+	const result = await runAgentTurn({
+		bot,
+		memory,
+		currentGoal: 'Mine 2 iron ore',
+		subGoal: null,
+		lastAction: null,
+		lastResult: null,
+		lastReason: null,
+		errorHistory: [],
+		taskContext: createTaskContext('Mine 2 iron ore', null),
+		client
+	})
+
+	assert.equal(result.kind, 'execute')
+	if (result.kind !== 'execute') {
+		assert.fail('Expected execution result')
+	}
+	assert.equal(result.execution.toolName, 'mine_resource')
+	assert.deepEqual(result.execution.args, {
+		block_name: 'iron_ore',
+		count: 2
+	})
+})
+
+test('runAgentTurn rejects mine_resource with non-integer or excessive count', async () => {
+	for (const count of [1.5, 1000000]) {
+		const client = new OpenAIResponsesClient({
+			client: {
+				responses: {
+					create: async () =>
+						({
+							id: `resp_${count}`,
+							output: [
+								{
+									type: 'function_call',
+									call_id: 'call_1',
+									name: 'mine_resource',
+									arguments: JSON.stringify({
+										block_name: 'iron_ore',
+										count
+									})
+								}
+							]
+						}) as any
+				}
+			},
+			model: 'test-model'
+		})
+
+		const memory = {
+			readEntries: () => [],
+			saveEntry: () => null,
+			updateEntryData: () => null,
+			deleteEntry: () => false
+		} as any
+
+		const bot = {
+			memory,
+			health: 20,
+			food: 20,
+			oxygenLevel: 20,
+			entity: { position: createVec3(0, 64, 0) },
+			game: { dimension: 'overworld' },
+			time: { isDay: true, timeOfDay: 1000 },
+			inventory: {
+				slots: Array.from({ length: 46 }, () => null),
+				items: () => []
+			},
+			getEquipmentDestSlot: () => 36,
+			blockAt: () => null,
+			findBlocks: () => [],
+			entities: {},
+			closeWindow: () => {}
+		} as any
+
+		const result = await runAgentTurn({
+			bot,
+			memory,
+			currentGoal: 'Mine iron ore',
+			subGoal: null,
+			lastAction: null,
+			lastResult: null,
+			lastReason: null,
+			errorHistory: [],
+			taskContext: createTaskContext('Mine iron ore', null),
+			client
+		})
+
+		assert.equal(result.kind, 'failed')
+		if (result.kind !== 'failed') {
+			assert.fail('Expected failed result')
+		}
+		assert.match(result.reason, /integer count from 1 to 64/)
+	}
+})
+
 test('runAgentTurn rejects open_window when memory_read returns no grounded entries', async () => {
 	const responses = [
 		{

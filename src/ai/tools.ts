@@ -29,6 +29,7 @@ export type AgentToolName =
 	| 'finish_goal'
 	| 'navigate_to'
 	| 'break_block'
+	| 'mine_resource'
 	| 'place_block'
 	| 'follow_entity'
 	| 'open_window'
@@ -79,6 +80,7 @@ export const AGENT_SYSTEM_PROMPT = [
 	'Snapshot is runtime-only and does not include nearby world facts.',
 	'Use inspect_blocks to find specific blocks by passing target_block_names, or use generic scope for world facts. Use inspect_entities for entities, inspect_inventory for player inventory, and inspect_window for container state.',
 	'Before using navigate_to, break_block, place_block, follow_entity, or open_window, call memory_read or inspect tools in this turn to ground world facts.',
+	'Use mine_resource for repeated resource gathering such as ore, logs, or other mineable blocks. Do not require inspect_blocks before mine_resource; it performs its own world search.',
 	'Never invent coordinates, blocks, entities, or containers that are not present in inspect/memory tool results.',
 	'If the user asks you to come to them, follow them, or stay near them, prefer follow_entity with the matching nearby player name instead of navigate_to.',
 	'Use open_window, transfer_item, and close_window for direct window interactions when the task requires moving items.',
@@ -90,6 +92,7 @@ const FUNCTION = 'function' as const
 const executionToolNames = new Set<ExecutionToolName>([
 	'navigate_to',
 	'break_block',
+	'mine_resource',
 	'place_block',
 	'follow_entity',
 	'open_window',
@@ -275,6 +278,28 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 		},
 		required: ['position']
 	}),
+	tool(
+		'mine_resource',
+		'Mine a specific quantity of a block type efficiently. Use for resource gathering tasks like mining ore, wood, or other materials. Executes batch search and cyclic mining without repeated LLM calls.',
+		{
+			type: 'object',
+			additionalProperties: false,
+			properties: {
+				block_name: {
+					type: 'string',
+					description:
+						'Block type to mine (e.g., iron_ore, coal_ore, diamond_ore, oak_log)'
+				},
+				count: {
+					type: 'number',
+					description: 'Number of blocks to mine',
+					minimum: 1,
+					maximum: 64
+				}
+			},
+			required: ['block_name', 'count']
+		}
+	),
 	tool('place_block', 'Place a block from inventory.', {
 		type: 'object',
 		additionalProperties: false,
@@ -411,6 +436,8 @@ export const summarizeExecution = (execution: PendingExecution): string => {
 			return 'Move to target position'
 		case 'break_block':
 			return 'Break target block'
+		case 'mine_resource':
+			return `Mine ${String(execution.args.count ?? 1)} ${String(execution.args.block_name ?? 'blocks')}`
 		case 'place_block':
 			return `Place ${String(execution.args.block_name ?? 'block')}`
 		case 'follow_entity':

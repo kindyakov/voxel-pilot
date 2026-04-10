@@ -240,6 +240,15 @@ const waitForTurn = async () => {
 	await delay(0)
 }
 
+const waitUntil = async (predicate: () => boolean, attempts = 40) => {
+	for (let attempt = 0; attempt < attempts; attempt += 1) {
+		await delay(25)
+		if (predicate()) {
+			return
+		}
+	}
+}
+
 test('machine enters TASKS.THINKING on USER_COMMAND', async () => {
 	const { actor } = createTestActor()
 
@@ -706,6 +715,268 @@ test('thinking execution enters a concrete executing substate without crashing',
 			}),
 			true
 		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('mine_resource execution routes into MINING search state', async () => {
+	const thinkingActor = fromPromise(async () => ({
+		kind: 'execute' as const,
+		execution: {
+			toolName: 'mine_resource' as any,
+			args: {
+				block_name: ' IRON_ORE ',
+				count: 2
+			}
+		},
+		subGoal: 'Mine iron ore',
+		transcript: ['mine_resource']
+	}))
+
+	const bot = new FakeBot() as any
+	bot.registry = {
+		...bot.registry,
+		blocksByName: {
+			iron_ore: { id: 15, name: 'iron_ore' }
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Mine 2 iron ore'
+		})
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.equal(
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: {
+					TASKS: { EXECUTING: { MINING: 'SEARCHING' } }
+				}
+			}),
+			true
+		)
+		assert.equal((actor.getSnapshot().context.taskData as any).blockName, 'iron_ore')
+		assert.equal((actor.getSnapshot().context.taskData as any).count, 2)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('mine_resource records failure after repeated navigation failures', async () => {
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls > 1) {
+			return await new Promise<never>(() => {})
+		}
+
+		return {
+			kind: 'execute' as const,
+			execution: {
+				toolName: 'mine_resource' as any,
+				args: {
+					block_name: 'iron_ore',
+					count: 1
+				}
+			},
+			subGoal: 'Mine iron ore',
+			transcript: ['mine_resource']
+		}
+	})
+
+	const bot = new FakeBot() as any
+	const orePosition = createVec3(10, 64, 0)
+	bot.registry = {
+		...bot.registry,
+		blocksByName: {
+			iron_ore: { id: 15, name: 'iron_ore' }
+		}
+	}
+	bot.findBlocks = () => [orePosition]
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 10 && position.y === 64 && position.z === 0) {
+			return {
+				name: 'iron_ore',
+				position: orePosition,
+				drops: [1]
+			}
+		}
+		if (position.x === 10 && position.y === 63 && position.z === 0) {
+			return {
+				name: 'stone',
+				position: createVec3(10, 63, 0)
+			}
+		}
+		return null
+	}
+	bot.pathfinder = {
+		setGoal: (goal: unknown) => {
+			if (goal) {
+				setImmediate(() => bot.emit('path_stop', 'failed'))
+			}
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Mine 1 iron ore'
+		})
+
+		await waitUntil(() => actor.getSnapshot().context.lastResult === 'FAILED')
+
+		assert.equal(actor.getSnapshot().context.lastAction, 'mine_resource')
+		assert.equal(actor.getSnapshot().context.lastResult, 'FAILED')
+		assert.equal(actor.getSnapshot().context.pendingExecution, null)
+		assert.equal(actor.getSnapshot().context.taskData, null)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('mine_resource records failure after repeated breaking failures', async () => {
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls > 1) {
+			return await new Promise<never>(() => {})
+		}
+
+		return {
+			kind: 'execute' as const,
+			execution: {
+				toolName: 'mine_resource' as any,
+				args: {
+					block_name: 'iron_ore',
+					count: 1
+				}
+			},
+			subGoal: 'Mine iron ore',
+			transcript: ['mine_resource']
+		}
+	})
+
+	const bot = new FakeBot() as any
+	const orePosition = createVec3(1, 64, 0)
+	bot.registry = {
+		...bot.registry,
+		blocksByName: {
+			iron_ore: { id: 15, name: 'iron_ore' }
+		}
+	}
+	bot.findBlocks = () => [orePosition]
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 1 && position.y === 64 && position.z === 0) {
+			return {
+				name: 'iron_ore',
+				position: orePosition,
+				drops: [1]
+			}
+		}
+		if (position.x === 1 && position.y === 63 && position.z === 0) {
+			return {
+				name: 'stone',
+				position: createVec3(1, 63, 0)
+			}
+		}
+		return null
+	}
+	bot.tool = {
+		equipForBlock: async () => {
+			throw new Error('no harvest tool')
+		}
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Mine 1 iron ore'
+		})
+
+		await waitUntil(() => actor.getSnapshot().context.lastResult === 'FAILED')
+
+		assert.equal(actor.getSnapshot().context.lastAction, 'mine_resource')
+		assert.equal(actor.getSnapshot().context.lastResult, 'FAILED')
+		assert.equal(actor.getSnapshot().context.pendingExecution, null)
+		assert.equal(actor.getSnapshot().context.taskData, null)
 	} finally {
 		actor.stop()
 	}

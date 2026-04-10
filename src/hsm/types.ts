@@ -39,6 +39,8 @@ export type PrimitiveEvents =
 	| { type: 'FOUND_FOOD' }
 	| { type: 'NOT_FOUND'; reason: string }
 	| { type: 'FOUND'; block?: Block; entity?: Entity }
+	| { type: 'BLOCKS_FOUND'; blocks: Block[] }
+	| { type: 'INVENTORY_FULL' }
 	| { type: 'SUCCESSFULLY' }
 	| { type: 'ARRIVED' }
 	| { type: 'NAVIGATION_FAILED'; reason?: string }
@@ -138,3 +140,13 @@ interface TaskDefinition {
 }
 
 type TaskRegistry = Record<string, TaskDefinition>
+
+export interface MiningTaskData {
+	blockName: string
+	count: number
+	targetBlocks: Block[]
+	targetIndex: number
+	collected: number
+	navigationAttempts: number
+	breakAttempts: number
+}

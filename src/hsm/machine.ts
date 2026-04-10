@@ -21,10 +21,13 @@ import { primitiveFollowing } from '@/hsm/actors/primitives/primitiveFollowing.p
 import { primitiveNavigating } from '@/hsm/actors/primitives/primitiveNavigating.primitive'
 import { primitiveOpenWindow } from '@/hsm/actors/primitives/primitiveOpenWindow.primitive'
 import { primitivePlacing } from '@/hsm/actors/primitives/primitivePlacing.primitive'
+import { primitiveSearchBlock } from '@/hsm/actors/primitives/primitiveSearchBlock.primitive'
 import { primitiveTransferItem } from '@/hsm/actors/primitives/primitiveTransferItem.primitive'
 import { type MachineContext, context } from '@/hsm/context'
+import { miningActions } from '@/hsm/actions/mining.actions'
 import combatGuards from '@/hsm/guards/combat.guards'
-import type { MachineEvent } from '@/hsm/types'
+import { miningGuards } from '@/hsm/guards/mining.guards'
+import type { MachineEvent, MiningTaskData } from '@/hsm/types'
 
 import { canSeeEnemy } from '@/utils/combat/enemyVisibility'
 import { hasMovementController } from '@/utils/combat/movementController'
@@ -412,6 +415,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 		},
 		guards: {
 			...combatGuards,
+			...miningGuards,
 			hasCurrentGoal: ({ context }) => Boolean(context.currentGoal),
 			isHealthCritical: ({ context }) =>
 				context.health < context.preferences.healthEmergency,
@@ -436,12 +440,19 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			isPlaceExecution: ({ context }) =>
 				context.pendingExecution?.toolName === 'place_block',
 			isFollowExecution: ({ context }) =>
-				context.pendingExecution?.toolName === 'follow_entity'
+				context.pendingExecution?.toolName === 'follow_entity',
+			isMiningExecution: ({ context }) =>
+				context.pendingExecution?.toolName === 'mine_resource'
 		},
 		actions: {
-			logStateEntry: ({ context, event }, params: { state: string }) => {
+			...miningActions,
+			logStateEntry: ({ context, event }, params: unknown) => {
+				const state =
+					params && typeof params === 'object' && 'state' in params
+						? String(params.state)
+						: 'unknown'
 				console.log(
-					`[HSM] enter ${params.state}`,
+					`[HSM] enter ${state}`,
 					JSON.stringify({
 						event: event.type,
 						targetId: context.nearestEnemy.entity?.id ?? null,
@@ -452,9 +463,13 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					})
 				)
 			},
-			logStateExit: ({ context, event }, params: { state: string }) => {
+			logStateExit: ({ context, event }, params: unknown) => {
+				const state =
+					params && typeof params === 'object' && 'state' in params
+						? String(params.state)
+						: 'unknown'
 				console.log(
-					`[HSM] exit ${params.state}`,
+					`[HSM] exit ${state}`,
 					JSON.stringify({
 						event: event.type,
 						targetId: context.nearestEnemy.entity?.id ?? null,
@@ -1353,6 +1368,35 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 								states: {
 									RESOLVE: {
 										always: [
+											{
+												guard: 'isMiningExecution',
+												target: 'MINING',
+												actions: [
+													assign({
+														taskData: ({ context }) =>
+															({
+																blockName: String(
+																	context.pendingExecution?.args.block_name ?? ''
+																)
+																	.trim()
+																	.toLowerCase(),
+																count:
+																	typeof context.pendingExecution?.args.count ===
+																		'number' &&
+																	Number.isFinite(
+																		context.pendingExecution.args.count
+																	)
+																		? context.pendingExecution.args.count
+																		: 1,
+																targetBlocks: [],
+																targetIndex: 0,
+																collected: 0,
+																navigationAttempts: 0,
+																breakAttempts: 0
+															}) satisfies MiningTaskData
+													})
+												]
+											},
 											{ guard: 'isNavigateExecution', target: 'NAVIGATING' },
 											{ guard: 'isBreakExecution', target: 'BREAKING' },
 											{ guard: 'isOpenWindowExecution', target: 'OPEN_WINDOW' },
@@ -1366,6 +1410,167 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 												actions: ['recordExecutionFailure']
 											}
 										]
+									},
+									MINING: {
+										initial: 'CHECKING_PRECONDITIONS',
+										entry: ['entryMining'],
+										exit: ['exitMining'],
+										states: {
+											CHECKING_PRECONDITIONS: {
+												always: [
+													{
+														guard: 'canAttemptMining',
+														target: 'SEARCHING'
+													},
+													{
+														target: 'TASK_FAILED'
+													}
+												]
+											},
+											SEARCHING: {
+												invoke: {
+													src: primitiveSearchBlock,
+													input: ({ context }: { context: MachineContext }) => {
+														const taskData = context.taskData as MiningTaskData
+														return {
+															bot: context.bot!,
+															options: {
+																blockName: taskData.blockName,
+																count: taskData.count,
+																maxDistance: 64,
+																mode: 'mining' as const,
+																maxYDiffAbove: 6,
+																maxYDiffBelow: 2,
+																prioritizeSafety: true
+															}
+														}
+													}
+												},
+												on: {
+													BLOCKS_FOUND: {
+														target: 'CHECKING_DISTANCE',
+														actions: ['storeFoundBlocks']
+													},
+													NOT_FOUND: 'TASK_FAILED',
+													ERROR: 'TASK_FAILED'
+												}
+											},
+											CHECKING_DISTANCE: {
+												always: [
+													{
+														guard: 'isBlockNearby',
+														target: 'BREAKING'
+													},
+													{
+														target: 'NAVIGATING'
+													}
+												]
+											},
+											NAVIGATING: {
+												invoke: {
+													src: primitiveNavigating,
+													input: ({ context }: { context: MachineContext }) => {
+														const taskData = context.taskData as MiningTaskData
+														const targetBlock =
+															taskData.targetBlocks[taskData.targetIndex]
+														return {
+															bot: context.bot!,
+															options: {
+																target: targetBlock?.position
+															}
+														}
+													}
+												},
+												on: {
+													ARRIVED: {
+														target: 'BREAKING'
+													},
+													NAVIGATION_FAILED: [
+														{
+															guard: 'maxNavigationAttemptsReached',
+															target: 'TASK_FAILED'
+														},
+														{
+															target: 'SEARCHING',
+															actions: ['incrementNavigationAttempts']
+														}
+													],
+													ERROR: 'TASK_FAILED'
+												}
+											},
+											BREAKING: {
+												invoke: {
+													src: primitiveBreaking,
+													input: ({ context }: { context: MachineContext }) => {
+														const taskData = context.taskData as MiningTaskData
+														return {
+															bot: context.bot!,
+															options: {
+																block:
+																	taskData.targetBlocks[taskData.targetIndex]
+															}
+														}
+													}
+												},
+												on: {
+													BROKEN: {
+														target: 'CHECKING_GOAL',
+														actions: [
+															'incrementCollected',
+															'resetNavigationAttempts',
+															'resetBreakAttempts'
+														]
+													},
+													BREAKING_FAILED: [
+														{
+															guard: 'maxBreakAttemptsReached',
+															target: 'TASK_FAILED'
+														},
+														{
+															target: 'SEARCHING',
+															actions: ['incrementBreakAttempts']
+														}
+													],
+													ERROR: 'TASK_FAILED'
+												}
+											},
+											CHECKING_GOAL: {
+												always: [
+													{
+														guard: 'isMiningGoalComplete',
+														target: 'TASK_COMPLETED'
+													},
+													{
+														guard: 'isInventoryFull',
+														target: 'TASK_FAILED'
+													},
+													{
+														guard: 'hasMoreBlocksToMine',
+														target: 'NAVIGATING',
+														actions: ['advanceToNextBlock']
+													},
+													{
+														target: 'SEARCHING'
+													}
+												]
+											},
+											TASK_COMPLETED: {
+												entry: [
+													'taskMiningCompleted',
+													'recordExecutionSuccess',
+													assign({ taskData: () => null })
+												],
+												always: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT'
+											},
+											TASK_FAILED: {
+												entry: [
+													'taskMiningFailed',
+													'recordExecutionFailure',
+													assign({ taskData: () => null })
+												],
+												always: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT'
+											}
+										}
 									},
 									NAVIGATING: {
 										invoke: {

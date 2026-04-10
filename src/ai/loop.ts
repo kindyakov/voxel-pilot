@@ -479,6 +479,23 @@ const validateExecutionTool = (
 				return 'Execution tool "break_block" requires a block position grounded by inspect_blocks in this turn'
 			}
 			return null
+		case 'mine_resource': {
+			const blockName = normalizeFactValue(execution.args.block_name)
+			const count = execution.args.count
+			if (!blockName) {
+				return 'Execution tool "mine_resource" requires block_name'
+			}
+			if (
+				typeof count !== 'number' ||
+				!Number.isFinite(count) ||
+				!Number.isInteger(count) ||
+				count <= 0 ||
+				count > 64
+			) {
+				return 'Execution tool "mine_resource" requires an integer count from 1 to 64'
+			}
+			return null
+		}
 		case 'open_window':
 			if (
 				!targetPosition ||
