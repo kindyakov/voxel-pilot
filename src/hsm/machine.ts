@@ -1,3 +1,4 @@
+import { appendConversationEntry } from '@/ai/conversationHistory.js'
 import type { AgentTurnResult } from '@/ai/contracts/agentTurn.js'
 import type { PendingExecution } from '@/ai/contracts/execution.js'
 import { runAgentTurn } from '@/ai/loop.js'
@@ -96,6 +97,8 @@ const defaultThinkingActor = fromPromise<
 		memory: input.bot.memory,
 		currentGoal: input.context.currentGoal,
 		subGoal: input.context.subGoal,
+		conversationHistory: input.context.conversationHistory,
+		userProfilePrompt: input.bot.profileMemory?.getProfilePrompt() ?? null,
 		lastAction: input.context.lastAction,
 		lastResult: input.context.lastResult,
 		lastReason: input.context.lastReason,
@@ -686,7 +689,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				isActiveTask: false,
 				pendingExecution: null
 			}),
-			setGoalFromUserCommand: assign(({ event }) => {
+			setGoalFromUserCommand: assign(({ context, event }) => {
 				if (event.type !== 'USER_COMMAND') {
 					return {}
 				}
@@ -694,6 +697,14 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				return {
 					currentGoal: event.text,
 					subGoal: null,
+					conversationHistory: appendConversationEntry(
+						context.conversationHistory,
+						{
+							role: 'user',
+							username: event.username,
+							message: event.text
+						}
+					),
 					taskContext: createTaskContext(event.text, null),
 					pendingExecution: null,
 					lastToolTranscript: [],
@@ -714,6 +725,37 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					movementOwner: 'NONE',
 					preferredCombatTargetId: null,
 					combatStopRequested: false
+				}
+			}),
+			appendFinishConversationEntry: assign(({ context, event }) => {
+				const output = (event as any).output as AgentTurnResult
+				if (output.kind !== 'finish') {
+					return {}
+				}
+
+				return {
+					conversationHistory: appendConversationEntry(
+						context.conversationHistory,
+						{
+							role: 'assistant',
+							message: output.message
+						}
+					)
+				}
+			}),
+			appendFailureConversationEntry: assign(({ context }) => {
+				if (!context.lastReason) {
+					return {}
+				}
+
+				return {
+					conversationHistory: appendConversationEntry(
+						context.conversationHistory,
+						{
+							role: 'assistant',
+							message: `Не могу продолжить задачу: ${context.lastReason}`
+						}
+					)
 				}
 			}),
 			markWindowCloseFailed: assign(({ context }) => {
@@ -1342,6 +1384,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											actions: [
 												'closeActiveWindowSession',
 												'logThinkingFinish',
+												'appendFinishConversationEntry',
 												'notifyGoalFinished',
 												'clearGoal'
 											]
@@ -1352,6 +1395,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 												'closeActiveWindowSession',
 												'logThinkingFailure',
 												'storeThinkingFailure',
+												'appendFailureConversationEntry',
 												'notifyThinkingFailure',
 												'clearGoal'
 											]

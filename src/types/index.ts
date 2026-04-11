@@ -7,6 +7,7 @@ import type { Recipe } from 'prismarine-recipe'
 import type { Vec3 } from 'vec3'
 
 import type { MemoryManager } from '@/core/memory/index.js'
+import type { ProfileMemoryStore } from '@/core/profile/index.js'
 
 export type { Item } from 'prismarine-item'
 export type { Entity, EntityType } from 'prismarine-entity'
@@ -99,4 +100,5 @@ export interface Bot {
 	utils: import('../utils/minecraft/botUtils').BotUtils
 	hsm: import('../core/hsm').default
 	memory: MemoryManager
+	profileMemory?: ProfileMemoryStore
 }

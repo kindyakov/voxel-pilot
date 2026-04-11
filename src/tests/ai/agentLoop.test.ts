@@ -935,7 +935,7 @@ test('runAgentTurn rejects navigation to unsupported workstation for crafting go
 	assert.match(result.reason, /unsupported workstation for crafting tasks/i)
 })
 
-test('runAgentTurn still fails when the first model response is plain text without any tool call', async () => {
+test('runAgentTurn finishes with plain text when the model returns no tool call', async () => {
 	const client = new OpenAIResponsesClient({
 		client: {
 			responses: {
@@ -989,13 +989,13 @@ test('runAgentTurn still fails when the first model response is plain text witho
 		client
 	})
 
-	assert.equal(result.kind, 'failed')
-	if (result.kind !== 'failed') {
-		assert.fail('Expected failed result')
+	assert.equal(result.kind, 'finish')
+	if (result.kind !== 'finish') {
+		assert.fail('Expected finish result')
 	}
-	assert.equal(result.reason, 'Model did not return a tool call')
+	assert.equal(result.message, 'В моем инвентаре есть кирка и еда.')
 	assert.match(result.transcript[0]!, /^round_0_ms:\d+$/)
-	assert.match(result.transcript[1]!, /^round_1_ms:\d+$/)
+	assert.equal(result.transcript.length, 1)
 })
 
 test('runAgentTurn still fails when the model returns no tool call and no plain-text response', async () => {
@@ -1155,6 +1155,195 @@ test('runAgentTurn accepts plain-text finish after a grounded world inspection i
 	assert.match(result.transcript[0]!, /^round_0_ms:\d+$/)
 	assert.equal(result.transcript[1]!, 'inspect_entities')
 	assert.match(result.transcript[2]!, /^round_1_ms:\d+$/)
+})
+
+test('OpenAIResponsesClient writes a markdown dump for the full request body', async () => {
+	const capturedLogs: string[] = []
+	const originalConsoleLog = console.log
+	console.log = (...args: unknown[]) => {
+		capturedLogs.push(
+			args
+				.map(arg => (typeof arg === 'string' ? arg : JSON.stringify(arg)))
+				.join(' ')
+		)
+	}
+
+	try {
+		const client = new OpenAIResponsesClient({
+			client: {
+				responses: {
+					create: async () =>
+						({
+							id: 'resp_dump',
+							output_text: 'ok',
+							output: []
+						}) as any
+				}
+			},
+			model: 'test-model'
+		})
+
+		await client.createResponse({
+			instructions: 'System prompt',
+			input: 'Full payload input',
+			tools: []
+		})
+	} finally {
+		console.log = originalConsoleLog
+	}
+
+	const dumpLog = capturedLogs.find(log =>
+		log.includes('[AI] model_request_dump')
+	)
+	assert.ok(dumpLog)
+	assert.match(
+		dumpLog,
+		/logs[\\/]+ai-requests[\\/]+responses-request-.*\.md/
+	)
+})
+
+test('OpenAICompatibleChatClient writes a markdown dump for the full chat payload', async () => {
+	const capturedLogs: string[] = []
+	const originalConsoleLog = console.log
+	console.log = (...args: unknown[]) => {
+		capturedLogs.push(
+			args
+				.map(arg => (typeof arg === 'string' ? arg : JSON.stringify(arg)))
+				.join(' ')
+		)
+	}
+
+	try {
+		const { OpenAICompatibleChatClient } = await import('../../ai/client.js')
+		const client = new OpenAICompatibleChatClient({
+			client: {
+				chat: {
+					completions: {
+						create: async () =>
+							({
+								id: 'chat_dump',
+								choices: [
+									{
+										message: {
+											content: 'Привет!'
+										}
+									}
+								]
+							}) as any
+					}
+				}
+			},
+			model: 'test-chat-model'
+		})
+
+		await client.createResponse({
+			instructions: 'System prompt',
+			input: 'Привет',
+			tools: []
+		})
+	} finally {
+		console.log = originalConsoleLog
+	}
+
+	const dumpLog = capturedLogs.find(log =>
+		log.includes('[AI] model_request_dump')
+	)
+	assert.ok(dumpLog)
+	assert.match(dumpLog, /logs[\\/]+ai-requests[\\/]+chat-request-.*\.md/)
+})
+
+test('runAgentTurn assembles layered prompt context before calling the model client', async () => {
+	let capturedRequest: any = null
+
+	const client = {
+		createResponse: async (request: any) => {
+			capturedRequest = request
+			return {
+				id: 'resp_layered',
+				outputText: '',
+				toolCalls: [
+					{
+						callId: 'call_finish',
+						name: 'finish_goal',
+						arguments: {
+							message: 'Готово'
+						}
+					}
+				]
+			}
+		}
+	} as any
+
+	const memory = {
+		readEntries: () => [],
+		saveEntry: () => null,
+		updateEntryData: () => null,
+		deleteEntry: () => false
+	} as any
+
+	const bot = {
+		memory,
+		health: 20,
+		food: 20,
+		oxygenLevel: 20,
+		entity: { position: createVec3(0, 64, 0) },
+		game: { dimension: 'overworld' },
+		time: { isDay: true, timeOfDay: 1000 },
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		},
+		getEquipmentDestSlot: () => 36,
+		blockAt: () => null,
+		findBlocks: () => [],
+		entities: {},
+		closeWindow: () => {}
+	} as any
+
+	const result = await runAgentTurn({
+		bot,
+		memory,
+		currentGoal: 'Что у тебя в инвентаре?',
+		subGoal: null,
+		conversationHistory: [
+			{
+				role: 'user',
+				username: 'Smidvard',
+				message: 'отвечай по-русски'
+			}
+		],
+		userProfilePrompt: {
+			persona: 'Helpful assistant',
+			style: 'brief',
+			defaultLanguage: 'ru',
+			selfDescription: null,
+			tone: 'calm',
+			behaviorPreferences: ['Prefer direct answers']
+		},
+		lastAction: null,
+		lastResult: null,
+		lastReason: null,
+		errorHistory: [],
+		taskContext: createTaskContext('Что у тебя в инвентаре?', null),
+		client
+	})
+
+	assert.equal(result.kind, 'finish')
+	assert.ok(capturedRequest)
+	assert.ok(capturedRequest.promptAssembly)
+	assert.match(capturedRequest.instructions, /^CORE_POLICY/m)
+	assert.match(capturedRequest.instructions, /^USER_PROFILE_PROMPT/m)
+	assert.match(capturedRequest.input, /^CURRENT_GOAL/m)
+	assert.match(capturedRequest.input, /^RUNTIME_CONTEXT/m)
+	assert.match(capturedRequest.input, /^RECENT_CONVERSATION/m)
+	assert.equal(
+		capturedRequest.promptAssembly.instructionSections[0]?.source,
+		'core_policy'
+	)
+	assert.equal(
+		capturedRequest.promptAssembly.inputSections[2]?.source,
+		'conversation_context'
+	)
 })
 
 test('loop facade re-exports dedicated loop ownership modules', async () => {

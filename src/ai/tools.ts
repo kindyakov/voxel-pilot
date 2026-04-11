@@ -12,5 +12,4 @@ export type {
 	ExecutionToolName,
 	InlineToolName
 } from './tools/names.js'
-export { AGENT_SYSTEM_PROMPT } from './tools/prompt.js'
 export { summarizeExecution } from './tools/summary.js'

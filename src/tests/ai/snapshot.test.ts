@@ -49,8 +49,6 @@ test('buildSnapshot renders runtime-only sections and active window summary', ()
 
 	const snapshot = buildSnapshot({
 		bot,
-		currentGoal: 'Smelt iron',
-		subGoal: 'Inspect furnace',
 		lastAction: 'inspect_window',
 		lastResult: 'FAILED',
 		lastReason: 'Window is too far away (5.2m)',
@@ -61,7 +59,6 @@ test('buildSnapshot renders runtime-only sections and active window summary', ()
 
 	assert.match(snapshot, /STATUS/)
 	assert.match(snapshot, /ACTIVE_WINDOW_SESSION/)
-	assert.match(snapshot, /GOAL_CONTEXT/)
 	assert.match(snapshot, /FEEDBACK_ERRORS/)
 
 	assert.match(snapshot, /health: 18\/20/)
@@ -76,8 +73,6 @@ test('buildSnapshot renders runtime-only sections and active window summary', ()
 	assert.match(snapshot, /position: 12,64,-4/)
 	assert.match(snapshot, /close_failed: false/)
 
-	assert.match(snapshot, /current_goal: Smelt iron/)
-	assert.match(snapshot, /sub_goal: Inspect furnace/)
 	assert.match(snapshot, /last_action: inspect_window/)
 	assert.match(snapshot, /last_result: FAILED/)
 	assert.match(snapshot, /last_reason: Window is too far away \(5.2m\)/)
@@ -88,6 +83,8 @@ test('buildSnapshot renders runtime-only sections and active window summary', ()
 
 	assert.equal(snapshot.includes('INVENTORY_EQUIPMENT'), false)
 	assert.equal(snapshot.includes('ENVIRONMENT'), false)
+	assert.equal(snapshot.includes('GOAL_CONTEXT'), false)
+	assert.equal(snapshot.includes('RECENT_CONVERSATION'), false)
 	assert.equal(snapshot.includes('time:'), false)
 	assert.equal(snapshot.includes('biome:'), false)
 	assert.equal(snapshot.includes('action_result:'), false)
@@ -105,8 +102,6 @@ test('buildSnapshot caps error history and reports close_failed state without se
 
 	const snapshot = buildSnapshot({
 		bot,
-		currentGoal: 'Survive',
-		subGoal: null,
 		lastAction: null,
 		lastResult: null,
 		lastReason: null,

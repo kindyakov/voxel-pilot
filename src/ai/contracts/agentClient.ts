@@ -1,5 +1,7 @@
 import type { Responses } from 'openai/resources/responses/responses'
 
+import type { AgentPromptAssembly } from '@/ai/prompt.js'
+
 export interface ParsedToolCall {
 	callId: string
 	name: string
@@ -34,6 +36,7 @@ export interface AgentResponseRequest {
 	instructions: string
 	input: string | Array<Record<string, unknown>>
 	tools: AgentToolDefinition[]
+	promptAssembly?: AgentPromptAssembly
 	previousResponseId?: string | null
 	signal?: AbortSignal
 }

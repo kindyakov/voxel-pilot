@@ -2,13 +2,13 @@ import type { WindowSession } from '@/ai/runtime/window.js'
 
 const DEFAULT_ERROR_HISTORY_LIMIT = 3
 
-type VecLike = {
+export type VecLike = {
 	x: number
 	y: number
 	z: number
 }
 
-type SnapshotBot = {
+export type SnapshotBot = {
 	health: number
 	food: number
 	oxygenLevel: number
@@ -24,8 +24,6 @@ export type ActiveWindowSessionState = 'open' | 'close_failed' | null
 
 interface BuildSnapshotInput {
 	bot: SnapshotBot
-	currentGoal: string
-	subGoal: string | null
 	lastAction: string | null
 	lastResult: 'SUCCESS' | 'FAILED' | null
 	lastReason: string | null
@@ -84,10 +82,6 @@ export const buildSnapshot = (input: BuildSnapshotInput): string => {
 		`block_name: ${activeWindowSummary.blockName ?? '-'}`,
 		`position: ${formatPosition(activeWindowSummary.position)}`,
 		`close_failed: ${activeWindowSummary.closeFailed ? 'true' : 'false'}`,
-		'',
-		'GOAL_CONTEXT',
-		`current_goal: ${input.currentGoal ?? '-'}`,
-		`sub_goal: ${input.subGoal ?? '-'}`,
 		'',
 		'FEEDBACK_ERRORS',
 		`last_action: ${input.lastAction ?? '-'}`,

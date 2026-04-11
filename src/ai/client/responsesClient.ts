@@ -10,6 +10,10 @@ import type {
 	OpenAIResponsesSdkLike
 } from '../contracts/agentClient.js'
 import { mapParsedToolCalls } from './parsers.js'
+import {
+	buildResponsesRequestDebugMarkdown,
+	writeRequestDebugDump
+} from './requestDebugDump.js'
 
 export class OpenAIResponsesClient implements AgentModelClient {
 	private readonly client: OpenAIResponsesSdkLike
@@ -40,17 +44,39 @@ export class OpenAIResponsesClient implements AgentModelClient {
 	async createResponse(
 		request: AgentResponseRequest
 	): Promise<CreateResponseResult> {
-		const response = await this.client.responses.create(
-			{
-				model: this.model,
+		const requestBody = {
+			model: this.model,
+			instructions: request.instructions,
+			input: request.input as unknown as Responses.ResponseInput,
+			tools: request.tools,
+			parallel_tool_calls: false,
+			previous_response_id: request.previousResponseId ?? undefined,
+			max_output_tokens: this.maxOutputTokens,
+			tool_choice: 'auto' as const
+		}
+		const requestDumpPath = await writeRequestDebugDump({
+			filePrefix: 'responses-request',
+			markdown: buildResponsesRequestDebugMarkdown({
+				model: requestBody.model,
 				instructions: request.instructions,
-				input: request.input as unknown as Responses.ResponseInput,
+				input: request.input,
 				tools: request.tools,
-				parallel_tool_calls: false,
-				previous_response_id: request.previousResponseId ?? undefined,
-				max_output_tokens: this.maxOutputTokens,
-				tool_choice: 'auto'
-			},
+				promptAssembly: request.promptAssembly,
+				parallelToolCalls: requestBody.parallel_tool_calls,
+				previousResponseId: request.previousResponseId ?? undefined,
+				maxOutputTokens: requestBody.max_output_tokens,
+				toolChoice: requestBody.tool_choice
+			})
+		})
+		console.log(
+			'[AI] model_request_dump',
+			JSON.stringify({
+				path: requestDumpPath
+			})
+		)
+
+		const response = await this.client.responses.create(
+			requestBody,
 			{
 				timeout: this.timeoutMs,
 				signal: request.signal

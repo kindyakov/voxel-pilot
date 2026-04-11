@@ -1,8 +1,7 @@
 import { createAgentClient } from '@/ai/client.js'
-import { buildSnapshot } from '@/ai/snapshot.js'
+import { assembleAgentPrompt } from '@/ai/prompt.js'
 import { appendRejectedStepSignature } from '@/ai/taskContext.js'
 import {
-	AGENT_SYSTEM_PROMPT,
 	AGENT_TOOLS,
 	executeInlineToolCall,
 	isControlToolName,
@@ -15,8 +14,7 @@ import type { AgentTurnInput, AgentTurnResult } from '../contracts/agentTurn.js'
 import type { PendingExecution } from '../contracts/execution.js'
 import {
 	collectGroundedFacts,
-	createGroundedTurnFacts,
-	hasGroundedReferences
+	createGroundedTurnFacts
 } from './grounding.js'
 import {
 	MAX_INLINE_TOOL_ROUNDS,
@@ -31,26 +29,23 @@ export const runAgentTurn = async (
 ): Promise<AgentTurnResult> => {
 	const client = input.client ?? createAgentClient()
 	const transcript: string[] = []
-	const snapshot = buildSnapshot({
+	const promptAssembly = assembleAgentPrompt({
 		bot: input.bot,
 		currentGoal: input.currentGoal,
 		subGoal: input.subGoal,
+		conversationHistory: input.conversationHistory ?? [],
+		userProfilePrompt: input.userProfilePrompt ?? null,
 		lastAction: input.lastAction,
 		lastResult: input.lastResult,
 		lastReason: input.lastReason,
 		errorHistory: input.errorHistory,
 		activeWindowSession: input.activeWindowSession ?? null,
-		activeWindowSessionState: input.activeWindowSessionState ?? null
+		activeWindowSessionState: input.activeWindowSessionState ?? null,
+		tools: AGENT_TOOLS
 	})
 
 	let previousResponseId: string | null = null
-	let nextInput: string | Array<Record<string, unknown>> = [
-		'Current goal:',
-		input.currentGoal,
-		'',
-		'Snapshot:',
-		snapshot
-	].join('\n')
+	let nextInput: string | Array<Record<string, unknown>> = promptAssembly.input
 	let modelRetries = 0
 	const groundedFacts = createGroundedTurnFacts()
 
@@ -61,9 +56,10 @@ export const runAgentTurn = async (
 
 		const roundStart = Date.now()
 		const response = await client.createResponse({
-			instructions: AGENT_SYSTEM_PROMPT,
+			instructions: promptAssembly.instructions,
 			input: nextInput,
 			tools: AGENT_TOOLS,
+			promptAssembly,
 			previousResponseId,
 			signal: input.signal
 		})
@@ -75,7 +71,7 @@ export const runAgentTurn = async (
 				typeof response.outputText === 'string'
 					? response.outputText.trim()
 					: ''
-			if (plainTextOutput && hasGroundedReferences(groundedFacts)) {
+			if (plainTextOutput) {
 				console.log(
 					'[AI] plain_text_fallback_finish',
 					JSON.stringify({

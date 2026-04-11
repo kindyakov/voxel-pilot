@@ -16,6 +16,10 @@ import {
 	serializeChatInput,
 	toChatTools
 } from './parsers.js'
+import {
+	buildChatRequestDebugMarkdown,
+	writeRequestDebugDump
+} from './requestDebugDump.js'
 
 export class OpenAICompatibleChatClient implements AgentModelClient {
 	private readonly client: OpenAICompatibleChatSdkLike
@@ -103,16 +107,38 @@ export class OpenAICompatibleChatClient implements AgentModelClient {
 		this.ensureSession(request.instructions)
 		this.appendInput(request.input)
 
-		const response = await this.client.chat.completions.create(
-			{
-				model: this.model,
+		const requestBody = {
+			model: this.model,
+			messages: this.history,
+			tools: toChatTools(request.tools),
+			tool_choice: 'auto' as const,
+			max_tokens: this.maxTokens,
+			temperature: 0,
+			stream: false
+		}
+		const requestDumpPath = await writeRequestDebugDump({
+			filePrefix: 'chat-request',
+			markdown: buildChatRequestDebugMarkdown({
+				model: requestBody.model,
 				messages: this.history,
-				tools: toChatTools(request.tools),
-				tool_choice: 'auto',
-				max_tokens: this.maxTokens,
-				temperature: 0,
-				stream: false
-			},
+				tools: request.tools,
+				toolChoice: requestBody.tool_choice,
+				maxTokens: requestBody.max_tokens,
+				temperature: requestBody.temperature,
+				stream: requestBody.stream,
+				systemPrompt: request.instructions,
+				promptAssembly: request.promptAssembly
+			})
+		})
+		console.log(
+			'[AI] model_request_dump',
+			JSON.stringify({
+				path: requestDumpPath
+			})
+		)
+
+		const response = await this.client.chat.completions.create(
+			requestBody,
 			{
 				timeout: this.timeoutMs,
 				signal: request.signal

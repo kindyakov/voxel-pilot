@@ -456,7 +456,7 @@ test('tools facade re-exports dedicated tool ownership modules', async () => {
 		facade
 	] = await Promise.all([
 		import('../../ai/contracts/execution.js'),
-		import('../../ai/tools/prompt.js'),
+		import('../../ai/prompt.js'),
 		import('../../ai/tools/catalog.js'),
 		import('../../ai/tools/names.js'),
 		import('../../ai/tools/summary.js'),
@@ -466,7 +466,9 @@ test('tools facade re-exports dedicated tool ownership modules', async () => {
 	])
 
 	assert.equal('PendingExecution' in contracts, false)
-	assert.equal(typeof promptModule.AGENT_SYSTEM_PROMPT, 'string')
+	assert.equal(typeof promptModule.AGENT_CORE_POLICY, 'string')
+	assert.equal(typeof promptModule.assembleAgentPrompt, 'function')
+	assert.equal('AGENT_SYSTEM_PROMPT' in facade, false)
 	assert.equal(catalogModule.AGENT_TOOLS, facade.AGENT_TOOLS)
 	assert.equal(namesModule.isExecutionToolName, facade.isExecutionToolName)
 	assert.equal(summaryModule.summarizeExecution, facade.summarizeExecution)

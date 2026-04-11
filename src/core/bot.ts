@@ -10,6 +10,7 @@ import Logger from '@/config/logger'
 import CommandHandler from '@/core/CommandHandler.js'
 import BotStateMachine from '@/core/hsm'
 import { MemoryManager } from '@/core/memory/index.js'
+import { ProfileMemoryStore } from '@/core/profile/index.js'
 
 import { initConnection } from '@/modules/connection/index.js'
 
@@ -50,6 +51,9 @@ class MinecraftBot extends EventEmitter {
 
 				this.bot.utils = new BotUtils(this.bot)
 				this.bot.memory = new MemoryManager({
+					botName: this.bot.username
+				}) as any
+				this.bot.profileMemory = new ProfileMemoryStore({
 					botName: this.bot.username
 				}) as any
 				this.bot.hsm = new BotStateMachine(this.bot)

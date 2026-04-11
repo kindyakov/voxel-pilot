@@ -30,6 +30,7 @@ class BotStateMachine {
 
 	private async init(): Promise<void> {
 		await this.bot.memory.load()
+		await this.bot.profileMemory?.load()
 
 		this.actor = createActor(machine, {
 			input: {
@@ -164,6 +165,7 @@ class BotStateMachine {
 		}
 
 		this.bot.memory.close()
+		this.bot.profileMemory?.close()
 	}
 }
 

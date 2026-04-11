@@ -1,3 +1,4 @@
+import type { ConversationEntry } from '@/ai/conversationHistory.js'
 import type { PendingExecution } from '@/ai/contracts/execution.js'
 import type { WindowSession } from '@/ai/runtime/window.js'
 import type { TaskContext } from '@/ai/taskContext.js'
@@ -74,6 +75,7 @@ export interface MachineContext {
 
 	currentGoal: string | null
 	subGoal: string | null
+	conversationHistory: ConversationEntry[]
 	taskContext: TaskContext
 	lastAction: string | null
 	lastActionArgs: Record<string, unknown> | null
@@ -158,6 +160,7 @@ export const context: MachineContext = {
 
 	currentGoal: null,
 	subGoal: null,
+	conversationHistory: [],
 	taskContext: {
 		category: 'unknown',
 		relevantInteractables: [],

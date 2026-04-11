@@ -2428,3 +2428,95 @@ test('invalid navigate args do not default to world zero', async () => {
 		actor.stop()
 	}
 })
+
+test('conversation history survives completed goals and is appended on user and assistant turns', async () => {
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'finish' as const,
+				message: 'Я буду отвечать по-русски.',
+				transcript: ['finish_goal']
+			}
+		}
+
+		return await new Promise<never>(() => {})
+	})
+
+	const bot = new FakeBot() as any
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Smidvard',
+			text: 'отвечай по-русски'
+		})
+
+		await waitForTurn()
+		await waitForTurn()
+
+		assert.deepEqual(actor.getSnapshot().context.conversationHistory, [
+			{
+				role: 'user',
+				username: 'Smidvard',
+				message: 'отвечай по-русски'
+			},
+			{
+				role: 'assistant',
+				message: 'Я буду отвечать по-русски.'
+			}
+		])
+		assert.equal(actor.getSnapshot().context.currentGoal, null)
+
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Smidvard',
+			text: 'что у тебя в инвентаре?'
+		})
+		await waitForTurn()
+
+		assert.deepEqual(actor.getSnapshot().context.conversationHistory, [
+			{
+				role: 'user',
+				username: 'Smidvard',
+				message: 'отвечай по-русски'
+			},
+			{
+				role: 'assistant',
+				message: 'Я буду отвечать по-русски.'
+			},
+			{
+				role: 'user',
+				username: 'Smidvard',
+				message: 'что у тебя в инвентаре?'
+			}
+		])
+	} finally {
+		actor.stop()
+	}
+})
