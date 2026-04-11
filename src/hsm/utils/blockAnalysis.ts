@@ -66,7 +66,9 @@ export function checkBlockSafety(
 	const supportPos = new Vec3Class(pos.x, pos.y - 1, pos.z)
 	const supportBlock = bot.blockAt(supportPos)
 	const supportName =
-		typeof supportBlock?.name === 'string' ? supportBlock.name.toLowerCase() : ''
+		typeof supportBlock?.name === 'string'
+			? supportBlock.name.toLowerCase()
+			: ''
 
 	if (!supportBlock || UNSUPPORTED_BLOCK_NAMES.has(supportName)) {
 		return {
@@ -80,7 +82,10 @@ export function checkBlockSafety(
 	}
 }
 
-export function filterSafeBlocks(blocks: AnalyzedBlock[], bot: Bot): AnalyzedBlock[] {
+export function filterSafeBlocks(
+	blocks: AnalyzedBlock[],
+	bot: Bot
+): AnalyzedBlock[] {
 	return blocks.filter(block => checkBlockSafety(bot, block.position).isSafe)
 }
 

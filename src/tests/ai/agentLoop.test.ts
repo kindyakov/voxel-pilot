@@ -361,7 +361,10 @@ test('runAgentTurn rejects open_window when memory_read returns no grounded entr
 	if (result.kind !== 'failed') {
 		assert.fail('Expected failed result')
 	}
-	assert.match(result.reason, /open_window.*requires a window-compatible position grounded/i)
+	assert.match(
+		result.reason,
+		/open_window.*requires a window-compatible position grounded/i
+	)
 })
 
 test('runAgentTurn accepts open_window only from allowed grounding sources', async () => {
@@ -568,7 +571,10 @@ test('runAgentTurn rejects open_window when memory_read grounds an incompatible 
 	if (result.kind !== 'failed') {
 		assert.fail('Expected failed result')
 	}
-	assert.match(result.reason, /open_window.*requires a window-compatible position grounded/i)
+	assert.match(
+		result.reason,
+		/open_window.*requires a window-compatible position grounded/i
+	)
 })
 
 test('runAgentTurn rejects follow_entity when inspect_entities returns no entities', async () => {
@@ -844,7 +850,10 @@ test('runAgentTurn does not treat snapshot window metadata as fresh grounding', 
 	if (result.kind !== 'failed') {
 		assert.fail('Expected failed result')
 	}
-	assert.match(result.reason, /open_window.*requires a window-compatible position grounded/i)
+	assert.match(
+		result.reason,
+		/open_window.*requires a window-compatible position grounded/i
+	)
 })
 
 test('runAgentTurn rejects navigation to unsupported workstation for crafting goals', async () => {
@@ -923,10 +932,7 @@ test('runAgentTurn rejects navigation to unsupported workstation for crafting go
 	if (result.kind !== 'failed') {
 		assert.fail('Expected failed result')
 	}
-	assert.match(
-		result.reason,
-		/unsupported workstation for crafting tasks/i
-	)
+	assert.match(result.reason, /unsupported workstation for crafting tasks/i)
 })
 
 test('runAgentTurn still fails when the first model response is plain text without any tool call', async () => {
@@ -1152,26 +1158,32 @@ test('runAgentTurn accepts plain-text finish after a grounded world inspection i
 })
 
 test('loop facade re-exports dedicated loop ownership modules', async () => {
-	const [contracts, groundingModule, validationModule, policyModule, transcriptModule, runAgentTurnModule, facade] =
-		await Promise.all([
-			import('../../ai/contracts/agentTurn.js'),
-			import('../../ai/loop/grounding.js'),
-			import('../../ai/loop/validation.js'),
-			import('../../ai/loop/policy.js'),
-			import('../../ai/loop/transcript.js'),
-			import('../../ai/loop/runAgentTurn.js'),
-			import('../../ai/loop.js')
-		])
+	const [
+		contracts,
+		groundingModule,
+		validationModule,
+		policyModule,
+		transcriptModule,
+		runAgentTurnModule,
+		facade
+	] = await Promise.all([
+		import('../../ai/contracts/agentTurn.js'),
+		import('../../ai/loop/grounding.js'),
+		import('../../ai/loop/validation.js'),
+		import('../../ai/loop/policy.js'),
+		import('../../ai/loop/transcript.js'),
+		import('../../ai/loop/runAgentTurn.js'),
+		import('../../ai/loop.js')
+	])
 
-	assert.equal(typeof contracts.AgentTurnResult, 'undefined')
+	assert.equal('AgentTurnResult' in contracts, false)
 	assert.equal(typeof groundingModule.collectGroundedFacts, 'function')
 	assert.equal(typeof validationModule.validateExecutionTool, 'function')
 	assert.equal(policyModule.MAX_INLINE_TOOL_ROUNDS, 4)
 	assert.equal(
-		transcriptModule.executionSignature(
-			'navigate_to',
-			{ position: { x: 1, y: 2, z: 3 } }
-		),
+		transcriptModule.executionSignature('navigate_to', {
+			position: { x: 1, y: 2, z: 3 }
+		}),
 		'navigate_to:{"position":{"x":1,"y":2,"z":3}}'
 	)
 	assert.equal(runAgentTurnModule.runAgentTurn, facade.runAgentTurn)

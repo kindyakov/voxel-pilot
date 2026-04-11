@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { executeInlineToolCall } from '../../ai/tools.js'
 import type { WindowSession } from '../../ai/runtime/window.js'
 import {
 	describePlayerInventory,
 	inferWindowKindFromBlockName
 } from '../../ai/runtime/window.js'
+import { executeInlineToolCall } from '../../ai/tools.js'
 
 const createVec3 = (x: number, y: number, z: number) => ({
 	x,
@@ -20,9 +20,11 @@ const createVec3 = (x: number, y: number, z: number) => ({
 	}
 })
 
-const createActiveWindowSession = (
-	position: { x: number; y: number; z: number }
-): WindowSession =>
+const createActiveWindowSession = (position: {
+	x: number
+	y: number
+	z: number
+}): WindowSession =>
 	({
 		kind: 'furnace_family',
 		descriptor: {
@@ -76,7 +78,9 @@ test('describePlayerInventory exposes semantic zones for hotbar and inventory', 
 
 	const snapshot = describePlayerInventory(bot)
 
-	const inventoryZone = snapshot.zones.find(zone => zone.zone === 'player_inventory')
+	const inventoryZone = snapshot.zones.find(
+		zone => zone.zone === 'player_inventory'
+	)
 	const hotbarZone = snapshot.zones.find(zone => zone.zone === 'hotbar')
 
 	assert.equal(snapshot.kind, 'player_inventory')
@@ -134,11 +138,15 @@ test('inspect_window opens, snapshots, and closes a furnace-family window', asyn
 		}
 	} as any
 
-	const result = await executeInlineToolCall('inspect_window', {
-		position: { x: 1, y: 64, z: 1 }
-	}, {
-		bot
-	})
+	const result = await executeInlineToolCall(
+		'inspect_window',
+		{
+			position: { x: 1, y: 64, z: 1 }
+		},
+		{
+			bot
+		}
+	)
 
 	assert.equal(result.ok, true)
 	assert.equal(openCalls, 1)
@@ -204,11 +212,15 @@ test('inspect_window fails when temporary close fails', async () => {
 		}
 	} as any
 
-	const result = await executeInlineToolCall('inspect_window', {
-		position: { x: 1, y: 64, z: 1 }
-	}, {
-		bot
-	})
+	const result = await executeInlineToolCall(
+		'inspect_window',
+		{
+			position: { x: 1, y: 64, z: 1 }
+		},
+		{
+			bot
+		}
+	)
 
 	assert.equal(result.ok, false)
 	assert.equal(openCalls, 1)
@@ -246,13 +258,17 @@ test('inspect_window rejects stale close_failed sessions', async () => {
 		}
 	} as any
 
-	const result = await executeInlineToolCall('inspect_window', {
-		position: { x: 1, y: 64, z: 1 }
-	}, {
-		bot,
-		activeWindowSession: activeSession,
-		activeWindowSessionState: 'close_failed'
-	})
+	const result = await executeInlineToolCall(
+		'inspect_window',
+		{
+			position: { x: 1, y: 64, z: 1 }
+		},
+		{
+			bot,
+			activeWindowSession: activeSession,
+			activeWindowSessionState: 'close_failed'
+		}
+	)
 
 	assert.equal(result.ok, false)
 	assert.match(
@@ -286,19 +302,20 @@ test('inspect_window rejects different-position inspect when another session is 
 		}
 	} as any
 
-	const result = await executeInlineToolCall('inspect_window', {
-		position: { x: 2, y: 64, z: 2 }
-	}, {
-		bot,
-		activeWindowSession: activeSession,
-		activeWindowSessionState: 'open'
-	})
+	const result = await executeInlineToolCall(
+		'inspect_window',
+		{
+			position: { x: 2, y: 64, z: 2 }
+		},
+		{
+			bot,
+			activeWindowSession: activeSession,
+			activeWindowSessionState: 'open'
+		}
+	)
 
 	assert.equal(result.ok, false)
-	assert.match(
-		String((result.output as any).reason),
-		/different position/i
-	)
+	assert.match(String((result.output as any).reason), /different position/i)
 	assert.equal(openCalls, 0)
 })
 
@@ -326,13 +343,17 @@ test('inspect_window reuses same-position active sessions', async () => {
 		}
 	} as any
 
-	const result = await executeInlineToolCall('inspect_window', {
-		position: { x: 1, y: 64, z: 1 }
-	}, {
-		bot,
-		activeWindowSession: activeSession,
-		activeWindowSessionState: 'open'
-	})
+	const result = await executeInlineToolCall(
+		'inspect_window',
+		{
+			position: { x: 1, y: 64, z: 1 }
+		},
+		{
+			bot,
+			activeWindowSession: activeSession,
+			activeWindowSessionState: 'open'
+		}
+	)
 
 	assert.equal(result.ok, true)
 	assert.equal(openCalls, 0)
@@ -405,31 +426,46 @@ test('inspect_window rejects unsupported workstation blocks explicitly', async (
 		closeWindow: () => {}
 	} as any
 
-	const result = await executeInlineToolCall('inspect_window', {
-		position: { x: 2, y: 64, z: 2 }
-	}, {
-		bot
-	})
+	const result = await executeInlineToolCall(
+		'inspect_window',
+		{
+			position: { x: 2, y: 64, z: 2 }
+		},
+		{
+			bot
+		}
+	)
 
 	assert.equal(result.ok, false)
-	assert.match(String((result.output as any).reason), /Unsupported window block/)
+	assert.match(
+		String((result.output as any).reason),
+		/Unsupported window block/
+	)
 	assert.equal(openCalls, 0)
 })
 
 test('tools facade re-exports dedicated tool ownership modules', async () => {
-	const [contracts, promptModule, catalogModule, namesModule, summaryModule, sharedModule, inlineExecutorModule, facade] =
-		await Promise.all([
-			import('../../ai/contracts/execution.js'),
-			import('../../ai/tools/prompt.js'),
-			import('../../ai/tools/catalog.js'),
-			import('../../ai/tools/names.js'),
-			import('../../ai/tools/summary.js'),
-			import('../../ai/tools/shared.js'),
-			import('../../ai/tools/inlineExecutor.js'),
-			import('../../ai/tools.js')
-		])
+	const [
+		contracts,
+		promptModule,
+		catalogModule,
+		namesModule,
+		summaryModule,
+		sharedModule,
+		inlineExecutorModule,
+		facade
+	] = await Promise.all([
+		import('../../ai/contracts/execution.js'),
+		import('../../ai/tools/prompt.js'),
+		import('../../ai/tools/catalog.js'),
+		import('../../ai/tools/names.js'),
+		import('../../ai/tools/summary.js'),
+		import('../../ai/tools/shared.js'),
+		import('../../ai/tools/inlineExecutor.js'),
+		import('../../ai/tools.js')
+	])
 
-	assert.equal(typeof contracts.PendingExecution, 'undefined')
+	assert.equal('PendingExecution' in contracts, false)
 	assert.equal(typeof promptModule.AGENT_SYSTEM_PROMPT, 'string')
 	assert.equal(catalogModule.AGENT_TOOLS, facade.AGENT_TOOLS)
 	assert.equal(namesModule.isExecutionToolName, facade.isExecutionToolName)

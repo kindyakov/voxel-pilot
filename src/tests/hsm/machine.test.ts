@@ -783,7 +783,10 @@ test('mine_resource execution routes into MINING search state', async () => {
 			}),
 			true
 		)
-		assert.equal((actor.getSnapshot().context.taskData as any).blockName, 'iron_ore')
+		assert.equal(
+			(actor.getSnapshot().context.taskData as any).blockName,
+			'iron_ore'
+		)
 		assert.equal((actor.getSnapshot().context.taskData as any).count, 2)
 	} finally {
 		actor.stop()
@@ -1031,8 +1034,7 @@ test('follow_entity runtime selector requires entity_name and entity_type to mat
 		candidateEntities.map(entity => [String(entity.id), entity])
 	)
 	bot.nearestEntity = (predicate: (entity: any) => boolean) => {
-		const target =
-			candidateEntities.find(entity => predicate(entity)) ?? null
+		const target = candidateEntities.find(entity => predicate(entity)) ?? null
 		selectedEntityIds.push(target?.id ?? -1)
 		return target
 	}
@@ -1227,10 +1229,7 @@ test('open_window, transfer_item, and close_window route through the HSM with se
 		assert.equal(openCalls, 1)
 		assert.equal(transferCalls, 1)
 		assert.equal(closeCalls, 1)
-		assert.equal(
-			(actor.getSnapshot().context as any).activeWindowSession,
-			null
-		)
+		assert.equal((actor.getSnapshot().context as any).activeWindowSession, null)
 		assert.equal((transferredArgs as any)?.itemType, 1)
 		assert.equal((transferredArgs as any)?.sourceStart, 3)
 		assert.equal((transferredArgs as any)?.destStart, 0)
@@ -1330,10 +1329,7 @@ test('START_COMBAT closes an active window before entering combat', async () => 
 
 		assert.equal(openCalls, 1)
 		assert.equal(closeCalls, 1)
-		assert.equal(
-			(actor.getSnapshot().context as any).activeWindowSession,
-			null
-		)
+		assert.equal((actor.getSnapshot().context as any).activeWindowSession, null)
 		assert.equal(
 			(actor.getSnapshot().context as any).preferredCombatTargetId,
 			enemy.id
@@ -1431,10 +1427,7 @@ test('UPDATE_ENTITIES closes an active window before auto-combat preemption', as
 
 		assert.equal(openCalls, 1)
 		assert.equal(closeCalls, 1)
-		assert.equal(
-			(actor.getSnapshot().context as any).activeWindowSession,
-			null
-		)
+		assert.equal((actor.getSnapshot().context as any).activeWindowSession, null)
 		assert.equal(
 			(actor.getSnapshot().context as any).preferredCombatTargetId,
 			null
@@ -1526,10 +1519,7 @@ test('START_URGENT_NEEDS closes an active window before urgent handling', async 
 
 		assert.equal(openCalls, 1)
 		assert.equal(closeCalls, 1)
-		assert.equal(
-			(actor.getSnapshot().context as any).activeWindowSession,
-			null
-		)
+		assert.equal((actor.getSnapshot().context as any).activeWindowSession, null)
 		assert.equal(
 			(actor.getSnapshot() as any).matches({
 				MAIN_ACTIVITY: { URGENT_NEEDS: 'EMERGENCY_EATING' }
@@ -1693,7 +1683,10 @@ test('failed window close marks the session retryable until a confirmed close su
 
 		assert.equal(openCalls, 2)
 		assert.equal(closeCalls, 2)
-		assert.equal((actor.getSnapshot().context as any).activeWindowSessionState, 'open')
+		assert.equal(
+			(actor.getSnapshot().context as any).activeWindowSessionState,
+			'open'
+		)
 		assert.equal(
 			(actor.getSnapshot().context as any).activeWindowSession !== null,
 			true
@@ -1942,10 +1935,7 @@ test('open_window abort after open preserves the session when close fails', asyn
 			(actor.getSnapshot().context as any).activeWindowSessionState,
 			'close_failed'
 		)
-		assert.equal(
-			(actor.getSnapshot().context as any).lastResult,
-			'FAILED'
-		)
+		assert.equal((actor.getSnapshot().context as any).lastResult, 'FAILED')
 	} finally {
 		actor.stop()
 	}
@@ -2038,10 +2028,7 @@ test('DEATH clears active window session state and closes any open window', asyn
 
 		assert.equal(openCalls, 1)
 		assert.equal(closeCalls, 1)
-		assert.equal(
-			(actor.getSnapshot().context as any).activeWindowSession,
-			null
-		)
+		assert.equal((actor.getSnapshot().context as any).activeWindowSession, null)
 		assert.equal(
 			(actor.getSnapshot().context as any).activeWindowSessionState,
 			null
@@ -2138,10 +2125,7 @@ test('STOP_CURRENT_GOAL clears active window session state and closes any open w
 
 		assert.equal(openCalls, 1)
 		assert.equal(closeCalls, 1)
-		assert.equal(
-			(actor.getSnapshot().context as any).activeWindowSession,
-			null
-		)
+		assert.equal((actor.getSnapshot().context as any).activeWindowSession, null)
 		assert.equal(
 			(actor.getSnapshot().context as any).activeWindowSessionState,
 			null
@@ -2249,10 +2233,7 @@ test('thinking finish clears active window session state and closes any open win
 
 		assert.equal(openCalls, 1)
 		assert.equal(closeCalls, 1)
-		assert.equal(
-			(actor.getSnapshot().context as any).activeWindowSession,
-			null
-		)
+		assert.equal((actor.getSnapshot().context as any).activeWindowSession, null)
 		assert.equal(
 			(actor.getSnapshot().context as any).activeWindowSessionState,
 			null
@@ -2360,10 +2341,7 @@ test('thinking failure clears active window session state and closes any open wi
 
 		assert.equal(openCalls, 1)
 		assert.equal(closeCalls, 1)
-		assert.equal(
-			(actor.getSnapshot().context as any).activeWindowSession,
-			null
-		)
+		assert.equal((actor.getSnapshot().context as any).activeWindowSession, null)
 		assert.equal(
 			(actor.getSnapshot().context as any).activeWindowSessionState,
 			null

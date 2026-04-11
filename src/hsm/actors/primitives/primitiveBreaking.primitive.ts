@@ -1,10 +1,11 @@
+import type { Block } from '@/types'
+
 import {
 	type BaseServiceState,
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
-import { GoalNear } from '@/modules/plugins/goals'
 
-import type { Block } from '@/types'
+import { GoalNear } from '@/modules/plugins/goals'
 
 import utils from '@/utils/general/index.general.utils'
 

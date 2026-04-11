@@ -7,10 +7,10 @@
 
 ### Architecture
 
-- [ ] **ARCH-01**: `src/ai/client.ts` becomes a thin facade while contracts, adapters, parsers, and factory ownership move into dedicated modules.
-- [ ] **ARCH-02**: `src/ai/tools.ts` becomes a thin facade while tool names, prompt, catalog, shared coercion, and inline executors move into dedicated modules.
-- [ ] **ARCH-03**: `src/ai/loop.ts` becomes a thin facade while `runAgentTurn` orchestration, grounding, validation, and loop policy move into dedicated modules.
-- [ ] **ARCH-04**: Existing HSM integration, entrypoint imports, tests, type-check, and build behavior remain intact through the refactor.
+- [x] **ARCH-01**: `src/ai/client.ts` becomes a thin facade while contracts, adapters, parsers, and factory ownership move into dedicated modules.
+- [x] **ARCH-02**: `src/ai/tools.ts` becomes a thin facade while tool names, prompt, catalog, shared coercion, and inline executors move into dedicated modules.
+- [x] **ARCH-03**: `src/ai/loop.ts` becomes a thin facade while `runAgentTurn` orchestration, grounding, validation, and loop policy move into dedicated modules.
+- [x] **ARCH-04**: Existing HSM integration, entrypoint imports, tests, type-check, and build behavior remain intact through the refactor.
 
 ## v2 Requirements
 
@@ -31,10 +31,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARCH-01 | Phase 1 | Pending |
-| ARCH-02 | Phase 1 | Pending |
-| ARCH-03 | Phase 1 | Pending |
-| ARCH-04 | Phase 1 | Pending |
+| ARCH-01 | Phase 1 | Verified in 01-VERIFICATION.md |
+| ARCH-02 | Phase 1 | Verified in 01-VERIFICATION.md |
+| ARCH-03 | Phase 1 | Verified in 01-VERIFICATION.md |
+| ARCH-04 | Phase 1 | Verified in 01-VERIFICATION.md |
 
 **Coverage:**
 - v1 requirements: 4 total
@@ -43,4 +43,4 @@
 
 ---
 *Requirements defined: 2026-04-10*
-*Last updated: 2026-04-10 after initial GSD bootstrap*
+*Last updated: 2026-04-11 after Phase 1 verification*

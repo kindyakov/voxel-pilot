@@ -27,7 +27,14 @@ const SMELT_KEYWORDS = ['smelt', 'переплав', 'плав']
 const PLACE_KEYWORDS = ['place', 'постав', 'установ']
 const FOLLOW_KEYWORDS = ['follow', 'следуй', 'иди за']
 const NAVIGATE_KEYWORDS = ['go to', 'come to', 'иди к', 'подойди', 'navigate']
-const GATHER_KEYWORDS = ['collect', 'gather', 'mine', 'добуд', 'собери', 'накопай']
+const GATHER_KEYWORDS = [
+	'collect',
+	'gather',
+	'mine',
+	'добуд',
+	'собери',
+	'накопай'
+]
 
 const includesAny = (value: string, keywords: string[]): boolean =>
 	keywords.some(keyword => value.includes(keyword))

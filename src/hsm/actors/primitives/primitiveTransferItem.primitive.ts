@@ -1,8 +1,9 @@
 import {
-	transferWindowItem,
 	type WindowTransferRequest,
-	type WindowTransferResult
+	type WindowTransferResult,
+	transferWindowItem
 } from '@/ai/runtime/window.js'
+
 import { createStatefulService } from '@/hsm/helpers/createStatefulService'
 
 interface TransferItemState {

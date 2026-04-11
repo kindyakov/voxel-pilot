@@ -6,7 +6,7 @@ This roadmap turns a raw architectural refactor brief into an executable, phase-
 
 ## Phases
 
-- [ ] **Phase 1: AI Subsystem Refactor** - Decompose `src/ai/client.ts`, `src/ai/tools.ts`, and `src/ai/loop.ts` into stable contracts, focused modules, and thin facades.
+- [x] **Phase 1: AI Subsystem Refactor** - Decompose `src/ai/client.ts`, `src/ai/tools.ts`, and `src/ai/loop.ts` into stable contracts, focused modules, and thin facades. (completed 2026-04-11)
 
 ## Phase Details
 
@@ -21,10 +21,10 @@ This roadmap turns a raw architectural refactor brief into an executable, phase-
 **Plans**: 4 plans
 
 Plans:
-- [ ] 01-01: Extract AI client contracts, parsers, adapters, and factory
-- [ ] 01-02: Split AI tools taxonomy, catalog, and inline executors
-- [ ] 01-03: Split agent loop orchestration, grounding, validation, and policy
-- [ ] 01-04: Consolidate imports, keep facades thin, and run full regression verification
+- [x] 01-01: Extract AI client contracts, parsers, adapters, and factory
+- [x] 01-02: Split AI tools taxonomy, catalog, and inline executors
+- [x] 01-03: Split agent loop orchestration, grounding, validation, and policy
+- [x] 01-04: Consolidate imports, keep facades thin, and run full regression verification
 
 ## Progress
 
@@ -33,4 +33,4 @@ Phases execute in numeric order: 1
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. AI Subsystem Refactor | 0/4 | Not started | - |
+| 1. AI Subsystem Refactor | 4/4 | Complete | 2026-04-11 |

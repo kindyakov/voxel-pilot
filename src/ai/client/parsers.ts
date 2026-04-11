@@ -79,8 +79,9 @@ export const toChatTools = (
 		}
 	}))
 
-export const serializeChatInput = (input: Array<Record<string, unknown>>): string =>
-	input.map(item => JSON.stringify(item)).join('\n')
+export const serializeChatInput = (
+	input: Array<Record<string, unknown>>
+): string => input.map(item => JSON.stringify(item)).join('\n')
 
 export const getFirstChatChoiceMessage = (response: {
 	choices?: Array<{ message: ChatCompletionMessageLike }>

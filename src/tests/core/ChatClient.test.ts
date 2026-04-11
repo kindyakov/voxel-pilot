@@ -137,7 +137,7 @@ test('client facade keeps stable exports while dedicated client modules own the 
 			import('../../ai/client.js')
 		])
 
-	assert.equal(typeof contracts.parseArguments, 'undefined')
+	assert.equal('parseArguments' in contracts, false)
 	assert.equal(typeof factory.createAgentClient, 'function')
 	assert.equal(typeof chatModule.OpenAICompatibleChatClient, 'function')
 	assert.equal(typeof responsesModule.OpenAIResponsesClient, 'function')

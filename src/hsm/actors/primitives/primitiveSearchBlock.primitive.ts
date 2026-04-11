@@ -1,3 +1,5 @@
+import type { Block } from '@/types'
+
 import {
 	type BaseServiceState,
 	createStatefulService
@@ -10,7 +12,6 @@ import {
 	filterSafeBlocks,
 	selectBestBlocks
 } from '@/hsm/utils/blockAnalysis'
-import type { Block } from '@/types'
 
 interface SearchBlockState extends BaseServiceState {
 	blockName: string

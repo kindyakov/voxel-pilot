@@ -144,7 +144,10 @@ const resolveEntityLabel = (
 		return entity.name
 	}
 
-	if (typeof entity.username === 'string' && entity.username.trim().length > 0) {
+	if (
+		typeof entity.username === 'string' &&
+		entity.username.trim().length > 0
+	) {
 		return entity.username
 	}
 
@@ -195,7 +198,10 @@ export const inspectNearbyBlocks = (
 			}
 
 			const resolvedPosition = toPosition(block.position)
-			if (!resolvedPosition || typeof bot.entity?.position?.distanceTo !== 'function') {
+			if (
+				!resolvedPosition ||
+				typeof bot.entity?.position?.distanceTo !== 'function'
+			) {
 				return null
 			}
 
@@ -209,9 +215,7 @@ export const inspectNearbyBlocks = (
 				name: block.name,
 				kind: kind ?? 'resource',
 				position: resolvedPosition,
-				distance: roundDistance(
-					bot.entity.position.distanceTo(block.position)
-				)
+				distance: roundDistance(bot.entity.position.distanceTo(block.position))
 			} satisfies BlockInspectionFact
 		})
 		.filter((fact): fact is BlockInspectionFact => Boolean(fact))
@@ -238,7 +242,10 @@ export const inspectNearbyEntities = (
 	const entityFacts = Object.values(bot.entities)
 		.map(entity => {
 			const resolvedPosition = toPosition(entity?.position)
-			if (!resolvedPosition || typeof bot.entity?.position?.distanceTo !== 'function') {
+			if (
+				!resolvedPosition ||
+				typeof bot.entity?.position?.distanceTo !== 'function'
+			) {
 				return null
 			}
 

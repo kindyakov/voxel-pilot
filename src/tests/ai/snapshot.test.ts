@@ -81,7 +81,10 @@ test('buildSnapshot renders runtime-only sections and active window summary', ()
 	assert.match(snapshot, /last_action: inspect_window/)
 	assert.match(snapshot, /last_result: FAILED/)
 	assert.match(snapshot, /last_reason: Window is too far away \(5.2m\)/)
-	assert.match(snapshot, /error_history: Window is too far away \(5.2m\) \| No coal/)
+	assert.match(
+		snapshot,
+		/error_history: Window is too far away \(5.2m\) \| No coal/
+	)
 
 	assert.equal(snapshot.includes('INVENTORY_EQUIPMENT'), false)
 	assert.equal(snapshot.includes('ENVIRONMENT'), false)

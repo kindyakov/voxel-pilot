@@ -1,4 +1,4 @@
-import type { PendingExecution } from '@/ai/tools.js'
+import type { PendingExecution } from '@/ai/contracts/execution.js'
 import type { WindowSession } from '@/ai/runtime/window.js'
 import type { TaskContext } from '@/ai/taskContext.js'
 

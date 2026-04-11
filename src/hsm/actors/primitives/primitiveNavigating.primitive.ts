@@ -1,9 +1,9 @@
+import type { Block, Entity, Vec3 } from '@/types'
+
 import {
 	type BaseServiceState,
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService'
-
-import type { Block, Entity, Vec3 } from '@/types'
 
 import { GoalNear } from '@/modules/plugins/goals'
 

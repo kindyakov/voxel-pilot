@@ -1,20 +1,24 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+
 import { Vec3 } from 'vec3'
 
 import {
+	analyzeBlock,
 	calculateBlockScore,
 	checkBlockSafety,
 	filterByYRange,
 	filterSafeBlocks,
 	selectBestBlocks,
-	sortBlocksByPriority,
-	analyzeBlock
+	sortBlocksByPriority
 } from '../../hsm/utils/blockAnalysis.js'
-
 import type { AnalyzedBlock } from '../../hsm/utils/blockAnalysis.js'
 
-const createBlock = (y: number, yDiff: number, distance = 5): AnalyzedBlock => ({
+const createBlock = (
+	y: number,
+	yDiff: number,
+	distance = 5
+): AnalyzedBlock => ({
 	block: {
 		name: 'stone',
 		position: new Vec3(0, y, 0)
@@ -41,7 +45,7 @@ const createBot = ({
 			(() => ({
 				name: 'stone'
 			}))
-	} as any)
+	}) as any
 
 test('filterByYRange keeps blocks within an asymmetric Y range', () => {
 	const blocks = [
@@ -55,8 +59,14 @@ test('filterByYRange keeps blocks within an asymmetric Y range', () => {
 
 	const filtered = filterByYRange(blocks, 64, { above: 2, below: 1 })
 
-	assert.deepEqual(filtered.map(block => block.position.y), [63, 64, 65, 66])
-	assert.deepEqual(blocks.map(block => block.position.y), [62, 63, 64, 65, 66, 67])
+	assert.deepEqual(
+		filtered.map(block => block.position.y),
+		[63, 64, 65, 66]
+	)
+	assert.deepEqual(
+		blocks.map(block => block.position.y),
+		[62, 63, 64, 65, 66, 67]
+	)
 })
 
 test('filterByYRange returns all blocks when no Y filter is specified', () => {
@@ -81,7 +91,11 @@ test('calculateBlockScore prefers level, above, and nearer blocks', () => {
 })
 
 test('sortBlocksByPriority sorts by descending score without mutating the input array', () => {
-	const blocks = [createBlock(60, -4, 8), createBlock(64, 0, 8), createBlock(68, 4, 1)]
+	const blocks = [
+		createBlock(60, -4, 8),
+		createBlock(64, 0, 8),
+		createBlock(68, 4, 1)
+	]
 	const original = [...blocks]
 
 	const sorted = sortBlocksByPriority(blocks)
@@ -150,5 +164,8 @@ test('analyzeBlock returns metrics for a real block and null when none exists', 
 	assert.equal(analyzed?.yDiff, 1)
 	assert.equal(analyzed?.distanceHorizontal, Math.sqrt(20))
 	assert.equal(analyzed?.distanceTotal, bot.entity.position.distanceTo(pos))
-	assert.equal(analyzeBlock(new Vec3(1, 1, 1), createBot({ blockAt: () => null })), null)
+	assert.equal(
+		analyzeBlock(new Vec3(1, 1, 1), createBot({ blockAt: () => null })),
+		null
+	)
 })

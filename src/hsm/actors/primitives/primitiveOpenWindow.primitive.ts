@@ -1,10 +1,12 @@
-import type { MemoryPosition } from '@/core/memory/types.js'
 import {
+	type WindowSession,
 	closeWindowSession,
 	closeWindowSessionSafely,
-	openWindowSession,
-	type WindowSession,
+	openWindowSession
 } from '@/ai/runtime/window.js'
+
+import type { MemoryPosition } from '@/core/memory/types.js'
+
 import { createStatefulService } from '@/hsm/helpers/createStatefulService'
 
 interface OpenWindowState {
@@ -27,14 +29,7 @@ export const primitiveOpenWindow = createStatefulService<
 		windowSession: null
 	},
 
-	onStart: async ({
-		bot,
-		context,
-		input,
-		sendBack,
-		setState,
-		abortSignal
-	}) => {
+	onStart: async ({ bot, context, input, sendBack, setState, abortSignal }) => {
 		const { position } = input
 
 		if (context.activeWindowSession) {

@@ -17,10 +17,15 @@ The bot's AI planning and execution behavior must stay stable while the `src/ai`
 
 ### Active
 
-- [ ] Split AI client contracts, provider adapters, and factory ownership.
-- [ ] Split tool catalog, tool taxonomy, and inline runtime execution ownership.
-- [ ] Split `runAgentTurn` orchestration from validation, grounding, and loop policy.
-- [ ] Preserve existing entrypoint imports, HSM integration, tests, and build behavior during refactor.
+- [ ] Add dedicated unit tests for pure grounding and validation modules.
+- [ ] Reduce remaining `src/hsm` knowledge of `src/ai` internals beyond stable contracts.
+
+### Validated This Milestone
+
+- ✓ `src/ai/client.ts` is now a thin facade backed by contracts, adapters, parsers, and a factory module. Validated in Phase 1: AI Subsystem Refactor.
+- ✓ `src/ai/tools.ts` is now a thin facade backed by tool contracts, catalog, taxonomy, shared helpers, and dedicated inline executors. Validated in Phase 1: AI Subsystem Refactor.
+- ✓ `src/ai/loop.ts` is now a thin facade backed by contracts, grounding, validation, policy, transcript, and orchestration modules. Validated in Phase 1: AI Subsystem Refactor.
+- ✓ Existing HSM integration, targeted AI tests, `type-check`, and `build` remained intact through the refactor. Validated in Phase 1: AI Subsystem Refactor.
 
 ### Out of Scope
 
@@ -30,7 +35,7 @@ The bot's AI planning and execution behavior must stay stable while the `src/ai`
 
 ## Context
 
-The current codebase already has codebase maps under `.planning/codebase/` and a source architecture brief in `.planning/phases/PLAN.md`. The immediate goal is to convert that raw architectural brief into executable GSD artifacts so the refactor can later run in controlled waves instead of as an ad hoc rewrite.
+The current codebase now has dedicated AI contracts, adapter modules, tool executors, and loop helpers extracted from the old `src/ai` god files. The immediate follow-up goal is no longer bootstrap; it is to add direct unit coverage for the new pure modules and continue reducing unnecessary HSM knowledge of AI internals.
 
 ## Constraints
 
@@ -47,6 +52,7 @@ The current codebase already has codebase maps under `.planning/codebase/` and a
 | Preserve `.planning/phases/PLAN.md` as source material | The original architecture brief should remain readable and auditable | ✓ Good |
 | Use four executable plans across three waves | `client`, `tools`, and `loop` have different seams and should not be rewritten in one pass | ✓ Good |
 | Keep facades while moving logic | Backward compatibility matters more than aggressive cleanup in wave 1 | ✓ Good |
+| Route HSM type imports to contract modules | Stable ownership matters more than facade convenience for type-only dependencies | ✓ Good |
 
 ---
-*Last updated: 2026-04-10 after GSD bootstrap from `.planning/phases/PLAN.md`*
+*Last updated: 2026-04-11 after Phase 1 completion*

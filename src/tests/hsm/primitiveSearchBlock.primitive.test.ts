@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
-import { createActor, createMachine } from 'xstate'
+
 import { Vec3 } from 'vec3'
+import { createActor, createMachine } from 'xstate'
 
 import { primitiveSearchBlock } from '../../hsm/actors/primitives/primitiveSearchBlock.primitive.js'
 
@@ -71,11 +72,7 @@ class FakeBot {
 			if (block.support) {
 				this.blocksByPosition.set(
 					this.key(
-						new Vec3(
-							block.position.x,
-							block.position.y - 1,
-							block.position.z
-						)
+						new Vec3(block.position.x, block.position.y - 1, block.position.z)
 					),
 					block.support
 				)
@@ -87,14 +84,19 @@ class FakeBot {
 
 	public off() {}
 
-	public findBlocks = (query: { matching: number; maxDistance: number; count: number }) => {
+	public findBlocks = (query: {
+		matching: number
+		maxDistance: number
+		count: number
+	}) => {
 		this.findBlocksCalls.push(query)
 		return [...this.blocksByPosition.values()]
 			.filter(block => block.position.y >= Number.NEGATIVE_INFINITY)
 			.map(block => block.position)
 	}
 
-	public blockAt = (position: Vec3) => this.blocksByPosition.get(this.key(position)) ?? null
+	public blockAt = (position: Vec3) =>
+		this.blocksByPosition.get(this.key(position)) ?? null
 
 	private key(position: Vec3) {
 		return `${position.x}:${position.y}:${position.z}`

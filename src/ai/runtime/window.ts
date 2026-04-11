@@ -112,9 +112,7 @@ const buildZoneSnapshots = (
 	WINDOW_ZONE_ORDER.map(zone => {
 		const indexes = zoneSlots[zone] ?? []
 		const items = normalizeItems(
-			indexes
-				.map(index => slots[index])
-				.filter(Boolean)
+			indexes.map(index => slots[index]).filter(Boolean)
 		)
 
 		return {
@@ -200,10 +198,7 @@ export const getWindowDescriptor = (kind: WindowKind): WindowDescriptor => {
 					fuel: [1],
 					output: [2],
 					player_inventory: range(3, Math.max(3, slotCount - 9)),
-					hotbar: range(
-						Math.max(3, slotCount - 9),
-						Math.max(3, slotCount)
-					)
+					hotbar: range(Math.max(3, slotCount - 9), Math.max(3, slotCount))
 				})
 			)
 		case 'crafting_table':
@@ -217,10 +212,7 @@ export const getWindowDescriptor = (kind: WindowKind): WindowDescriptor => {
 					fuel: [],
 					output: [9],
 					player_inventory: range(10, Math.max(10, slotCount - 9)),
-					hotbar: range(
-						Math.max(10, slotCount - 9),
-						Math.max(10, slotCount)
-					)
+					hotbar: range(Math.max(10, slotCount - 9), Math.max(10, slotCount))
 				})
 			)
 		case 'generic_container':
@@ -365,7 +357,9 @@ export const closeWindowSessionSafely = (
 	}
 }
 
-export const describeWindowSession = (session: WindowSession): WindowSnapshot => {
+export const describeWindowSession = (
+	session: WindowSession
+): WindowSnapshot => {
 	const slots = Array.isArray(session.window?.slots) ? session.window.slots : []
 	const zoneSlots = session.descriptor.resolveZones(slots.length)
 

@@ -18,7 +18,13 @@ export const miningActions = {
 		console.log('[MINING] Exiting mining state')
 	},
 
-	storeFoundBlocks: assign<MachineContext, MachineEvent, undefined, MachineEvent, never>({
+	storeFoundBlocks: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>({
 		taskData: ({
 			context,
 			event
@@ -43,7 +49,13 @@ export const miningActions = {
 		}
 	}),
 
-	advanceToNextBlock: assign<MachineContext, MachineEvent, undefined, MachineEvent, never>({
+	advanceToNextBlock: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>({
 		taskData: ({ context }: { context: MachineContext }) => {
 			const data = getMiningTaskData(context)
 			if (!data) {
@@ -57,7 +69,13 @@ export const miningActions = {
 		}
 	}),
 
-	incrementCollected: assign<MachineContext, MachineEvent, undefined, MachineEvent, never>({
+	incrementCollected: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>({
 		taskData: ({ context }: { context: MachineContext }) => {
 			const data = getMiningTaskData(context)
 			if (!data) {
@@ -71,7 +89,13 @@ export const miningActions = {
 		}
 	}),
 
-	incrementNavigationAttempts: assign<MachineContext, MachineEvent, undefined, MachineEvent, never>({
+	incrementNavigationAttempts: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>({
 		taskData: ({ context }: { context: MachineContext }) => {
 			const data = getMiningTaskData(context)
 			if (!data) {
@@ -85,7 +109,13 @@ export const miningActions = {
 		}
 	}),
 
-	resetNavigationAttempts: assign<MachineContext, MachineEvent, undefined, MachineEvent, never>({
+	resetNavigationAttempts: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>({
 		taskData: ({ context }: { context: MachineContext }) => {
 			const data = getMiningTaskData(context)
 			if (!data) {
@@ -99,7 +129,13 @@ export const miningActions = {
 		}
 	}),
 
-	incrementBreakAttempts: assign<MachineContext, MachineEvent, undefined, MachineEvent, never>({
+	incrementBreakAttempts: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>({
 		taskData: ({ context }: { context: MachineContext }) => {
 			const data = getMiningTaskData(context)
 			if (!data) {
@@ -113,7 +149,13 @@ export const miningActions = {
 		}
 	}),
 
-	resetBreakAttempts: assign<MachineContext, MachineEvent, undefined, MachineEvent, never>({
+	resetBreakAttempts: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>({
 		taskData: ({ context }: { context: MachineContext }) => {
 			const data = getMiningTaskData(context)
 			if (!data) {
