@@ -34,6 +34,7 @@ class CombatBot extends EventEmitter {
 	inventoryItems: Array<{ name: string }> = []
 	pvpAttackCalls = 0
 	pvpStopCalls = 0
+	pvpForceStopCalls = 0
 	hawkEyeStopCalls = 0
 	hawkEyeAttackCalls = 0
 	pathfinderSetGoalCalls: unknown[] = []
@@ -42,6 +43,9 @@ class CombatBot extends EventEmitter {
 	controlStates = new Map<string, boolean>()
 	equipCalls: string[] = []
 	logMessages: string[] = []
+	eatingCalls = 0
+	stopEatingCalls = 0
+	searchedPlayer: any = null
 	inventory = {
 		slots: Array.from({ length: 46 }, () => null),
 		items: () => this.inventoryItems
@@ -105,12 +109,19 @@ class CombatBot extends EventEmitter {
 		stop: () => {
 			this.pvpStopCalls += 1
 		},
+		forceStop: () => {
+			this.pvpForceStopCalls += 1
+		},
 		movements: null as unknown
 	}
 	utils = {
 		getAllFood: () => [{ name: 'bread' }],
-		eating: async () => {},
-		stopEating: () => {},
+		eating: async () => {
+			this.eatingCalls += 1
+		},
+		stopEating: () => {
+			this.stopEatingCalls += 1
+		},
 		getMeleeWeapon: () =>
 			this.inventoryItems.find(item => item.name.includes('sword')) ?? null,
 		getRangeWeapon: () =>
@@ -119,7 +130,7 @@ class CombatBot extends EventEmitter {
 			) ?? null,
 		getArrow: () =>
 			this.inventoryItems.find(item => item.name.includes('arrow')) ?? null,
-		searchPlayer: () => null,
+		searchPlayer: () => this.searchedPlayer,
 		countItemInInventory: () => 0
 	}
 	memory = {
@@ -217,6 +228,30 @@ const createRuntimeActor = (bot: CombatBot) => {
 				serviceEntitiesTracking: noopActor,
 				serviceEmergencyEating: hangingActor,
 				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{
+			input: { bot: bot as any }
+		}
+	)
+
+	bot.hsm = {
+		getContext: () => actor.getSnapshot().context
+	}
+
+	actor.start()
+	return actor
+}
+
+const createSurvivalRuntimeActor = (bot: CombatBot) => {
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor: hangingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceApproaching: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor
 			}
 		}),
 		{

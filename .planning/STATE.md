@@ -35,6 +35,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: -
 - Total execution time: 0.0 hours
@@ -42,10 +43,11 @@ Progress: [░░░░░░░░░░] 0%
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
+| ----- | ----- | ----- | -------- |
+| -     | -     | -     | -        |
 
 **Recent Trend:**
+
 - Last 5 plans: -
 - Trend: Not enough data
 

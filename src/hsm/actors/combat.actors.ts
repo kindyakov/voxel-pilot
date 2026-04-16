@@ -7,10 +7,16 @@ import {
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService.js'
 
-import { GoalFollow, GoalXZ } from '@/modules/plugins/goals.js'
+import { GoalFollow } from '@/modules/plugins/goals.js'
 
 import { canSeeEnemy } from '@/utils/combat/enemyVisibility'
 import { hasMovementController } from '@/utils/combat/movementController'
+import {
+	clearMicroMovement,
+	stopMeleeAttack,
+	stopPathfinderMovement,
+	stopRangedAttack
+} from '@/utils/combat/runtimeControl'
 
 interface MeleeAttackState extends BaseServiceState {
 	currentTarget: Entity | null
@@ -26,26 +32,101 @@ interface ApproachingState extends BaseServiceState {
 	currentTargetId: number | null
 }
 
-const stopMeleeAttack = (bot: any) => {
-	bot.pvp.stop()
+const logCombatRuntime = (event: string, payload: Record<string, unknown>) => {
+	console.log(`[COMBAT] ${event}`, JSON.stringify(payload))
 }
 
-const stopRangedAttack = (bot: any) => {
-	bot.hawkEye.stop()
-}
+const isPvpTargetActive = (bot: any, enemy: Entity) => bot.pvp?.target?.id === enemy.id
 
-const clearMicroMovement = (bot: any) => {
-	if (typeof bot.setControlState !== 'function') {
-		return
+const getCombatDistance = (position: any, entity: Entity): number =>
+	position?.distanceTo?.(entity.position) ?? Number.POSITIVE_INFINITY
+
+const meleeExitRangeBuffer = 1.5
+
+const resolveCombatTarget = (
+	context: any,
+	currentTarget: Entity | null = null
+): { entity: Entity | null; distance: number } => {
+	const position = context.position ?? context.bot?.entity?.position ?? null
+	const enemies = Array.isArray(context.enemies) ? context.enemies : []
+
+	if (!position) {
+		return context.nearestEnemy ?? { entity: null, distance: Infinity }
 	}
 
-	bot.setControlState('forward', false)
-	bot.setControlState('sprint', false)
-	bot.setControlState('jump', false)
+	const pickVisibleTarget = (targetId: number | null): Entity | null => {
+		if (targetId === null) {
+			return null
+		}
+
+		return (
+			enemies.find(
+				(enemy: Entity) =>
+					enemy?.id === targetId &&
+					Boolean(enemy.isValid) &&
+					getCombatDistance(position, enemy) <= context.preferences.maxDistToEnemy
+			) ?? null
+		)
+	}
+
+	const stickyTarget =
+		pickVisibleTarget(currentTarget?.id ?? null) ??
+		pickVisibleTarget(context.nearestEnemy.entity?.id ?? null)
+
+	if (stickyTarget) {
+		return {
+			entity: stickyTarget,
+			distance: getCombatDistance(position, stickyTarget)
+		}
+	}
+
+	if (
+		context.nearestEnemy?.entity &&
+		Boolean(context.nearestEnemy.entity.isValid) &&
+		context.nearestEnemy.distance <= context.preferences.maxDistToEnemy
+	) {
+		return context.nearestEnemy
+	}
+
+	const fallback = enemies
+		.filter(
+			(enemy: Entity) =>
+				enemy?.position &&
+				Boolean(enemy.isValid) &&
+				getCombatDistance(position, enemy) <= context.preferences.maxDistToEnemy
+		)
+		.sort(
+			(left: Entity, right: Entity) =>
+				getCombatDistance(position, left) - getCombatDistance(position, right)
+		)[0]
+
+	return fallback
+		? {
+				entity: fallback,
+				distance: getCombatDistance(position, fallback)
+			}
+		: { entity: null, distance: Infinity }
 }
 
-const stopPathfinderMovement = (bot: any) => {
-	bot.pathfinder.setGoal(null)
+const issueMeleeAttack = (
+	bot: any,
+	enemy: Entity,
+	sendBack: (event: any) => void
+) => {
+	const attackResult = bot.pvp.attack(enemy)
+
+	if (attackResult instanceof Promise) {
+		void attackResult.catch((error: unknown) => {
+			console.error(
+				'[COMBAT] melee_attack_failed',
+				error instanceof Error ? error.message : String(error)
+			)
+			sendBack({
+				type: 'ERROR',
+				error: error instanceof Error ? error.message : String(error)
+			})
+		})
+	}
 }
 
 const getWeaponType = (weaponName: string): Weapons => {
@@ -68,23 +149,41 @@ const resolveRangedLoadout = (bot: any) => {
 }
 
 const hasValidCombatTarget = (context: any) => {
-	const { nearestEnemy, preferences } = context
+	const target = resolveCombatTarget(context)
+	const { preferences } = context
 
 	return (
-		Boolean(nearestEnemy?.entity?.isValid) &&
-		nearestEnemy.distance <= preferences.maxDistToEnemy
+		Boolean(target.entity?.isValid) && target.distance <= preferences.maxDistToEnemy
 	)
 }
 
 const canEnterRangedSkirmish = (bot: any, context: any) => {
-	if (!hasValidCombatTarget(context) || !context.nearestEnemy.entity) {
+	const target = resolveCombatTarget(context)
+
+	if (!target.entity || target.distance > context.preferences.maxDistToEnemy) {
 		return false
 	}
 
 	return (
-		context.nearestEnemy.distance > context.preferences.enemyMeleeRange &&
+		target.distance > context.preferences.enemyMeleeRange &&
 		resolveRangedLoadout(bot) !== null &&
-		canSeeEnemy(bot, context.nearestEnemy.entity)
+		canSeeEnemy(bot, target.entity)
+	)
+}
+
+const canExitMeleeToRanged = (
+	bot: any,
+	context: any,
+	target: { entity: Entity | null; distance: number }
+) => {
+	if (!target.entity) {
+		return false
+	}
+
+	return (
+		target.distance > context.preferences.enemyMeleeRange + meleeExitRangeBuffer &&
+		resolveRangedLoadout(bot) !== null &&
+		canSeeEnemy(bot, target.entity)
 	)
 }
 
@@ -96,7 +195,9 @@ const serviceApproaching = createStatefulService<ApproachingState>({
 	},
 
 	onTick: ({ context, bot, sendBack, state, setState }) => {
-		if (!hasValidCombatTarget(context) || !context.nearestEnemy.entity) {
+		const target = resolveCombatTarget(context)
+
+		if (!target.entity) {
 			if (state.currentTargetId !== null) {
 				stopPathfinderMovement(bot)
 				setState({ currentTargetId: null })
@@ -106,9 +207,9 @@ const serviceApproaching = createStatefulService<ApproachingState>({
 			return
 		}
 
-		const enemy = context.nearestEnemy.entity
+		const enemy = target.entity
 
-		if (context.nearestEnemy.distance <= context.preferences.enemyMeleeRange) {
+		if (target.distance <= context.preferences.enemyMeleeRange) {
 			stopPathfinderMovement(bot)
 			setState({ currentTargetId: null })
 			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
@@ -161,9 +262,11 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 	},
 
 	onTick: ({ context, state, bot, sendBack, setState }) => {
-		if (!hasValidCombatTarget(context) || !context.nearestEnemy.entity) {
+		const target = resolveCombatTarget(context, state.currentTarget)
+
+		if (!target.entity) {
 			if (state.currentTarget) {
-				stopMeleeAttack(bot)
+				stopMeleeAttack(bot, 'no_enemies', logCombatRuntime)
 				setState({ currentTarget: null })
 			}
 
@@ -171,9 +274,9 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 			return
 		}
 
-		if (canEnterRangedSkirmish(bot, context)) {
+		if (canExitMeleeToRanged(bot, context, target)) {
 			if (state.currentTarget) {
-				stopMeleeAttack(bot)
+				stopMeleeAttack(bot, 'switch_to_ranged', logCombatRuntime)
 				setState({ currentTarget: null })
 			}
 
@@ -181,20 +284,35 @@ const serviceMeleeAttack = createStatefulService<MeleeAttackState>({
 			return
 		}
 
-		const enemy = context.nearestEnemy.entity
+		const enemy = target.entity
 
 		if (!state.currentTarget || state.currentTarget.id !== enemy.id) {
 			if (state.currentTarget) {
-				stopMeleeAttack(bot)
+				stopMeleeAttack(bot, 'retarget', logCombatRuntime)
 			}
 
-			bot.pvp.attack(enemy)
+			issueMeleeAttack(bot, enemy, sendBack)
 			setState({ currentTarget: enemy })
+			logCombatRuntime('melee_attack_issued', {
+				enemyId: enemy.id,
+				distance: Number(target.distance.toFixed(2)),
+				reason: 'target_changed'
+			})
+			return
+		}
+
+		if (!isPvpTargetActive(bot, enemy)) {
+			issueMeleeAttack(bot, enemy, sendBack)
+			logCombatRuntime('melee_attack_issued', {
+				enemyId: enemy.id,
+				distance: Number(target.distance.toFixed(2)),
+				reason: 'controller_lost_target'
+			})
 		}
 	},
 
 	onCleanup: ({ bot, setState }) => {
-		stopMeleeAttack(bot)
+		stopMeleeAttack(bot, 'cleanup', logCombatRuntime)
 		setState({ currentTarget: null })
 	}
 })
@@ -212,11 +330,12 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 		bot.utils.stopEating?.()
 
 		const loadout = resolveRangedLoadout(bot)
+		const target = resolveCombatTarget(context)
 
 		if (
 			!loadout ||
-			!context.nearestEnemy.entity ||
-			!canSeeEnemy(bot, context.nearestEnemy.entity)
+			!target.entity ||
+			!canSeeEnemy(bot, target.entity)
 		) {
 			sendBack({ type: 'ENEMY_BECAME_CLOSE' })
 			return
@@ -243,9 +362,11 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 		setState,
 		abortSignal
 	}) => {
-		if (!hasValidCombatTarget(context) || !context.nearestEnemy.entity) {
+		const target = resolveCombatTarget(context, state.currentTarget)
+
+		if (!target.entity) {
 			if (state.currentTarget) {
-				stopRangedAttack(bot)
+				stopRangedAttack(bot, 'no_enemies', logCombatRuntime)
 				setState({ currentTarget: null, weapon: null, weaponType: null })
 			}
 
@@ -253,17 +374,17 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 			return
 		}
 
-		const enemy = context.nearestEnemy.entity
+		const enemy = target.entity
 		const loadout = resolveRangedLoadout(bot)
 		const hasSight = canSeeEnemy(bot, enemy)
 
 		if (
-			context.nearestEnemy.distance <= context.preferences.enemyMeleeRange ||
+			target.distance <= context.preferences.enemyMeleeRange ||
 			!loadout ||
 			!hasSight
 		) {
 			if (state.currentTarget) {
-				stopRangedAttack(bot)
+				stopRangedAttack(bot, 'switch_to_melee', logCombatRuntime)
 				setState({ currentTarget: null, weapon: null, weaponType: null })
 			}
 
@@ -293,7 +414,7 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 			state.weaponType !== loadout.weaponType
 		) {
 			if (state.currentTarget) {
-				stopRangedAttack(bot)
+				stopRangedAttack(bot, 'retarget', logCombatRuntime)
 			}
 
 			bot.hawkEye.autoAttack(enemy, loadout.weaponType)
@@ -302,50 +423,18 @@ const serviceRangedSkirmish = createStatefulService<RangedSkirmishState>({
 				weapon: loadout.weapon,
 				weaponType: loadout.weaponType
 			})
+			logCombatRuntime('ranged_attack_issued', {
+				enemyId: enemy.id,
+				distance: Number(target.distance.toFixed(2)),
+				weapon: loadout.weapon.name
+			})
 		}
 	},
 
 	onCleanup: ({ bot, setState }) => {
-		stopRangedAttack(bot)
+		stopRangedAttack(bot, 'cleanup', logCombatRuntime)
 		clearMicroMovement(bot)
 		setState({ currentTarget: null, weapon: null, weaponType: null })
-	}
-})
-
-const serviceFleeing = createStatefulService({
-	name: 'Fleeing',
-	tickInterval: 500,
-
-	onStart: ({ bot }) => {
-		bot.utils.stopEating?.()
-
-		if (bot.movements) {
-			bot.movements.allowSprinting = true
-		}
-	},
-
-	onTick: ({ bot, context, sendBack }) => {
-		const { nearestEnemy, preferences, position } = context
-		if (!position) return
-
-		if (!hasValidCombatTarget(context) || !nearestEnemy.entity) {
-			sendBack({ type: 'NO_ENEMIES' })
-			return
-		}
-
-		const enemyPos = nearestEnemy.entity.position
-		const direction = position.clone().subtract(enemyPos).normalize()
-		const fleeTarget = position
-			.clone()
-			.add(direction.scaled(preferences.fleeTargetDistance))
-
-		bot.pathfinder.setGoal(
-			new GoalXZ(Math.floor(fleeTarget.x), Math.floor(fleeTarget.z))
-		)
-	},
-
-	onCleanup: ({ bot }) => {
-		stopPathfinderMovement(bot)
 	}
 })
 
@@ -353,7 +442,6 @@ const serviceRangedAttack = serviceRangedSkirmish
 
 export default {
 	serviceApproaching,
-	serviceFleeing,
 	serviceMeleeAttack,
 	serviceRangedAttack,
 	serviceRangedSkirmish

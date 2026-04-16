@@ -203,7 +203,7 @@ export class BotUtils {
 			return this._eatingPromise
 		}
 
-		if (!this._bot || this._bot.health === 20) {
+		if (!this._bot || (this._bot.health >= 20 && this._bot.food >= 20)) {
 			this.stopEating()
 			return
 		}

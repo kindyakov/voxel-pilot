@@ -344,6 +344,74 @@ test('regression: BotUtils deduplicates concurrent eating requests', async () =>
 	}
 })
 
+test('regression: BotUtils eats for hunger recovery even when health is already full', async () => {
+	class FakeEatingBot extends EventEmitter {
+		health = 20
+		food = 8
+		foodSaturation = 2
+		heldItem: any = null
+		entity = {
+			position: {
+				y: 64
+			}
+		}
+		registry = {
+			isNewerOrEqualTo: () => true
+		}
+		inventory = {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => [{ name: 'bread', type: 297, count: 3, slot: 36 }]
+		}
+		autoEat = {
+			foodsByName: {
+				bread: { saturation: 5 }
+			},
+			opts: {
+				bannedFood: []
+			},
+			isEating: false,
+			findBestChoices: () => [{ name: 'bread', type: 297, count: 3, slot: 36 }],
+			eatCalls: 0,
+			cancelEatCalls: 0,
+			eat: async () => {
+				this.autoEat.eatCalls += 1
+				this.autoEat.isEating = true
+				await delay(10)
+				this.food = 20
+				this.autoEat.isEating = false
+			},
+			cancelEat: () => {
+				this.autoEat.cancelEatCalls += 1
+				this.autoEat.isEating = false
+			}
+		}
+
+		chat() {}
+		nearestEntity() {
+			return null
+		}
+		async equip(item: any) {
+			this.heldItem = item
+		}
+		async consume() {
+			throw new Error('consume should not be called directly')
+		}
+	}
+
+	const bot = new FakeEatingBot() as any
+	const utils = new BotUtils(bot)
+	bot.utils = utils
+
+	try {
+		await utils.eating()
+
+		assert.equal(bot.autoEat.eatCalls, 1)
+		assert.equal(bot.food, 20)
+	} finally {
+		utils.stopEating()
+	}
+})
+
 test('regression: BotUtils.stopEating cancels active autoEat session', () => {
 	class FakeEatingBot extends EventEmitter {
 		health = 12

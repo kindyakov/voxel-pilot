@@ -1,4 +1,4 @@
-import type { Block, Bot, Entity, Vec3 } from '@/types'
+import type { Block, Entity, Vec3 } from '@/types'
 
 import type { MachineContext } from '@/hsm/context'
 
@@ -9,6 +9,10 @@ export type HealthEvents =
 	| { type: 'UPDATE_OXYGEN'; oxygenLevel: number }
 	| { type: 'FOOD_RESTORED' }
 	| { type: 'HEALTH_RESTORED' }
+	| {
+			type: 'SURVIVAL_MODE_CHANGED'
+			mode: 'IDLE' | 'EATING' | 'MOVEMENT' | 'PATHFINDER'
+	  }
 	| { type: 'START_URGENT_NEEDS'; need: 'food' | 'health' }
 
 export type CombatEvents =
@@ -80,66 +84,10 @@ export type MachineEvent =
 	| PrimitiveEvents
 	| SystemEvents
 
-type MachineGuard = (args: {
-	context: MachineContext
-	event: MachineEvent
-}) => boolean
-
-type MachineAction = (args: {
-	context: MachineContext
-	event: MachineEvent
-}) => void | Partial<MachineContext>
-
-type AssignAction = (args: {
-	context: MachineContext
-	event: MachineEvent
-}) => Partial<MachineContext>
-
-type MachineActionParams = {
-	context: MachineContext
-	event: MachineEvent
-}
-
 export type MachineGuardParams = {
 	context: MachineContext
 	event: MachineEvent
 }
-
-interface TaskParams {
-	[key: string]: any
-}
-
-interface TaskPreconditions {
-	tool?: string
-	inventory_space?: boolean
-	furnace?: 'nearby'
-	crafting_table?: 'nearby'
-	materials?: Record<string, number>
-}
-
-interface TaskValidationResult {
-	valid: boolean
-	missing: string[]
-	suggestions: TaskSuggestion[]
-}
-
-interface TaskSuggestion {
-	action: string
-	params: TaskParams
-}
-
-interface TaskDefinition {
-	name: string
-	description: string
-	required_params: string[]
-	optional_params: string[]
-	primitives_used: string[]
-	preconditions: TaskPreconditions
-	canExecute: (bot: Bot, params: TaskParams) => TaskValidationResult
-	events_emitted: string[]
-}
-
-type TaskRegistry = Record<string, TaskDefinition>
 
 export interface MiningTaskData {
 	blockName: string
