@@ -14,7 +14,7 @@ VoxelPilot is an AI-assisted Minecraft bot built with [mineflayer](https://githu
 
 ## Requirements
 
-- Node.js 18 or newer.
+- Node.js 22 or newer (required by Mineflayer).
 - A Minecraft server you control or are explicitly allowed to use.
 - An AI provider and model if `AI_PROVIDER` is not `local` or `disabled`.
 - Native build tools required by `better-sqlite3` on your platform.

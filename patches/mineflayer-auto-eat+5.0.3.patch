@@ -1,8 +1,8 @@
 diff --git a/node_modules/mineflayer-auto-eat/dist/new.js b/node_modules/mineflayer-auto-eat/dist/new.js
-index f256b9a..74d1fe9 100644
+index f256b9a..0f4fd7c 100644
 --- a/node_modules/mineflayer-auto-eat/dist/new.js
 +++ b/node_modules/mineflayer-auto-eat/dist/new.js
-@@ -15,6 +15,8 @@ export class EatUtil extends EventEmitter {
+@@ -15,6 +15,8 @@
      _eating = false;
      _enabled = false;
      _rejectionBinding;
@@ -11,7 +11,7 @@ index f256b9a..74d1fe9 100644
      get foods() {
          return this.bot.registry.foods;
      }
-@@ -39,10 +41,13 @@ export class EatUtil extends EventEmitter {
+@@ -39,10 +41,13 @@
          Object.assign(this.opts, opts);
      }
      cancelEat() {
@@ -28,16 +28,17 @@ index f256b9a..74d1fe9 100644
      }
      /**
       * Given a list of items, determine which food is optimal.
-@@ -107,32 +112,42 @@ export class EatUtil extends EventEmitter {
-      * @param timeout
+@@ -104,35 +109,39 @@
+      * Utility function to handle potential changes in inventory and eating status.
+      * Immediately handles events on a subscriber basis instead of polling.
+      * @param relevantItem
+-     * @param timeout
       * @returns
       */
 -    buildEatingListener(relevantItem, timeout) {
-+    buildEatingListener(relevantItem, timeout, signal) {
++    buildEatingListener(relevantItem, signal) {
          return new Promise((res, rej) => {
-+            let timer;
 +            const cleanup = () => {
-+                clearTimeout(timer);
 +                this.bot._client.off('entity_status', eatingListener);
 +                this.bot.inventory.off('updateSlot', itemListener);
 +                signal.removeEventListener('abort', abort);
@@ -74,17 +75,25 @@ index f256b9a..74d1fe9 100644
 -            };
 -            setTimeout(() => {
 -                rej(new Error(`Eating timed out with a time of ${timeout} milliseconds!`));
+-            }, timeout);
 +            this._rejectionBinding = fail;
 +            signal.addEventListener('abort', abort, { once: true });
-+            timer = setTimeout(() => {
-+                fail(new Error(`Eating timed out with a time of ${timeout} milliseconds!`));
-             }, timeout);
 +            if (signal.aborted)
 +                abort();
          });
      }
      /**
-@@ -153,24 +168,31 @@ export class EatUtil extends EventEmitter {
+@@ -143,34 +152,68 @@
+         // if we are already eating, throw error.
+         if (this._eating)
+             throw new Error('Already eating!');
+-        this._eating = true;
+         // Sanitize options; if not valid, throw error.
+         if (!this.sanitizeOpts(opts)) {
+-            this._eating = false;
+             throw new Error("No food specified and couldn't find a choice in inventory!");
+         }
+         // get current item in hand + wanted hand
          const currentItem = this.bot.util.inv.getHandWithItem(opts.offhand);
          const switchedItems = currentItem != opts.food;
          const wantedHand = this.bot.util.inv.getHand(opts.offhand);
@@ -102,36 +111,65 @@ index f256b9a..74d1fe9 100644
 -        this.bot.activateItem(opts.offhand);
 -        this.emit('eatStart', opts);
 -        // Wait for eating to finish, handle errors gracefully if there are, and perform cleanup.
++        const timeout = this.opts.eatingTimeout;
++        if (!Number.isFinite(timeout) || timeout <= 0)
++            throw new Error('Eating timeout must be a positive finite duration');
 +        const controller = new AbortController();
++        this._eating = true;
 +        this._eatController = controller;
 +        const signal = controller.signal;
++        let abort;
++        const interrupted = new Promise((_, reject) => {
++            abort = () => reject(signal.reason);
++            signal.addEventListener('abort', abort, { once: true });
++        });
++        // One deadline owns the entire attempt, including both inventory operations.
++        const timer = setTimeout(() => {
++            controller.abort(new Error(`Eating attempt timed out after ${timeout} milliseconds!`));
++        }, timeout);
++        const execute = async () => {
++            try {
++                if (switchedItems)
++                    await this.bot.equip(opts.food, wantedHand, { signal });
++                signal.throwIfAborted();
++                // Subscribe before activation: completion may be synchronous.
++                const consumed = this.buildEatingListener(opts.food, signal);
++                try {
++                    this.bot.deactivateItem();
++                    signal.throwIfAborted();
++                    this._usingItem = true;
++                    this.bot.activateItem(opts.offhand);
++                    signal.throwIfAborted();
++                    this.emit('eatStart', opts);
++                    await consumed;
++                    signal.throwIfAborted();
++                    this._usingItem = false;
++                } catch (error) {
++                    if (this._eatController === controller)
++                        this._rejectionBinding?.(error);
++                    await consumed.catch(() => {});
++                    throw error;
++                }
++            } finally {
++                if (this._eatController === controller && this._usingItem) {
++                    this._usingItem = false;
++                    this.bot.deactivateItem();
++                }
++                if (!signal.aborted && opts.equipOldItem && switchedItems && currentItem)
++                    await this.bot.equip(currentItem, wantedHand, { signal });
++                signal.throwIfAborted();
++            }
++        };
          try {
 -            await this.buildEatingListener(opts.food, this.opts.eatingTimeout);
-+            if (switchedItems) {
-+                await this.bot.equip(opts.food, wantedHand);
-+            }
-+            signal.throwIfAborted();
-+            // Subscribe before activation: completion may be synchronous.
-+            const consumed = this.buildEatingListener(opts.food, this.opts.eatingTimeout, signal);
-+            try {
-+                this.bot.deactivateItem();
-+                this._usingItem = true;
-+                this.bot.activateItem(opts.offhand);
-+                this.emit('eatStart', opts);
-+                await consumed;
-+                this._usingItem = false;
-+            } catch (error) {
-+                this._rejectionBinding?.(error);
-+                await consumed.catch(() => {});
-+                throw error;
-+            }
++            await Promise.race([execute(), interrupted]);
          }
          catch (error) {
 +            signal.throwIfAborted();
              if (this.opts.strictErrors)
                  throw error; // expose error to outer environment
              else
-@@ -178,11 +200,18 @@ export class EatUtil extends EventEmitter {
+@@ -178,11 +221,20 @@
              this.emit('eatFail', error);
          }
          finally {
@@ -140,17 +178,19 @@ index f256b9a..74d1fe9 100644
 -            delete this._rejectionBinding;
 -            this._eating = false;
 -            this.emit('eatFinish', opts);
-+            if (this._usingItem) {
-+                this._usingItem = false;
-+                this.bot.deactivateItem();
-+            }
-+            try {
-+                if (!signal.aborted && opts.equipOldItem && switchedItems && currentItem)
-+                    await this.bot.equip(currentItem, wantedHand);
-+            } finally {
++            clearTimeout(timer);
++            signal.removeEventListener('abort', abort);
++            if (this._eatController === controller) {
 +                delete this._eatController;
 +                this._eating = false;
-+                this.emit('eatFinish', opts);
++                try {
++                    if (this._usingItem) {
++                        this._usingItem = false;
++                        this.bot.deactivateItem();
++                    }
++                } finally {
++                    this.emit('eatFinish', opts);
++                }
 +            }
          }
      }

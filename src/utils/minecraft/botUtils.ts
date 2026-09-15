@@ -152,8 +152,7 @@ export class BotUtils {
 			this._bot.inventory
 				.items()
 				.find(
-					(item: Item) =>
-						item.name.includes('bow') || item.name.includes('crossbow')
+					(item: Item) => item.name === 'bow' || item.name === 'crossbow'
 				) || null
 		)
 	}

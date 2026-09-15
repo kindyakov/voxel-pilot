@@ -8,6 +8,7 @@ import { Vec3 } from 'vec3'
 import { createActor } from 'xstate'
 
 import combatActors from '../../hsm/actors/combat.actors.js'
+import { context as defaultContext } from '../../hsm/context.js'
 import { canAttackEnemy } from '../../utils/combat/enemyVisibility.js'
 import { BotUtils } from '../../utils/minecraft/botUtils.js'
 
@@ -64,6 +65,10 @@ class CombatServiceBot extends EventEmitter {
 	hawkEyeStopCalls = 0
 	rangeWeaponEnabled = true
 	meleeWeaponEnabled = true
+	private readonly meleeWeapon = { name: 'iron_sword', type: 1, count: 1 }
+	private readonly rangedWeapon = { name: 'bow', type: 2, count: 1 }
+	private readonly arrows = { name: 'arrow', type: 3, count: 16 }
+	heldItem: { name: string; type: number; count: number } | null = null
 	pvp = {
 		attack: () => {
 			this.pvpAttackCalls += 1
@@ -81,25 +86,21 @@ class CombatServiceBot extends EventEmitter {
 		}
 	}
 	utils = {
-		getMeleeWeapon: () =>
-			this.meleeWeaponEnabled
-				? ({ name: 'iron_sword', type: 1, count: 1 } as any)
-				: null,
-		getRangeWeapon: () =>
-			this.rangeWeaponEnabled
-				? ({ name: 'bow', type: 1, count: 1 } as any)
-				: null,
-		getArrow: () =>
-			this.rangeWeaponEnabled
-				? ({ name: 'arrow', type: 1, count: 16 } as any)
-				: null
+		getMeleeWeapon: () => (this.meleeWeaponEnabled ? this.meleeWeapon : null),
+		getRangeWeapon: () => (this.rangeWeaponEnabled ? this.rangedWeapon : null),
+		getArrow: () => (this.rangeWeaponEnabled ? this.arrows : null)
 	}
 	contextRef: any = null
 	hsm = {
 		getContext: () => this.contextRef
 	}
 	blockAt = () => null
-	async equip() {}
+	getEquipmentDestSlot() {
+		return 36
+	}
+	async equip(item: NonNullable<CombatServiceBot['heldItem']>) {
+		this.heldItem = item
+	}
 }
 
 const createCombatContext = (
@@ -107,12 +108,14 @@ const createCombatContext = (
 	enemy: ReturnType<typeof createEnemy>,
 	distance: number
 ) => ({
+	...defaultContext,
 	bot,
 	combatTarget: {
 		entity: enemy,
 		distance
 	},
 	preferences: {
+		...defaultContext.preferences,
 		maxDistToEnemy: 20,
 		enemyMeleeRange: 5
 	}

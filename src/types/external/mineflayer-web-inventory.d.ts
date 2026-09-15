@@ -18,18 +18,3 @@ declare module 'mineflayer-web-inventory' {
 
 	export = webInventory
 }
-
-declare module 'mineflayer' {
-	interface Bot {
-		webInventory?: {
-			options: {
-				port: number
-				webPath: string
-				windowUpdateDebounceTime: number
-			}
-			isRunning: boolean
-			start: () => Promise<void>
-			stop: () => Promise<void>
-		}
-	}
-}

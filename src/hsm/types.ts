@@ -42,9 +42,15 @@ export type CombatEvents =
 	| { type: 'RANGED_UNAVAILABLE'; reason: string }
 
 export type UpdateEvents =
+	| { type: 'THREAT_OBSERVATION_FAILED'; error: string }
+	| {
+			type: 'THREAT_OBSERVATION_INVALID'
+			reason: NonNullable<MachineContext['threatObservationProblem']>
+	  }
 	| { type: 'UPDATE_POSITION'; position: Vec3 }
 	| { type: 'DEATH' }
 	| { type: 'REMOVE_ENTITY'; entity: Entity }
+	| { type: 'ENTITY_DIED'; entity: Entity }
 	| {
 			type: 'UPDATE_ENTITIES'
 			entities: Entity[]

@@ -27,12 +27,24 @@ export interface ThreatObservation {
 	observed: boolean
 }
 
+export type RecoveryRelocation =
+	| { status: 'pending'; sourcePosition: Vec3 | null }
+	| { status: 'planned'; from: Vec3; goal: Vec3 }
+
 export interface MachineContext {
 	bot: Bot | null
 	health: number
-	recoveryRelocation: { from: Vec3; goal: Vec3 } | null
+	recoveryRelocation: RecoveryRelocation | null
+	aggressionByEntity: Record<number, number>
+	/** Death is terminal for this entity object, not for a reusable server ID. */
+	deadEntities: ReadonlySet<Entity>
 	recoveryNoFoodNotified: boolean
 	threatObservationAt: number | null
+	threatObservationProblem:
+		| 'invalid_bot_position'
+		| 'invalid_entity_position'
+		| 'observer_failed'
+		| null
 	lastDamage: {
 		sequence: number
 		observedAt: number
@@ -83,8 +95,10 @@ export interface MachineContext {
 		safePlayerDistance: number
 		fleeToPlayerRadius: number
 		enemyMeleeRange: number
+		rangedAttackRange: number
 		selfDefenseDistance: number
 		creeperDangerDistance: number
+		creeperRetreatDistance: number
 		aggressionRetentionMs: number
 		maxCountSlotsInInventory: number
 		foodEmergency: number
@@ -114,6 +128,7 @@ export interface MachineContext {
 	movementOwner: 'NONE' | 'PATHFINDER' | 'PVP' | 'MOVEMENT'
 	preferredCombatTargetId: number | null
 	combatStopRequested: boolean
+	combatNoWeaponNotified: boolean
 	rangedUnavailable: boolean
 	approachAttempts: Record<number, ApproachAttempt>
 	recoveryFailure: 'no_food' | 'error' | null
@@ -143,8 +158,11 @@ export const context: MachineContext = {
 	bot: null,
 	health: 20,
 	recoveryRelocation: null,
+	aggressionByEntity: {},
+	deadEntities: new Set(),
 	recoveryNoFoodNotified: false,
 	threatObservationAt: null,
+	threatObservationProblem: null,
 	lastDamage: {
 		sequence: 0,
 		observedAt: 0,
@@ -195,8 +213,10 @@ export const context: MachineContext = {
 		safePlayerDistance: 10,
 		fleeToPlayerRadius: 50,
 		enemyMeleeRange: 5,
+		rangedAttackRange: 25,
 		selfDefenseDistance: 8,
 		creeperDangerDistance: 12,
+		creeperRetreatDistance: 16,
 		aggressionRetentionMs: 10000,
 		maxCountSlotsInInventory: 45,
 		foodEmergency: 6,
@@ -226,6 +246,7 @@ export const context: MachineContext = {
 	movementOwner: 'NONE',
 	preferredCombatTargetId: null,
 	combatStopRequested: false,
+	combatNoWeaponNotified: false,
 	rangedUnavailable: false,
 	approachAttempts: {},
 	recoveryFailure: null,

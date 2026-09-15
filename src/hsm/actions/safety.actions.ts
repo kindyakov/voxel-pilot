@@ -1,4 +1,3 @@
-import { Vec3 } from 'vec3'
 import { assign } from 'xstate'
 
 import type { MachineContext } from '@/hsm/context'
@@ -9,8 +8,21 @@ import {
 	recordApproach,
 	resumeApproach
 } from '@/utils/combat/approachPolicy'
+import {
+	planRecoveryRelocation,
+	refreshRecoveryRelocation
+} from '@/utils/combat/recoveryRelocation'
 
 export const safetyActions = {
+	refreshRecoveryPosition: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>(({ context }) => ({
+		recoveryRelocation: refreshRecoveryRelocation(context)
+	})),
 	blockCombatApproach: assign<
 		MachineContext,
 		MachineEvent,
@@ -74,24 +86,19 @@ export const safetyActions = {
 		if (event.type !== 'DAMAGE_OBSERVED') return {}
 		let recoveryRelocation = context.recoveryRelocation
 		const bot = context.bot
-		if (bot?.autoEat?.isEating && bot.entity?.position) {
-			const position = bot.entity.position
-			const source = event.sourcePosition ?? context.nearestThreat?.position
-			const yaw = source
-				? Math.atan2(source.x - position.x, source.z - position.z)
-				: bot.entity.yaw
-			const distance = context.preferences.fleeTargetDistance
-			recoveryRelocation = {
-				from: new Vec3(position.x, position.y, position.z),
-				goal: position.offset(
-					-Math.sin(yaw) * distance,
-					0,
-					-Math.cos(yaw) * distance
-				)
-			}
-		}
+		if (bot?.autoEat?.isEating)
+			recoveryRelocation = planRecoveryRelocation(
+				bot.entity?.position,
+				event.sourcePosition ?? context.nearestThreat?.position ?? null,
+				bot.entity?.yaw,
+				context.preferences.fleeTargetDistance
+			)
 		return {
 			recoveryRelocation,
+			aggressionByEntity:
+				event.sourceId === null
+					? context.aggressionByEntity
+					: { ...context.aggressionByEntity, [event.sourceId]: Date.now() },
 			lastDamage: {
 				sequence: context.lastDamage.sequence + 1,
 				observedAt: Date.now(),

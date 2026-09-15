@@ -6,8 +6,10 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
 
+import type { Item } from '@/types'
+
 import { createBotMachine } from '../../hsm/machine.js'
-import { registry } from './fixtures/handoffBot'
+import { ItemFactory, registry } from './fixtures/handoffBot'
 import { publishEntities } from './fixtures/publishEntities'
 
 const hangingActor = fromPromise(async () => {
@@ -15,6 +17,9 @@ const hangingActor = fromPromise(async () => {
 })
 
 const noopActor = fromPromise(async () => {})
+
+const createItem = (name: string): Item =>
+	new ItemFactory(registry.itemsByName[name].id, 1)
 
 const createEnemy = (distance: number) => ({
 	id: 1,
@@ -33,7 +38,7 @@ class CombatBot extends EventEmitter {
 	food = 20
 	foodSaturation = 5
 	oxygenLevel = 20
-	inventoryItems: Array<{ name: string }> = []
+	inventoryItems: Item[] = []
 	pvpAttackCalls = 0
 	pvpStopCalls = 0
 	pvpForceStopCalls = 0
@@ -49,7 +54,7 @@ class CombatBot extends EventEmitter {
 	stopEatingCalls = 0
 	searchedPlayer: any = null
 	inventory = {
-		slots: Array.from({ length: 46 }, () => null),
+		slots: Array<Item | null>(46).fill(null),
 		items: () => this.inventoryItems
 	}
 	registry = registry
@@ -149,8 +154,12 @@ class CombatBot extends EventEmitter {
 	loadPlugin() {}
 	async dig() {}
 	async placeBlock() {}
-	async equip(item: { name: string }) {
+	get heldItem() {
+		return this.inventory.slots[36] ?? null
+	}
+	async equip(item: Item) {
 		this.equipCalls.push(item.name)
+		this.inventory.slots[36] = item
 	}
 	async consume() {}
 	async craft() {}
@@ -209,9 +218,10 @@ class CombatBot extends EventEmitter {
 }
 
 class DelayedEquipCombatBot extends CombatBot {
-	override async equip(item: { name: string }) {
+	override async equip(item: Item) {
 		this.equipCalls.push(item.name)
 		await delay(100)
+		this.inventory.slots[36] = item
 		this.logMessages.push(`equip resolved ${item.name}`)
 	}
 }
@@ -246,13 +256,14 @@ const createRuntimeActor = (bot: CombatBot) => {
 test('a rejected ranged equip falls back once and stays in melee for this encounter', async () => {
 	const bot = new CombatBot()
 	bot.inventoryItems = [
-		{ name: 'bow' },
-		{ name: 'arrow' },
-		{ name: 'iron_sword' }
+		createItem('bow'),
+		createItem('arrow'),
+		createItem('iron_sword')
 	]
 	bot.equip = async item => {
 		bot.equipCalls.push(item.name)
 		if (item.name === 'bow') throw new Error('equip rejected')
+		bot.inventory.slots[36] = item
 	}
 	const actor = createRuntimeActor(bot)
 	try {
@@ -275,9 +286,9 @@ test('a rejected ranged equip falls back once and stays in melee for this encoun
 	}
 })
 
-test('a combat callback error retreats instead of treating the threat as resolved', async () => {
+test('a combat callback error waits without restarting the failed controller or fleeing', async () => {
 	const bot = new CombatBot()
-	bot.inventoryItems = [{ name: 'iron_sword' }]
+	bot.inventoryItems = [createItem('iron_sword')]
 	bot.pvp.attack = () => {
 		throw new Error('attack controller failed')
 	}
@@ -286,7 +297,7 @@ test('a combat callback error retreats instead of treating the threat as resolve
 		await enterCombat(actor, createEnemy(2))
 		await delay(700)
 		assert.equal(
-			actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'RETREATING' } }),
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'WAITING' } }),
 			true
 		)
 		assert.match(
@@ -344,7 +355,7 @@ const enterCombat = async (
 
 test('STOP_COMBAT cleans up active melee combat', async () => {
 	const bot = new CombatBot()
-	bot.inventoryItems = [{ name: 'iron_sword' }]
+	bot.inventoryItems = [createItem('iron_sword')]
 	const actor = createRuntimeActor(bot)
 
 	try {
@@ -365,7 +376,7 @@ test('STOP_COMBAT cleans up active melee combat', async () => {
 
 test('STOP_COMBAT cleans up active ranged combat', async () => {
 	const bot = new CombatBot()
-	bot.inventoryItems = [{ name: 'bow' }, { name: 'arrow' }]
+	bot.inventoryItems = [createItem('bow'), createItem('arrow')]
 	const actor = createRuntimeActor(bot)
 
 	try {
@@ -386,7 +397,7 @@ test('STOP_COMBAT cleans up active ranged combat', async () => {
 
 test('ranged skirmish owns only ranged attacks and leaves movement idle', async () => {
 	const bot = new CombatBot()
-	bot.inventoryItems = [{ name: 'bow' }, { name: 'arrow' }]
+	bot.inventoryItems = [createItem('bow'), createItem('arrow')]
 	const actor = createRuntimeActor(bot)
 
 	try {
@@ -417,7 +428,7 @@ test('ranged skirmish owns only ranged attacks and leaves movement idle', async 
 
 test('ranged skirmish does not require the movement plugin', async () => {
 	const bot = new NoMovementCombatBot()
-	bot.inventoryItems = [{ name: 'bow' }, { name: 'arrow' }]
+	bot.inventoryItems = [createItem('bow'), createItem('arrow')]
 	const actor = createRuntimeActor(bot)
 
 	try {
@@ -440,9 +451,9 @@ test('ranged skirmish does not require the movement plugin', async () => {
 test('combat hands off from melee to ranged skirmish without overlap', async () => {
 	const bot = new CombatBot()
 	bot.inventoryItems = [
-		{ name: 'iron_sword' },
-		{ name: 'bow' },
-		{ name: 'arrow' }
+		createItem('iron_sword'),
+		createItem('bow'),
+		createItem('arrow')
 	]
 	const actor = createRuntimeActor(bot)
 
@@ -472,9 +483,9 @@ test('combat hands off from melee to ranged skirmish without overlap', async () 
 test('combat hands off from ranged skirmish back to melee without overlap', async () => {
 	const bot = new CombatBot()
 	bot.inventoryItems = [
-		{ name: 'iron_sword' },
-		{ name: 'bow' },
-		{ name: 'arrow' }
+		createItem('iron_sword'),
+		createItem('bow'),
+		createItem('arrow')
 	]
 	const actor = createRuntimeActor(bot)
 
@@ -503,7 +514,7 @@ test('combat hands off from ranged skirmish back to melee without overlap', asyn
 
 test('combat does not re-enter melee on repeated entity updates for the same close target', async () => {
 	const bot = new CombatBot()
-	bot.inventoryItems = [{ name: 'iron_sword' }]
+	bot.inventoryItems = [createItem('iron_sword')]
 	const actor = createRuntimeActor(bot)
 	const enemy = createEnemy(2)
 
@@ -538,13 +549,11 @@ test('combat does not re-enter melee on repeated entity updates for the same clo
 	}
 })
 
-test('ranged skirmish re-equips when weapon instance changes but type stays the same', async () => {
+test('ranged skirmish preserves shooting when inventory refresh replaces the same bow object', async () => {
 	const bot = new CombatBot()
-	const firstBow = { name: 'bow' }
-	const secondBow = { name: 'bow' }
-	let currentWeapon = firstBow
-	bot.inventoryItems = [{ name: 'arrow' }]
-	bot.utils.getRangeWeapon = () => currentWeapon as any
+	const firstBow = createItem('bow')
+	const secondBow = createItem('bow')
+	bot.inventoryItems = [firstBow, createItem('arrow')]
 	const actor = createRuntimeActor(bot)
 
 	try {
@@ -553,11 +562,12 @@ test('ranged skirmish re-equips when weapon instance changes but type stays the 
 
 		assert.deepEqual(bot.equipCalls, ['bow'])
 
-		currentWeapon = secondBow
+		bot.inventoryItems[0] = secondBow
+		bot.inventory.slots[36] = secondBow
 		await delay(350)
 
-		assert.deepEqual(bot.equipCalls, ['bow', 'bow'])
-		assert.equal(bot.hawkEyeAttackCalls >= 2, true)
+		assert.deepEqual(bot.equipCalls, ['bow'])
+		assert.equal(bot.hawkEyeAttackCalls, 1)
 	} finally {
 		actor.stop()
 	}
@@ -565,7 +575,7 @@ test('ranged skirmish re-equips when weapon instance changes but type stays the 
 
 test('delayed ranged equip does not continue combat startup after STOP_COMBAT', async () => {
 	const bot = new DelayedEquipCombatBot()
-	bot.inventoryItems = [{ name: 'bow' }, { name: 'arrow' }]
+	bot.inventoryItems = [createItem('bow'), createItem('arrow')]
 	const actor = createRuntimeActor(bot)
 
 	try {

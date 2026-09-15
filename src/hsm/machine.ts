@@ -2,6 +2,7 @@ import { Vec3 as Vec3Class } from 'vec3'
 import {
 	and,
 	assign,
+	enqueueActions,
 	fromCallback,
 	fromPromise,
 	not,
@@ -40,6 +41,8 @@ import { miningGuards } from '@/hsm/guards/mining.guards'
 import {
 	canAttemptRecovery,
 	canPreemptForHungerRecovery,
+	hasFreshThreatObservation,
+	isHungerRecoverySafe,
 	isRecoverySafe
 } from '@/hsm/guards/survival.guards'
 import type { MachineEvent, MiningTaskData } from '@/hsm/types'
@@ -61,11 +64,13 @@ import { refreshApproaches } from '@/utils/combat/approachPolicy'
 import { hasMovementController } from '@/utils/combat/movementController'
 import {
 	assessMob,
-	forbidsMelee,
+	hasCombatWeapon,
 	isDefensiveCandidate,
+	nearestRetreatCreeper,
 	requiresAvoidance,
 	selectCombatTarget
 } from '@/utils/combat/selfDefense'
+import { isFinitePosition } from '@/utils/minecraft/spatial'
 
 const defaultThinkingActor = fromPromise<
 	AgentTurnResult,
@@ -319,11 +324,6 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			...combatGuards,
 			...miningGuards,
 			hasCurrentGoal: ({ context }) => Boolean(context.currentGoal),
-			isHealthCritical: ({ context }) =>
-				context.health < context.preferences.healthEmergency,
-			isHungerCritical: ({ context }) =>
-				context.food < context.preferences.foodEmergency,
-			isEnemyNearby: ({ context }) => context.combatTarget.entity !== null,
 			isAgentLoopStuck: ({ context }) =>
 				getGoalStopReason(context.goalExecution) !== null,
 			thinkingProducedRejection: ({ event }) =>
@@ -383,6 +383,21 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					distance: Number.isFinite(context.combatTarget.distance)
 						? Number(context.combatTarget.distance.toFixed(2))
 						: null
+				})
+			},
+			logCombatWaiting: ({ context }) => {
+				const targetId = context.combatTarget.entity?.id
+				const attempt =
+					targetId === undefined
+						? undefined
+						: context.approachAttempts[targetId]
+				Logger.info('[COMBAT] waiting', {
+					targetId: targetId ?? null,
+					reason: attempt?.blocked
+						? `${attempt.blockedReason}_blocked`
+						: 'attack_unavailable',
+					resumes: attempt?.resumes ?? 0,
+					rangedUnavailable: context.rangedUnavailable
 				})
 			},
 			logThinkingStart: ({ context }) => {
@@ -457,9 +472,10 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 						return 20
 					}
 
-					Logger.debug(`[HSM] health ${context.health} -> ${event.health}`, {
-						event: event.type
-					})
+					if (context.health !== event.health)
+						Logger.debug(`[HSM] health ${context.health} -> ${event.health}`, {
+							event: event.type
+						})
 
 					return event.health
 				}
@@ -476,9 +492,10 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 						return 20
 					}
 
-					Logger.debug(`[HSM] food ${context.food} -> ${event.food}`, {
-						event: event.type
-					})
+					if (context.food !== event.food)
+						Logger.debug(`[HSM] food ${context.food} -> ${event.food}`, {
+							event: event.type
+						})
 
 					return event.food
 				}
@@ -489,19 +506,51 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			}),
 			updateEntities: assign(({ context, event }) => {
 				if (event.type !== 'UPDATE_ENTITIES') return {}
+				const observedEntities = [
+					...event.enemies,
+					...event.entities,
+					...event.players
+				]
+				const problem = !isFinitePosition(context.bot?.entity?.position)
+					? 'invalid_bot_position'
+					: observedEntities.some(entity => !isFinitePosition(entity.position))
+						? 'invalid_entity_position'
+						: null
+				if (problem)
+					return {
+						threatObservationAt: null,
+						threatObservationProblem: problem
+					}
 				return {
 					threatObservationAt: Date.now(),
+					threatObservationProblem: null,
+					deadEntities: new Set(
+						[...context.deadEntities].filter(
+							entity =>
+								context.bot?.entities[entity.id] === entity ||
+								observedEntities.includes(entity)
+						)
+					),
+					aggressionByEntity: Object.fromEntries(
+						Object.entries(context.aggressionByEntity).filter(
+							([, observedAt]) =>
+								Date.now() - observedAt <
+								context.preferences.aggressionRetentionMs
+						)
+					),
 					approachAttempts: refreshApproaches(
 						context,
 						new Set(event.enemies.map(entity => entity.id))
 					),
 					entities: event.entities,
-					enemies: event.enemies,
+					enemies: event.enemies.filter(
+						entity => !context.deadEntities.has(entity)
+					),
 					players: event.players,
 					...(context.bot
 						? observeThreats(
 								context.threats,
-								event.enemies,
+								observedEntities,
 								context.bot.entity.position,
 								Date.now(),
 								context.preferences.threatRetentionMs,
@@ -511,21 +560,74 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 						: {})
 				}
 			}),
-			updateCombatTarget: assign(({ context }) => {
+			updateCombatTarget: enqueueActions(({ context, enqueue }) => {
 				const combatTarget = selectCombatTarget(context)
-				return {
+				enqueue.assign({
 					combatTarget,
 					combatStopRequested:
 						context.combatStopRequested && combatTarget.entity !== null
-				}
+				})
+				enqueue('notifyMissingCombatWeapon')
 			}),
+			notifyMissingCombatWeapon: enqueueActions(
+				({ context, event, enqueue }) => {
+					if (hasCombatWeapon(context)) {
+						enqueue.assign({ combatNoWeaponNotified: false })
+						return
+					}
+					const target =
+						event.type === 'START_COMBAT'
+							? event.target
+							: context.combatTarget.entity
+					if (
+						!context.combatNoWeaponNotified &&
+						context.health >= context.preferences.healthEmergency &&
+						(event.type === 'START_COMBAT' ||
+							(context.preferences.autoDefend &&
+								!context.combatStopRequested)) &&
+						isDefensiveCandidate(context, target)
+					) {
+						enqueue('sendMissingCombatWeaponMessage')
+						enqueue.assign({ combatNoWeaponNotified: true })
+					}
+				}
+			),
+			sendMissingCombatWeaponMessage: ({ context }) => {
+				context.bot?.chat('Оружия нет (или нет боеприпасов). Бой не начинаю.')
+			},
 
 			removeEntity: assign(({ context, event }) => {
-				if (event.type !== 'REMOVE_ENTITY') {
+				if (event.type !== 'REMOVE_ENTITY' && event.type !== 'ENTITY_DIED') {
 					return {}
 				}
 
-				return {
+				const died = event.type === 'ENTITY_DIED'
+				const threats = died
+					? context.threats.filter(
+							threat => threat.entityId !== event.entity.id
+						)
+					: context.threats
+				const remaining = {
+					...context,
+					deadEntities: died
+						? new Set([...context.deadEntities, event.entity])
+						: context.deadEntities,
+					threats,
+					nearestThreat: threats[0] ?? null,
+					aggressionByEntity: died
+						? Object.fromEntries(
+								Object.entries(context.aggressionByEntity).filter(
+									([id]) => Number(id) !== event.entity.id
+								)
+							)
+						: context.aggressionByEntity,
+					approachAttempts: died
+						? Object.fromEntries(
+								Object.entries(context.approachAttempts).filter(
+									([id]) => Number(id) !== event.entity.id
+								)
+							)
+						: context.approachAttempts,
 					entities: context.entities.filter(
 						entity => entity.id !== event.entity.id
 					),
@@ -535,10 +637,6 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					players: context.players.filter(
 						entity => entity.id !== event.entity.id
 					),
-					combatTarget:
-						context.combatTarget.entity?.id === event.entity.id
-							? { entity: null, distance: Infinity }
-							: context.combatTarget,
 					preferredCombatTargetId:
 						context.preferredCombatTargetId === event.entity.id
 							? null
@@ -548,11 +646,25 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 							? false
 							: context.combatStopRequested
 				}
+				return {
+					...remaining,
+					combatTarget:
+						context.combatTarget.entity?.id === event.entity.id
+							? selectCombatTarget(remaining)
+							: context.combatTarget
+				}
+			}),
+			invalidateFailedThreatObservation: assign({
+				threatObservationAt: null,
+				threatObservationProblem: 'observer_failed'
 			}),
 			updateAfterDeath: assign({
+				combatNoWeaponNotified: false,
 				recoveryRelocation: null,
+				aggressionByEntity: {},
 				recoveryNoFoodNotified: false,
 				threatObservationAt: null,
+				threatObservationProblem: null,
 				approachAttempts: {},
 				lastDamage: {
 					sequence: 0,
@@ -843,42 +955,15 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			...context,
 			preferences: { ...preferences },
 			bot: input.bot,
+			health: input.bot.health,
+			food: input.bot.food,
+			foodSaturation: input.bot.foodSaturation,
+			oxygenLevel: input.bot.oxygenLevel,
+			position: input.bot.entity?.position ?? null,
+			aggressionByEntity: {},
 			windows: getWindowRuntime(input.bot),
 			goalExecution: createGoalExecution()
 		}),
-		always: [
-			{
-				guard: and([
-					not(
-						stateIn(
-							'#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING'
-						)
-					),
-					({ context }) =>
-						context.health > 0 &&
-						context.health < context.preferences.healthEmergency
-				]),
-				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING'
-			},
-			{
-				guard: and([
-					not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS')),
-					({ context }) =>
-						context.health > 0 &&
-						context.food < context.preferences.foodEmergency &&
-						(canAttemptRecovery(context) || !isRecoverySafe(context))
-				]),
-				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING'
-			},
-			{
-				guard: and([
-					not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS')),
-					not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.RETREATING')),
-					({ context }) => context.health > 0 && requiresAvoidance(context)
-				]),
-				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.RETREATING'
-			}
-		],
 		invoke: [
 			{ src: 'windowLifetime', input: ({ context }) => context.windows! },
 			{
@@ -887,12 +972,18 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			}
 		],
 		on: {
+			THREAT_OBSERVATION_INVALID: {
+				actions: assign(({ event }) => ({
+					threatObservationAt: null,
+					threatObservationProblem: event.reason
+				}))
+			},
 			PASSABILITY_CHANGED: { actions: 'observePassability' },
 			DAMAGE_OBSERVED: { actions: ['observeDamage', 'cancelDamagedEating'] },
 			RECOVERY_RELOCATION: { actions: 'storeRecoveryRelocation' },
 			RECOVERY_FOOD_AVAILABILITY: { actions: 'observeRecoveryFood' },
 			UPDATE_POSITION: {
-				actions: ['updatePosition']
+				actions: ['updatePosition', 'refreshRecoveryPosition']
 			},
 			UPDATE_SATURATION: {
 				actions: ['updateFoodSaturation']
@@ -912,16 +1003,20 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
 				actions: ['closeActiveWindowSession', 'clearGoal']
 			},
-			START_COMBAT: {
-				guard: ({ context, event }) =>
-					isDefensiveCandidate(context, event.target),
-				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
-				actions: [
-					'closeActiveWindowSession',
-					'resetRanged',
-					'setCombatTargetFromEvent'
-				]
-			},
+			START_COMBAT: [
+				{
+					guard: ({ context, event }) =>
+						hasCombatWeapon(context) &&
+						isDefensiveCandidate(context, event.target),
+					target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
+					actions: [
+						'closeActiveWindowSession',
+						'resetRanged',
+						'setCombatTargetFromEvent'
+					]
+				},
+				{ actions: 'notifyMissingCombatWeapon' }
+			],
 			STOP_COMBAT: [
 				{
 					guard: 'hasCurrentGoal',
@@ -951,6 +1046,52 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 		states: {
 			MAIN_ACTIVITY: {
 				initial: 'IDLE',
+				always: [
+					{
+						guard: and([
+							not(
+								stateIn(
+									'#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING'
+								)
+							),
+							({ context }) =>
+								context.health > 0 &&
+								context.health < context.preferences.healthEmergency
+						]),
+						target: '.URGENT_NEEDS.EMERGENCY_HEALING'
+					},
+					{
+						guard: and([
+							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS')),
+							({ context }) =>
+								context.health > 0 &&
+								context.food < context.preferences.foodEmergency &&
+								canAttemptRecovery(context) &&
+								isRecoverySafe(context)
+						]),
+						target: '.URGENT_NEEDS.EMERGENCY_EATING'
+					},
+					{
+						guard: and([
+							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS')),
+							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.OBSERVATION_WAIT')),
+							({ context }) =>
+								context.health > 0 && context.threatObservationProblem !== null
+						]),
+						target: '.OBSERVATION_WAIT'
+					},
+					{
+						guard: and([
+							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS')),
+							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.RETREATING')),
+							({ context }) =>
+								context.health > 0 &&
+								context.threatObservationProblem === null &&
+								requiresAvoidance(context)
+						]),
+						target: '.COMBAT.RETREATING'
+					}
+				],
 				on: {
 					UPDATE_HEALTH: {
 						guard: ({ context, event }) =>
@@ -965,6 +1106,20 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					}
 				},
 				states: {
+					OBSERVATION_WAIT: {
+						entry: ['closeActiveWindowSession', 'ownMovementNone'],
+						always: {
+							guard: ({ context }) => hasFreshThreatObservation(context),
+							target: 'RESUMING'
+						},
+						on: {
+							USER_COMMAND: { actions: 'setGoalFromUserCommand' },
+							STOP_CURRENT_GOAL: { actions: 'clearGoal' },
+							START_COMBAT: {},
+							STOP_COMBAT: {},
+							UPDATE_COMBAT_TARGET: { actions: 'updateCombatTarget' }
+						}
+					},
 					IDLE: {
 						on: {
 							UPDATE_COMBAT_TARGET: [
@@ -1018,6 +1173,12 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 						initial: 'EMERGENCY_EATING',
 						states: {
 							EMERGENCY_EATING: {
+								always: {
+									guard: ({ context }) =>
+										context.health >= context.preferences.healthEmergency &&
+										!isHungerRecoverySafe(context),
+									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING'
+								},
 								on: {
 									UPDATE_HEALTH: {
 										guard: ({ context, event }) =>
@@ -1111,18 +1272,21 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									not(
 										stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.RETREATING')
 									),
-									'approachIsBlocked'
+									({ context }) =>
+										!context.combatTarget.entity || !hasCombatWeapon(context)
 								]),
-								target: '.RETREATING'
+								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING',
+								actions: 'notifyMissingCombatWeapon'
 							},
 							{
 								guard: and([
 									not(
 										stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.RETREATING')
 									),
-									'mustRetreat'
+									not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.WAITING')),
+									not('canAttack')
 								]),
-								target: '.RETREATING'
+								target: '.WAITING'
 							}
 						],
 						entry: [
@@ -1141,73 +1305,52 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 						],
 						on: {
 							RANGED_UNAVAILABLE: {
-								target: '.MELEE_ATTACKING',
-								actions: ['disableRanged']
+								target: '.DECIDING',
+								actions: ['disableRanged', 'updateCombatTarget']
 							},
 							ERROR: {
-								target: '.RETREATING',
+								target: '.WAITING',
 								actions: ['recordCombatFailure', 'blockCombatApproach']
 							},
 							UPDATE_COMBAT_TARGET: {
 								actions: ['updateCombatTarget']
 							},
 							WEAPON_BROKEN: {
-								target: '.DECIDING'
+								target: '.DECIDING',
+								actions: 'updateCombatTarget'
 							},
 							ENEMY_BECAME_FAR: {
-								target: '.DECIDING'
+								target: '.DECIDING',
+								actions: 'updateCombatTarget'
 							},
 							ENEMY_BECAME_CLOSE: {
-								target: '.MELEE_ATTACKING'
+								target: '.DECIDING',
+								actions: 'updateCombatTarget'
 							},
-							NO_ENEMIES: [
-								{
-									guard: ({ context }) => !isRecoverySafe(context),
-									target: '.RETREATING'
-								},
-								{
-									guard: 'isHealthCritical',
-									target:
-										'#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING',
-									actions: ['clearCombatTarget']
-								},
-								{
-									guard: 'isHungerCritical',
-									target:
-										'#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING',
-									actions: ['clearCombatTarget']
-								},
-								{
-									guard: 'hasCurrentGoal',
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.THINKING',
-									actions: ['clearCombatTarget']
-								},
-								{
-									target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-									actions: ['clearCombatTarget']
-								}
-							]
+							NO_ENEMIES: { target: '.DECIDING', actions: 'updateCombatTarget' }
 						},
 						initial: 'DECIDING',
 						states: {
-							RETREATING: {
+							WAITING: {
+								entry: ['ownMovementNone', 'logCombatWaiting'],
 								always: [
 									{
 										guard: 'canResumeApproach',
 										target: 'DECIDING',
 										actions: 'resumeCombatApproach'
 									},
-									{
-										guard: and([not('approachIsBlocked'), 'canSkirmishRanged']),
-										target: 'RANGED_SKIRMISHING'
-									}
-								],
+									{ guard: 'canAttack', target: 'DECIDING' }
+								]
+							},
+							RETREATING: {
 								exit: ['ownMovementNone'],
 								on: {
 									RETREAT_SAFE: {
-										guard: ({ context }) => isRecoverySafe(context),
-										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING',
-										actions: ['clearCombatTarget']
+										guard: ({ context }) =>
+											hasFreshThreatObservation(context) &&
+											!nearestRetreatCreeper(context),
+										target: 'DECIDING',
+										actions: 'updateCombatTarget'
 									},
 									UPDATE_COMBAT_TARGET: { actions: ['updateCombatTarget'] },
 									SURVIVAL_MODE_CHANGED: { actions: ['syncSurvivalModeOwner'] },
@@ -1241,11 +1384,16 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 								}
 							},
 							DECIDING: {
+								entry: 'notifyMissingCombatWeapon',
 								always: [
-									{ guard: 'mustRetreat', target: 'RETREATING' },
+									{
+										guard: ({ context }) =>
+											!context.combatTarget.entity || !hasCombatWeapon(context),
+										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING'
+									},
 									{
 										target: 'MELEE_ATTACKING',
-										guard: 'isEnemyInMeleeRange'
+										guard: and(['canMelee', 'isEnemyInMeleeRange'])
 									},
 									{
 										target: 'RANGED_SKIRMISHING',
@@ -1253,9 +1401,9 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									},
 									{
 										target: 'MELEE_ATTACKING',
-										guard: 'isEnemyNearby'
+										guard: 'canMelee'
 									},
-									{ target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING' }
+									{ target: 'WAITING' }
 								]
 							},
 							MELEE_ATTACKING: {
@@ -1832,17 +1980,32 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					},
 					HUNGER_MONITOR: { on: { UPDATE_FOOD: { actions: ['updateFood'] } } },
 					ENTITIES_MONITOR: {
+						initial: 'RUNNING',
 						on: {
+							THREAT_OBSERVATION_FAILED: {
+								target: '.RETRYING',
+								actions: 'invalidateFailedThreatObservation'
+							},
 							UPDATE_ENTITIES: { actions: ['updateEntities'] },
 							REMOVE_ENTITY: {
 								actions: ['removeEntity']
-							}
+							},
+							ENTITY_DIED: { actions: 'removeEntity' }
 						},
-						invoke: {
-							src: 'serviceEntitiesTracking',
-							input: ({ context }: { context: MachineContext }) => ({
-								bot: context.bot
-							})
+						states: {
+							RUNNING: {
+								invoke: {
+									src: 'serviceEntitiesTracking',
+									input: ({ context }: { context: MachineContext }) => ({
+										bot: context.bot
+									}),
+									onError: {
+										target: 'RETRYING',
+										actions: 'invalidateFailedThreatObservation'
+									}
+								}
+							},
+							RETRYING: { after: { recoveryRetry: 'RUNNING' } }
 						}
 					}
 				}

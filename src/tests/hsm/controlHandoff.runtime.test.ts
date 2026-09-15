@@ -42,18 +42,28 @@ test('an old PVP path-stop timeout cannot clear the escape route or other listen
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })
 	const { bot, actor, enemy, observe } = createHarness()
 	t.after(() => actor.stop())
-	enemy.position.x = 18
 	observe()
 	await flush()
 	t.mock.timers.tick(500)
 	await flush()
+	assert.equal(
+		bot.pvp.target,
+		enemy,
+		'The old PVP operation must actually start'
+	)
+	enemy.position.x = 18
+	observe()
 	bot.emit('entityGone', enemy)
 	const unrelatedListener = () => {}
 	bot.on('path_stop', unrelatedListener)
 	actor.send({ type: 'UPDATE_HEALTH', health: 8 })
 	await flush()
-	t.mock.timers.tick(100)
-	await flush()
+	// Search may yield partial results; readiness is not guaranteed in one slice.
+	for (let tick = 0; tick < 20 && !bot.pathfinder.goal; tick++) {
+		observe()
+		t.mock.timers.tick(100)
+		await flush()
+	}
 	assert.ok(bot.pathfinder.goal, 'Survival has issued its escape route')
 	t.mock.timers.tick(5000)
 	await flush()

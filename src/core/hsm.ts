@@ -1,58 +1,121 @@
-import { createActor } from 'xstate'
+import type { BotEvents } from 'mineflayer'
+import { type ActorRefFrom, createActor } from 'xstate'
 
 import type { Bot, Entity } from '@/types'
+
+import Config from '@/config/config'
+import Logger from '@/config/logger'
 
 import type { MachineContext } from '@/hsm/context'
 import { machine } from '@/hsm/machine'
 import type { MachineEvent } from '@/hsm/types'
 import { AntiLoopGuard } from '@/hsm/utils/antiLoop'
+import { attachHsmDiagnostics } from '@/hsm/utils/runtimeDiagnostics'
 
 import { cleanupPathfindCache } from '@/utils/combat/enemyVisibility'
 
+interface StoreLifecycle {
+	started: boolean
+	loading: boolean
+	closed: boolean
+}
+
 class BotStateMachine {
-	private bot: Bot
-	private actor: any = null
+	private readonly bot: Bot
+	private readonly memory: Bot['memory']
+	private readonly profileMemory: Bot['profileMemory']
+	private actor: ActorRefFrom<typeof machine> | null = null
 	private readonly antiLoopGuard: AntiLoopGuard
 	private pathfindCacheCleanupInterval?: NodeJS.Timeout
 	private readonly pendingEvents: MachineEvent[] = []
 	private isReady = false
 	private antiLoopTripped = false
 	private antiLoopCooldown?: NodeJS.Timeout
+	private stopDiagnostics?: () => void
+	private readonly subscriptions: Array<() => void> = []
+	private stopped = false
+	private stopPromise: Promise<void> | null = null
+	private saving: Promise<void> | null = null
+	private cancelReady!: (ready: false) => void
+	private readonly memoryLifecycle: StoreLifecycle = {
+		started: false,
+		loading: false,
+		closed: false
+	}
+	private readonly profileLifecycle: StoreLifecycle = {
+		started: false,
+		loading: false,
+		closed: false
+	}
+	readonly ready: Promise<boolean>
 
 	constructor(bot: Bot) {
 		this.bot = bot
+		this.memory = bot.memory
+		this.profileMemory = bot.profileMemory
 		this.antiLoopGuard = new AntiLoopGuard({
 			maxTransitionsPerSecond: 20,
 			emergencyStopAfter: 100,
 			windowMs: 1000
 		})
 
-		void this.init()
+		const cancelled = new Promise<false>(resolve => {
+			this.cancelReady = resolve
+		})
+		this.ready = Promise.race([this.init(), cancelled])
 	}
 
-	private async init(): Promise<void> {
-		await this.bot.memory.load()
-		await this.bot.profileMemory?.load()
-
-		this.actor = createActor(machine, {
-			input: {
-				bot: this.bot
+	private async init(): Promise<boolean> {
+		try {
+			await this.loadStore(this.memory, this.memoryLifecycle)
+			if (this.stopped) return false
+			if (this.profileMemory) {
+				await this.loadStore(this.profileMemory, this.profileLifecycle)
+				if (this.stopped) return false
 			}
-		})
+			// Construction reads current vitals; no stale pre-load health events are replayed.
+			this.actor = createActor(machine, { input: { bot: this.bot } })
+			this.bot.hsm = this
+			this.stopDiagnostics = attachHsmDiagnostics(
+				this.actor,
+				Config.minecraft.version
+			)
+			this.setupBotEvents()
+			this.actor.start()
+			this.isReady = true
+			this.flushPendingEvents()
+			this.setupAntiLoopObserver()
+			this.pathfindCacheCleanupInterval = setInterval(() => {
+				cleanupPathfindCache(10000)
+			}, 15000)
+			return true
+		} catch (error) {
+			Logger.error('[HSM] initialization failed', { error: String(error) })
+			this.stopped = true
+			this.cancelReady(false)
+			this.releaseRuntime()
+			this.closeStores()
+			return false
+		}
+	}
 
-		this.bot.hsm = this
-		this.setupBotEvents()
-		this.actor.start()
-		this.isReady = true
-		this.flushPendingEvents()
-		this.setupAntiLoopObserver()
-
-		this.pathfindCacheCleanupInterval = setInterval(() => {
-			cleanupPathfindCache(10000)
-		}, 15000)
+	private async loadStore(
+		store: { load(): Promise<void>; close(): void },
+		lifecycle: StoreLifecycle
+	): Promise<void> {
+		lifecycle.started = true
+		lifecycle.loading = true
+		try {
+			await store.load()
+		} finally {
+			lifecycle.loading = false
+			// A load cannot be interrupted, but its late result cannot reopen a live session.
+			if (this.stopped) this.closeStore(store, lifecycle)
+		}
 	}
 
 	send(event: MachineEvent): void {
+		if (this.stopped) return
 		if (!this.actor || !this.isReady) {
 			this.pendingEvents.push(event)
 			return
@@ -65,13 +128,13 @@ class BotStateMachine {
 		while (this.pendingEvents.length > 0) {
 			const event = this.pendingEvents.shift()
 			if (event) {
-				this.actor.send(event)
+				this.actor?.send(event)
 			}
 		}
 	}
 
 	private setupAntiLoopObserver(): void {
-		this.actor.subscribe((snapshot: any) => {
+		const subscription = this.actor!.subscribe(snapshot => {
 			if (this.antiLoopTripped) {
 				return
 			}
@@ -89,14 +152,16 @@ class BotStateMachine {
 				}, 60_000)
 			}
 		})
+		this.subscriptions.push(() => subscription.unsubscribe())
 	}
 
 	getContext(): MachineContext {
-		return this.actor.getSnapshot().context as MachineContext
+		if (!this.actor) throw new Error('HSM is not initialized')
+		return this.actor.getSnapshot().context
 	}
 
 	getCurrentState(): unknown {
-		return this.actor.getSnapshot().value
+		return this.actor?.getSnapshot().value ?? 'IDLE'
 	}
 
 	getCurrentStateString(): string {
@@ -110,11 +175,19 @@ class BotStateMachine {
 	}
 
 	isInState(statePath: string | Record<string, unknown>): boolean {
-		return this.actor.getSnapshot().matches(statePath as never)
+		return this.actor?.getSnapshot().matches(statePath as never) ?? false
+	}
+
+	private listen<TEvent extends keyof BotEvents>(
+		event: TEvent,
+		listener: BotEvents[TEvent]
+	): void {
+		this.bot.on(event, listener)
+		this.subscriptions.push(() => this.bot.off(event, listener))
 	}
 
 	private setupBotEvents(): void {
-		this.bot.on('health', () => {
+		this.listen('health', () => {
 			this.send({
 				type: 'UPDATE_HEALTH',
 				health: this.bot.health
@@ -131,50 +204,108 @@ class BotStateMachine {
 			})
 		})
 
-		this.bot.on('breath', () => {
+		this.listen('breath', () => {
 			this.send({
 				type: 'UPDATE_OXYGEN',
 				oxygenLevel: this.bot.oxygenLevel
 			})
 		})
 
-		this.bot.on('move', () => {
+		this.listen('move', () => {
 			this.send({
 				type: 'UPDATE_POSITION',
 				position: this.bot.entity.position
 			})
 		})
 
-		this.bot.on('death', () => {
+		this.listen('death', () => {
 			this.send({ type: 'DEATH' })
 		})
 
-		this.bot.on('entityDead', (entity: Entity) => {
+		this.listen('entityDead', (entity: Entity) => {
 			this.send({
-				type: 'REMOVE_ENTITY',
+				type: 'ENTITY_DIED',
 				entity
 			})
 		})
+		this.listen('entityGone', (entity: Entity) => {
+			this.send({ type: 'REMOVE_ENTITY', entity })
+		})
 
-		this.bot.on('itemDrop', (entity: Entity) => {
+		this.listen('itemDrop', (entity: Entity) => {
 			if (entity.name === 'broken_item') {
 				this.send({ type: 'WEAPON_BROKEN' })
 			}
 		})
 	}
 
-	stop(): void {
+	save(): Promise<void> {
+		return this.isReady && !this.stopped ? this.saveMemory() : Promise.resolve()
+	}
+
+	private saveMemory(): Promise<void> {
+		if (this.saving) return this.saving
+		this.saving = Promise.resolve()
+			.then(() => this.memory.save())
+			.catch(error => {
+				Logger.error('[HSM] memory save failed', { error: String(error) })
+			})
+			.finally(() => {
+				this.saving = null
+			})
+		return this.saving
+	}
+
+	private cleanup(action: () => void): void {
+		try {
+			action()
+		} catch (error) {
+			Logger.error('[HSM] cleanup failed', { error: String(error) })
+		}
+	}
+
+	private releaseRuntime(): void {
+		this.isReady = false
+		this.pendingEvents.length = 0
+		this.cleanup(() => this.stopDiagnostics?.())
+		this.stopDiagnostics = undefined
 		if (this.antiLoopCooldown) clearTimeout(this.antiLoopCooldown)
 		if (this.pathfindCacheCleanupInterval) {
 			clearInterval(this.pathfindCacheCleanupInterval)
 		}
 
-		if (this.actor) {
-			this.actor.stop()
-		}
+		for (const dispose of this.subscriptions.splice(0)) this.cleanup(dispose)
+		this.cleanup(() => this.actor?.stop())
+	}
 
-		this.bot.memory.close()
-		this.bot.profileMemory?.close()
+	private closeStore(
+		store: { close(): void },
+		lifecycle: StoreLifecycle
+	): void {
+		if (!lifecycle.started || lifecycle.loading || lifecycle.closed) return
+		lifecycle.closed = true
+		this.cleanup(() => store.close())
+	}
+
+	private closeStores(): void {
+		this.closeStore(this.memory, this.memoryLifecycle)
+		if (this.profileMemory)
+			this.closeStore(this.profileMemory, this.profileLifecycle)
+	}
+
+	stop(): Promise<void> {
+		if (this.stopPromise) return this.stopPromise
+		const wasReady = this.isReady
+		this.stopped = true
+		this.cancelReady(false)
+		this.releaseRuntime()
+		if (!wasReady) {
+			this.closeStores()
+			this.stopPromise = Promise.resolve()
+		} else {
+			this.stopPromise = this.saveMemory().finally(() => this.closeStores())
+		}
+		return this.stopPromise
 	}
 }
 

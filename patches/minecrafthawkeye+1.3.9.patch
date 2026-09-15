@@ -1,22 +1,47 @@
 diff --git a/node_modules/minecrafthawkeye/dist/hawkEye.js b/node_modules/minecrafthawkeye/dist/hawkEye.js
-index c7dc930..1f48e20 100644
+index c7dc930..d2e105d 100644
 --- a/node_modules/minecrafthawkeye/dist/hawkEye.js
 +++ b/node_modules/minecrafthawkeye/dist/hawkEye.js
-@@ -22,6 +22,7 @@ const autoAttack = (targetToAttack, inputWeapon = _types.Weapons.bow, isOneShot
+@@ -18,10 +18,25 @@ let oneShot;
+ let chargingArrow;
+ let weapon = _types.Weapons.bow;
+ let infoShot;
++let shotSlot;
++let generation = 0;
++let attackController;
+ const autoAttack = (targetToAttack, inputWeapon = _types.Weapons.bow, isOneShot = false) => {
    if (!targetToAttack) {
      return false;
    }
++  if (target !== undefined && weapon === inputWeapon) {
++    // Retarget the aim, not the item-use operation already in progress.
++    if (target !== targetToAttack) {
++      prevPlayerPositions = [];
++      infoShot = undefined;
++    }
++    target = targetToAttack;
++    oneShot = isOneShot;
++    return true;
++  }
 +  stop();
++  attackController = new AbortController();
    oneShot = isOneShot;
    target = targetToAttack;
    preparingShot = false;
-@@ -33,14 +34,23 @@ const autoAttack = (targetToAttack, inputWeapon = _types.Weapons.bow, isOneShot
+@@ -33,14 +48,40 @@ const autoAttack = (targetToAttack, inputWeapon = _types.Weapons.bow, isOneShot
  };
  exports.autoAttack = autoAttack;
  const stop = () => {
 -  _loadBot.bot.deactivateItem();
++  const activeBot = _loadBot.bot;
 +  const previousTarget = target;
++  const ownedSlot = shotSlot;
++  const ownsDraw = preparingShot && activeBot.getEquipmentDestSlot('hand') === ownedSlot && activeBot.heldItem?.name === weapon;
++  const stopGeneration = ++generation;
++  attackController?.abort();
++  attackController = undefined;
 +  target = undefined;
++  shotSlot = undefined;
 +  preparingShot = false;
 +  chargingArrow = false;
 +  infoShot = undefined;
@@ -24,8 +49,18 @@ index c7dc930..1f48e20 100644
    _loadBot.bot.removeListener('physicsTick', getGrades);
    _loadBot.bot.removeListener('physicsTick', autoCalc);
 -  _loadBot.bot.emit('auto_shot_stopped', target);
++  if (ownsDraw) {
++    // RELEASE_USE_ITEM fires a partially drawn bow. A carried-slot change cancels
++    // main-hand use instead (Minecraft handleSetCarriedItem -> stopUsingItem).
++    const originalSlot = ownedSlot - activeBot.QUICK_BAR_START;
++    const cancelSlot = (originalSlot + 1) % 9;
++    activeBot.setQuickBarSlot(cancelSlot);
++    // heldItemChanged is synchronous; never overwrite a replacement owner.
++    if (generation === stopGeneration && activeBot.quickBarSlot === cancelSlot) {
++      activeBot.setQuickBarSlot(originalSlot);
++    }
++  }
 +  if (previousTarget !== undefined) {
-+    _loadBot.bot.deactivateItem();
 +    _loadBot.bot.emit('auto_shot_stopped', previousTarget);
 +  }
  };
@@ -37,7 +72,7 @@ index c7dc930..1f48e20 100644
      stop();
      return;
    }
-@@ -63,6 +73,7 @@ const getGrades = () => {
+@@ -63,13 +104,14 @@ const getGrades = () => {
    infoShot = (0, _hawkEyeEquations.default)(target, speed, weapon);
  };
  const autoCalc = async () => {
@@ -45,3 +80,19 @@ index c7dc930..1f48e20 100644
    const waitTime = _types.weaponsProps[weapon].waitTime;
    const slotID = _loadBot.bot.getEquipmentDestSlot('hand');
    if (_loadBot.bot.inventory.slots[slotID] === null || _loadBot.bot.inventory.slots[slotID]?.name !== weapon) {
+     const weaponFound = _loadBot.bot.inventory.items().find(item => item.name === weapon);
+     if (weaponFound) {
+       try {
+-        await _loadBot.bot.equip(weaponFound, 'hand');
++        await _loadBot.bot.equip(weaponFound, 'hand', { signal: attackController?.signal });
+         return;
+       } catch (err) {
+         await sleep(500);
+@@ -81,6 +123,7 @@ const autoCalc = async () => {
+     }
+   }
+   if (!preparingShot) {
++    shotSlot = slotID;
+     if (['bow', 'crossbow', 'trident'].includes(weapon)) {
+       _loadBot.bot.activateItem();
+     }

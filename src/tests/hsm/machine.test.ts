@@ -1020,7 +1020,7 @@ test('combat chooses MELEE_ATTACKING in close range and assigns pvp ownership', 
 	}
 })
 
-test('combat keeps the current target locked instead of retargeting every monitor tick', async () => {
+test('combat chooses the nearer hostile instead of locking the initial target', async () => {
 	const bot = new FakeBot() as any
 	bot.utils.getRangeWeapon = () => ({ name: 'bow' })
 	bot.utils.getArrow = () => ({ name: 'arrow' })
@@ -1087,7 +1087,7 @@ test('combat keeps the current target locked instead of retargeting every monito
 		await waitForTurn()
 
 		assert.equal(actor.getSnapshot().context.preferredCombatTargetId, enemyA.id)
-		assert.equal(actor.getSnapshot().context.combatTarget.entity?.id, enemyA.id)
+		assert.equal(actor.getSnapshot().context.combatTarget.entity?.id, enemyB.id)
 	} finally {
 		actor.stop()
 	}
@@ -2484,6 +2484,12 @@ test('START_URGENT_NEEDS closes an active window before urgent handling', async 
 		await waitForTurn()
 		await waitForTurn()
 
+		actor.send({
+			type: 'UPDATE_ENTITIES',
+			entities: [],
+			enemies: [],
+			players: []
+		})
 		actor.send({ type: 'START_URGENT_NEEDS', need: 'food' })
 		await waitForTurn()
 		await waitForTurn()

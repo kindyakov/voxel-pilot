@@ -11,9 +11,10 @@ import {
 	registry
 } from './fixtures/handoffBot'
 
-test('approach without actual progress retreats and unchanged observations do not reset its limit', async t => {
+test('approach without actual progress stops without fleeing and unchanged observations do not reset its limit', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, enemy, observe } = createHarness()
+	const pvpTargetId = () => bot.pvp.target?.id
 	t.after(() => actor.stop())
 	bot.inventory.items = () => [
 		new ItemFactory(registry.itemsByName.iron_sword.id, 1)
@@ -28,7 +29,7 @@ test('approach without actual progress retreats and unchanged observations do no
 		await flush()
 	}
 	assert.ok(
-		actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'RETREATING' } })
+		actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'WAITING' } })
 	)
 	for (let i = 0; i < 20; i++) {
 		observe()
@@ -36,9 +37,11 @@ test('approach without actual progress retreats and unchanged observations do no
 		await flush()
 	}
 	assert.equal(bot.pvp.target, undefined)
+	assert.equal(bot.controlState.forward, false)
+	assert.equal(bot.pathfinder.goal, null)
 	actor.send({ type: 'START_COMBAT', target: enemy })
 	assert.ok(
-		actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'RETREATING' } })
+		actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'WAITING' } })
 	)
 	// A changed passage is an explicit opportunity, unlike another entity update.
 	const closedGate = BlockFactory.fromProperties(
@@ -73,7 +76,7 @@ test('approach without actual progress retreats and unchanged observations do no
 			await flush()
 		}
 		assert.ok(
-			actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'RETREATING' } })
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'WAITING' } })
 		)
 		bot.emit('blockUpdate', null, bot.blockAt(new Vec3(2, 64, 0)))
 		observe()
@@ -83,7 +86,7 @@ test('approach without actual progress retreats and unchanged observations do no
 		assert.ok(
 			actor.getSnapshot().matches({
 				MAIN_ACTIVITY: {
-					COMBAT: retry === 1 ? 'MELEE_ATTACKING' : 'RETREATING'
+					COMBAT: retry === 1 ? 'MELEE_ATTACKING' : 'WAITING'
 				}
 			})
 		)
@@ -106,6 +109,24 @@ test('approach without actual progress retreats and unchanged observations do no
 		2,
 		'brief occlusion must preserve the budget'
 	)
+	// Pursuit stays exhausted, but a mob entering reach must not get free hits.
+	enemy.position = bot.entity.position.offset(2, 0, 0)
+	observe()
+	await flush()
+	t.mock.timers.tick(500)
+	await flush()
+	assert.equal(pvpTargetId(), enemy.id)
+	assert.equal(
+		actor.getSnapshot().context.approachAttempts[enemy.id]?.resumes,
+		2
+	)
+	enemy.position = bot.entity.position.offset(7, 0, 0)
+	observe()
+	await flush()
+	assert.ok(
+		actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'WAITING' } })
+	)
+	assert.equal(bot.pvp.target, undefined)
 	actor.send({ type: 'UPDATE_HEALTH', health: 8 })
 	assert.ok(
 		actor

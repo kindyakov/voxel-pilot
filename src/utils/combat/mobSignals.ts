@@ -6,8 +6,7 @@ export const readMobMetadata = (
 	entity: Entity,
 	key: string
 ): unknown => {
-	if (bot.registry?.version?.minecraftVersion !== '1.20.4' || !entity.name)
-		return undefined
+	if (!entity.name) return undefined
 	const keys: unknown =
 		bot.registry?.entitiesByName?.[entity.name]?.metadataKeys
 	if (!Array.isArray(keys)) return undefined

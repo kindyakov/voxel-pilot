@@ -8,6 +8,7 @@ export interface ApproachAttempt {
 	progress: ProgressAnchor | null
 	failedRoutes: number
 	blocked: boolean
+	blockedReason: 'approach' | 'controller' | null
 	blockedTarget: Vec3 | null
 	worldChanged: boolean
 	resumes: number
@@ -18,6 +19,7 @@ const freshAttempt = (): ApproachAttempt => ({
 	progress: null,
 	failedRoutes: 0,
 	blocked: false,
+	blockedReason: null,
 	blockedTarget: null,
 	worldChanged: false,
 	resumes: 0,
@@ -35,6 +37,7 @@ export const blockApproach = (
 		[target.id]: {
 			...previous,
 			blocked: true,
+			blockedReason: 'controller',
 			blockedTarget: new Vec3(
 				target.position.x,
 				target.position.y,
@@ -93,6 +96,7 @@ export const recordApproach = (
 			progress: result.anchor,
 			failedRoutes,
 			blocked,
+			blockedReason: blocked ? 'approach' : null,
 			blockedTarget: blocked ? target.position.clone() : null,
 			lastObservedAt: Date.now()
 		}
@@ -101,7 +105,18 @@ export const recordApproach = (
 
 export const approachIsBlocked = (context: MachineContext) => {
 	const id = context.combatTarget.entity?.id
-	return id !== undefined && context.approachAttempts[id]?.blocked === true
+	const attempt = id === undefined ? undefined : context.approachAttempts[id]
+	if (!attempt?.blocked) return false
+	// Exhausting pursuit does not forbid defending in reach, but a broken
+	// controller must not be restarted merely because its target is close.
+	return (
+		attempt.blockedReason !== 'approach' ||
+		!context.bot ||
+		!context.combatTarget.entity ||
+		context.bot.entity.position.distanceTo(
+			context.combatTarget.entity.position
+		) > context.bot.pvp.attackRange
+	)
 }
 
 export const canResumeApproach = (context: MachineContext) => {

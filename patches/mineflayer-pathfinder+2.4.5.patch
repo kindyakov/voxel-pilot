@@ -1,16 +1,26 @@
 diff --git a/node_modules/mineflayer-pathfinder/index.js b/node_modules/mineflayer-pathfinder/index.js
-index b38bd30..4c3d39d 100644
+index b38bd30..21e6f45 100644
 --- a/node_modules/mineflayer-pathfinder/index.js
 +++ b/node_modules/mineflayer-pathfinder/index.js
-@@ -35,6 +35,7 @@ function inject (bot) {
+@@ -35,7 +35,17 @@
    const lockUseBlock = new Lock()
  
    bot.pathfinder = {}
 +  let pathGeneration = 0
++  let pathController = new AbortController()
  
++  function cancelPathOperations () {
++    const generation = ++pathGeneration
++    const controller = pathController
++    pathController = new AbortController()
++    controller.abort(new Error('Path was canceled'))
++    return generation
++  }
++
    bot.pathfinder.thinkTimeout = 5000 // ms
    bot.pathfinder.tickTimeout = 40 // ms, amount of thinking per tick (max 50 ms)
-@@ -114,18 +115,12 @@ function inject (bot) {
+   bot.pathfinder.searchRadius = -1 // in blocks, limits of the search area, -1: don't limit the search
+@@ -114,21 +124,20 @@
      }
    })
  
@@ -21,17 +31,87 @@ index b38bd30..4c3d39d 100644
 -  }
 -
    function resetPath (reason, clearStates = true) {
-+    pathGeneration++
++    const generation = cancelPathOperations()
++    if (generation !== pathGeneration) return
      if (!stopPathing && path.length > 0) bot.emit('path_reset', reason)
++    if (generation !== pathGeneration) return
      path = []
      if (digging) {
 -      bot.on('diggingAborted', detectDiggingStopped)
 -      bot.on('diggingCompleted', detectDiggingStopped)
 +      digging = false
        bot.stopDigging()
++      if (generation !== pathGeneration) return
      }
      placing = false
-@@ -486,14 +481,18 @@ function inject (bot) {
++    placingBlock = null
++    returningPos = null
+     pathUpdated = false
+     astarContext = null
+     lockEquipItem.release()
+@@ -142,7 +151,9 @@
+   bot.pathfinder.setGoal = (goal, dynamic = false) => {
+     stateGoal = goal
+     dynamicGoal = dynamic
++    const generation = pathGeneration
+     bot.emit('goal_updated', goal, dynamic)
++    if (generation !== pathGeneration) return
+     resetPath('goal_updated')
+   }
+ 
+@@ -388,10 +399,13 @@
+   }
+ 
+   function stop () {
++    const generation = cancelPathOperations()
++    if (generation !== pathGeneration) return
+     stopPathing = false
+     stateGoal = null
+     path = []
+     bot.emit('path_stop')
++    if (generation !== pathGeneration) return
+     fullStop()
+   }
+ 
+@@ -434,16 +448,19 @@
+     if (stateGoal) {
+       if (!stateGoal.isValid()) {
+         stop()
++        return
+       } else if (stateGoal.hasChanged()) {
+         resetPath('goal_moved', false)
+       }
+     }
+ 
+     if (astarContext && astartTimedout) {
++      const generation = pathGeneration
+       const results = astarContext.compute()
+       results.path = postProcessPath(results.path)
+       pathFromPlayer(results.path)
+       bot.emit('path_update', results)
++      if (generation !== pathGeneration) return
+       path = results.path
+       astartTimedout = results.status === 'partial'
+     }
+@@ -458,13 +475,17 @@
+       if (stateGoal && stateMovements) {
+         if (stateGoal.isEnd(bot.entity.position.floored())) {
+           if (!dynamicGoal) {
++            const generation = pathGeneration
+             bot.emit('goal_reached', stateGoal)
++            if (generation !== pathGeneration) return
+             stateGoal = null
+             fullStop()
+           }
+         } else if (!pathUpdated) {
++          const generation = pathGeneration
+           const results = bot.pathfinder.getPathTo(stateMovements, stateGoal)
+           bot.emit('path_update', results)
++          if (generation !== pathGeneration) return
+           path = results.path
+           astartTimedout = results.status === 'partial'
+           pathUpdated = true
+@@ -486,14 +507,18 @@
          const b = nextPoint.toBreak.shift()
          const block = bot.blockAt(new Vec3(b.x, b.y, b.z), false)
          const tool = bot.pathfinder.bestHarvestTool(block)
@@ -50,12 +130,24 @@ index b38bd30..4c3d39d 100644
                lastNodeTime = performance.now()
                digging = false
              })
-@@ -521,10 +520,13 @@ function inject (bot) {
+@@ -502,7 +527,7 @@
+         if (!tool) {
+           digBlock()
+         } else {
+-          bot.equip(tool, 'hand')
++          bot.equip(tool, 'hand', { signal: pathController.signal })
+             .catch(_ignoreError => {})
+             .then(() => digBlock())
+         }
+@@ -521,10 +546,15 @@
        // Open gates or doors
        if (placingBlock?.useOne) {
          if (!lockUseBlock.tryAcquire()) return
+-        bot.activateBlock(bot.blockAt(new Vec3(placingBlock.x, placingBlock.y, placingBlock.z))).then(() => {
 +        const generation = pathGeneration
-         bot.activateBlock(bot.blockAt(new Vec3(placingBlock.x, placingBlock.y, placingBlock.z))).then(() => {
++        bot.activateBlock(bot.blockAt(new Vec3(placingBlock.x, placingBlock.y, placingBlock.z)), undefined, undefined, {
++          signal: pathController.signal
++        }).then(() => {
 +          if (generation !== pathGeneration) return
            lockUseBlock.release()
            placingBlock = nextPoint.toPlace.shift()
@@ -64,20 +156,26 @@ index b38bd30..4c3d39d 100644
            console.error(err)
            lockUseBlock.release()
          })
-@@ -545,8 +547,10 @@ function inject (bot) {
+@@ -545,30 +575,42 @@
        }
        if (canPlace) {
          if (!lockEquipItem.tryAcquire()) return
+-        bot.equip(block, 'hand')
 +        const generation = pathGeneration
-         bot.equip(block, 'hand')
++        bot.equip(block, 'hand', { signal: pathController.signal })
            .then(function () {
 +            if (generation !== pathGeneration) return
              lockEquipItem.release()
              const refBlock = bot.blockAt(new Vec3(placingBlock.x, placingBlock.y, placingBlock.z), false)
              if (!lockPlaceBlock.tryAcquire()) return
-@@ -555,20 +559,27 @@ function inject (bot) {
+             if (interactableBlocks.includes(refBlock.name)) {
+               bot.setControlState('sneak', true)
              }
-             bot.placeBlock(refBlock, new Vec3(placingBlock.dx, placingBlock.dy, placingBlock.dz))
+-            bot.placeBlock(refBlock, new Vec3(placingBlock.dx, placingBlock.dy, placingBlock.dz))
++            bot._placeBlockWithOptions(refBlock, new Vec3(placingBlock.dx, placingBlock.dy, placingBlock.dz), {
++              swingArm: 'right',
++              signal: pathController.signal
++            })
                .then(function () {
 +                if (generation !== pathGeneration) return
                  // Dont release Sneak if the block placement was not successful
@@ -104,3 +202,13 @@ index b38bd30..4c3d39d 100644
        }
        return
      }
+@@ -588,7 +630,9 @@
+         // If the block the bot is standing on is not a full block only checking for the floored position can fail as
+         // the distance to the goal can get greater then 0 when the vector is floored.
+         if (!dynamicGoal && stateGoal && (stateGoal.isEnd(p.floored()) || stateGoal.isEnd(p.floored().offset(0, 1, 0)))) {
++          const generation = pathGeneration
+           bot.emit('goal_reached', stateGoal)
++          if (generation !== pathGeneration) return
+           stateGoal = null
+         }
+         fullStop()

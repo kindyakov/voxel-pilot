@@ -4,7 +4,7 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { ItemFactory, createHarness, registry } from './fixtures/handoffBot'
 
-test('unsupported-version slime remains an uncertain threat rather than disappearing', async t => {
+test('slime with missing metadata remains an uncertain threat rather than disappearing', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, enemy } = createHarness(true)
 	t.after(() => actor.stop())
@@ -86,10 +86,10 @@ test('an unknown hostile species is uncertainty, not automatic permission to att
 		step()
 	}
 	assert.equal(bot.attacks.length, 0)
-	assert.ok(bot.entity.position.x < -2)
+	assert.equal(bot.entity.position.x, 0)
 })
 
-test('immediate danger replaces a distant held target but equal threats do not ping-pong', async t => {
+test('the nearest hostile replaces a held target; equal distance uses a stable entity id', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, enemy } = createHarness(true)
 	t.after(() => actor.stop())
@@ -120,7 +120,14 @@ test('immediate danger replaces a distant held target but equal threats do not p
 		t.mock.timers.tick(100)
 		await flush()
 	}
-	assert.equal(bot.pvp.target?.id, 2)
+	assert.equal(bot.pvp.target?.id, 1)
+	enemy.position.x = close.position.x
+	for (let i = 0; i < 6; i++) {
+		bot.entities = i % 2 ? { 1: enemy, 2: close } : { 2: close, 1: enemy }
+		t.mock.timers.tick(100)
+		await flush()
+		assert.equal(bot.pvp.target?.id, 1)
+	}
 })
 
 test('a confirmed attack on the bot permits self-defense against an enderman', async t => {
@@ -142,7 +149,7 @@ test('a confirmed attack on the bot permits self-defense against an enderman', a
 	assert.ok(bot.attacks.includes(enemy.id))
 })
 
-test('an avoid-only boss makes an armed bot retreat instead of attacking', async t => {
+test('a boss is excluded from healthy combat without triggering flight', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, enemy, step } = createHarness(true)
 	t.after(() => actor.stop())
@@ -158,7 +165,7 @@ test('an avoid-only boss makes an armed bot retreat instead of attacking', async
 		step()
 	}
 	assert.equal(bot.attacks.length, 0)
-	assert.ok(bot.entity.position.x < -2)
+	assert.equal(bot.entity.position.x, 0)
 })
 
 test('distant detection does not initiate pursuit and player attack commands are rejected', async t => {
@@ -234,8 +241,9 @@ test('an unprovoked enderman does not become an attack target merely by being cl
 	}
 	assert.equal(bot.attacks.length, 0)
 	assert.equal(bot.pvp.target, undefined)
-	assert.ok(
-		bot.entity.position.x < -2,
-		'Unknown provocation calls for distance, not an attack'
+	assert.equal(
+		bot.entity.position.x,
+		0,
+		'Unknown provocation alone authorizes neither attack nor flight'
 	)
 })

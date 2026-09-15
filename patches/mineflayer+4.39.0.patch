@@ -1,0 +1,337 @@
+diff --git a/node_modules/mineflayer/index.d.ts b/node_modules/mineflayer/index.d.ts
+index f650743..0927561 100644
+--- a/node_modules/mineflayer/index.d.ts
++++ b/node_modules/mineflayer/index.d.ts
+@@ -303,7 +303,8 @@ export interface Bot extends TypedEmitter<BotEvents> {
+ 
+   equip: (
+     item: Item | number,
+-    destination: EquipmentDestination | null
++    destination: EquipmentDestination | null,
++    options?: { signal?: AbortSignal }
+   ) => Promise<void>
+ 
+   unequip: (
+@@ -326,9 +327,13 @@ export interface Bot extends TypedEmitter<BotEvents> {
+ 
+   placeBlock: (referenceBlock: Block, faceVector: Vec3) => Promise<void>
+ 
++  _genericPlace: (referenceBlock: Block, faceVector: Vec3, options: PlaceBlockOptions) => Promise<Vec3>
++
++  _placeBlockWithOptions: (referenceBlock: Block, faceVector: Vec3, options: PlaceBlockOptions) => Promise<void>
++
+   placeEntity: (referenceBlock: Block, faceVector: Vec3) => Promise<Entity>
+ 
+-  activateBlock: (block: Block, direction?: Vec3, cursorPos?: Vec3) => Promise<void>
++  activateBlock: (block: Block, direction?: Vec3, cursorPos?: Vec3, options?: { signal?: AbortSignal }) => Promise<void>
+ 
+   activateEntity: (entity: Entity) => Promise<void>
+ 
+@@ -396,7 +401,8 @@ export interface Bot extends TypedEmitter<BotEvents> {
+   clickWindow: (
+     slot: number,
+     mouseButton: number,
+-    mode: number
++    mode: number,
++    options?: { signal?: AbortSignal }
+   ) => Promise<void>
+ 
+   putSelectedItemRange: (
+@@ -447,6 +453,16 @@ export interface Bot extends TypedEmitter<BotEvents> {
+   respawn: () => void
+ }
+ 
++export interface PlaceBlockOptions {
++  half?: 'top' | 'bottom'
++  delta?: Vec3
++  forceLook?: boolean | 'ignore'
++  offhand?: boolean
++  swingArm?: 'right' | 'left'
++  showHand?: boolean
++  signal?: AbortSignal
++}
++
+ export interface simpleClick {
+   leftMouse: (slot: number) => Promise<void>
+   rightMouse: (slot: number) => Promise<void>
+diff --git a/node_modules/mineflayer/lib/plugins/generic_place.js b/node_modules/mineflayer/lib/plugins/generic_place.js
+index 448dfc0..d8a9ab5 100644
+--- a/node_modules/mineflayer/lib/plugins/generic_place.js
++++ b/node_modules/mineflayer/lib/plugins/generic_place.js
+@@ -7,9 +7,10 @@ function inject (bot) {
+    *
+    * @param {import('prismarine-block').Block} referenceBlock
+    * @param {import('vec3').Vec3} faceVector
+-   * @param {{half?: 'top'|'bottom', delta?: import('vec3').Vec3, forceLook?: boolean | 'ignore', offhand?: boolean, swingArm?: 'right' | 'left', showHand?: boolean}} options
++   * @param {{half?: 'top'|'bottom', delta?: import('vec3').Vec3, forceLook?: boolean | 'ignore', offhand?: boolean, swingArm?: 'right' | 'left', showHand?: boolean, signal?: AbortSignal}} options
+    */
+   async function _genericPlace (referenceBlock, faceVector, options) {
++    options.signal?.throwIfAborted()
+     let handToPlaceWith = 0
+     if (options.offhand) {
+       if (!bot.inventory.slots[45]) {
+@@ -36,6 +37,7 @@ function inject (bot) {
+     if (options.forceLook !== 'ignore') {
+       await bot.lookAt(referenceBlock.position.offset(dx, dy, dz), options.forceLook)
+     }
++    options.signal?.throwIfAborted()
+     // TODO: tell the server that we are sneaking while doing this
+     const pos = referenceBlock.position
+ 
+diff --git a/node_modules/mineflayer/lib/plugins/inventory.js b/node_modules/mineflayer/lib/plugins/inventory.js
+index bab0eef..525c693 100644
+--- a/node_modules/mineflayer/lib/plugins/inventory.js
++++ b/node_modules/mineflayer/lib/plugins/inventory.js
+@@ -1,6 +1,6 @@
+ const assert = require('assert')
+ const { Vec3 } = require('vec3')
+-const { once, sleep, createDoneTask, createTask, withTimeout } = require('../promise_utils')
++const { once, onceWithCleanup, sleep, createDoneTask, createTask, withTimeout } = require('../promise_utils')
+ const { toNotchianYaw, toNotchianPitch } = require('../conversions')
+ 
+ module.exports = inject
+@@ -192,12 +192,15 @@ function inject (bot, { hideErrors }) {
+     }
+   }
+ 
+-  async function activateBlock (block, direction, cursorPos) {
++  async function activateBlock (block, direction, cursorPos, options = {}) {
++    const { signal } = options
++    signal?.throwIfAborted()
+     direction = direction ?? new Vec3(0, 1, 0)
+     const directionNum = vectorToDirection(direction) // The packet needs a number as the direction
+     cursorPos = cursorPos ?? new Vec3(0.5, 0.5, 0.5)
+     // TODO: tell the server that we are not sneaking while doing this
+     await bot.lookAt(block.position.offset(0.5, 0.5, 0.5), false)
++    signal?.throwIfAborted()
+     // place block message
+     // TODO: logic below can likely be simplified
+     if (bot.supportFeature('blockPlaceHasHeldItem')) {
+@@ -473,35 +476,37 @@ function inject (bot, { hideErrors }) {
+     return hasItem !== satisfied
+   }
+ 
+-  async function waitForWindowUpdate (window, slot) {
++  async function waitForWindowUpdate (window, slot, signal) {
++    const wait = (emitter, event) => onceWithCleanup(emitter, event, { signal, timeout: 20000 })
+     // The server recomputes the crafting result slot after any click in the
+     // crafting area, including picking up the result (which consumes the
+     // ingredients). Waiting for that resync on result clicks too keeps
+     // follow-up clicks and close_window from racing ahead of the craft.
+     if (window.type === 'minecraft:inventory') {
+       if (slot >= 0 && slot <= 4) {
+-        await once(bot.inventory, 'updateSlot:0')
++        await wait(bot.inventory, 'updateSlot:0')
+       }
+     } else if (window.type === 'minecraft:crafting') {
+       if (slot >= 0 && slot <= 9) {
+-        await once(bot.currentWindow, 'updateSlot:0')
++        await wait(bot.currentWindow, 'updateSlot:0')
+       }
+     } else if (window.type === 'minecraft:merchant') {
+       const toUpdate = []
+       if (slot <= 1 && !window.selectedTrade.tradeDisabled && expectTradeUpdate(window)) {
+-        toUpdate.push(once(bot.currentWindow, 'updateSlot:2'))
++        toUpdate.push(wait(bot.currentWindow, 'updateSlot:2'))
+       }
+       if (slot === 2) {
+         for (const item of bot.currentWindow.containerItems()) {
+-          toUpdate.push(once(bot.currentWindow, `updateSlot:${item.slot}`))
++          toUpdate.push(wait(bot.currentWindow, `updateSlot:${item.slot}`))
+         }
+       }
+       await Promise.all(toUpdate)
++      signal?.throwIfAborted()
+ 
+       if (slot === 2 && !window.selectedTrade.tradeDisabled && expectTradeUpdate(window)) {
+         // After the trade goes through, if the inputs are still satisfied,
+         // expect another update in slot 2
+-        await once(bot.currentWindow, 'updateSlot:2')
++        await wait(bot.currentWindow, 'updateSlot:2')
+       }
+     }
+   }
+@@ -569,16 +574,25 @@ function inject (bot, { hideErrors }) {
+     return changedSlots
+   }
+ 
+-  async function clickWindow (slot, mouseButton, mode) {
++  async function clickWindow (slot, mouseButton, mode, options = {}) {
++    const { signal } = options
++    signal?.throwIfAborted()
+     // if you click on the quick bar and have dug recently,
+     // wait a bit
+-    if (slot >= bot.QUICK_BAR_START && bot.lastDigTime != null) {
++    if ((slot >= bot.QUICK_BAR_START || mode === 2) && bot.lastDigTime != null) {
+       let timeSinceLastDig
+       while ((timeSinceLastDig = new Date() - bot.lastDigTime) < DIG_CLICK_TIMEOUT) {
+         await sleep(DIG_CLICK_TIMEOUT - timeSinceLastDig)
++        signal?.throwIfAborted()
+       }
+     }
+     const window = bot.currentWindow || bot.inventory
++    if (options.expectedWindow && window !== options.expectedWindow) {
++      throw new Error('Inventory window changed during equip')
++    }
++    if (mode === 2 && window.selectedItem) {
++      throw new Error('Cannot swap slots while carrying an item')
++    }
+ 
+     assert.ok(mode >= 0 && mode <= 6)
+     const actionId = createActionNumber()
+@@ -658,20 +672,22 @@ function inject (bot, { hideErrors }) {
+     }
+ 
+     if (bot.supportFeature('transactionPacketExists')) {
+-      const response = once(bot, `confirmTransaction${actionId}`)
++      const response = onceWithCleanup(bot, `confirmTransaction${actionId}`, { signal, timeout: WINDOW_TIMEOUT })
+       if (!window.transactionRequiresConfirmation(click)) {
+         confirmTransaction(window.id, actionId, true)
+       }
+-      const [success] = await withTimeout(response, WINDOW_TIMEOUT)
++      const [success] = await response
+         .catch(() => {
++          signal?.throwIfAborted()
+           throw new Error(`Server didn't respond to transaction for clicking on slot ${slot} on window with id ${window?.id}.`)
+         })
+       if (!success) {
+         throw new Error(`Server rejected transaction for clicking on slot ${slot}, on window with id ${window?.id}.`)
+       }
+     } else {
+-      await waitForWindowUpdate(window, slot)
++      await waitForWindowUpdate(window, slot, signal)
+     }
++    signal?.throwIfAborted()
+   }
+ 
+   async function putAway (slot) {
+diff --git a/node_modules/mineflayer/lib/plugins/place_block.js b/node_modules/mineflayer/lib/plugins/place_block.js
+index dc86e1e..6415925 100644
+--- a/node_modules/mineflayer/lib/plugins/place_block.js
++++ b/node_modules/mineflayer/lib/plugins/place_block.js
+@@ -13,6 +13,7 @@ function inject (bot) {
+     const oldBlock = bot.blockAt(dest)
+ 
+     await bot._genericPlace(referenceBlock, faceVector, options)
++    options.signal?.throwIfAborted()
+ 
+     // Whether or not it placed anything, the server answers block_place with a
+     // block update for the reference block, then one for the block across the
+@@ -27,9 +28,11 @@ function inject (bot) {
+     bot.on(`blockUpdate:${referenceBlock.position}`, onAck)
+     const [, newBlock] = await onceWithCleanup(bot, `blockUpdate:${dest}`, {
+       timeout: 5000,
++      signal: options.signal,
+       // oldBlock and newBlock are both null when the world unloads
+       checkCondition: (oldBlock, newBlock) => !oldBlock || !newBlock || oldBlock.type !== newBlock.type || (acked && inFlight.get(key) === 1)
+     }).catch((err) => {
++      options.signal?.throwIfAborted()
+       throw acked ? err : new Error(`Server did not answer the placement at ${dest}: ${err.message}`)
+     }).finally(() => {
+       bot.removeListener(`blockUpdate:${referenceBlock.position}`, onAck)
+@@ -37,6 +40,7 @@ function inject (bot) {
+       else inFlight.set(key, inFlight.get(key) - 1)
+     })
+ 
++    options.signal?.throwIfAborted()
+     if (!newBlock) return
+     if (newBlock.type === oldBlock.type) {
+       throw new Error(`Server refused to place ${bot.heldItem?.name ?? 'block'} at ${dest}: the block is still ${newBlock.name}`)
+diff --git a/node_modules/mineflayer/lib/plugins/simple_inventory.js b/node_modules/mineflayer/lib/plugins/simple_inventory.js
+index 6fff5b2..f426932 100644
+--- a/node_modules/mineflayer/lib/plugins/simple_inventory.js
++++ b/node_modules/mineflayer/lib/plugins/simple_inventory.js
+@@ -53,6 +53,7 @@ function inject (bot) {
+     assert.ok(slot < 9)
+     if (bot.quickBarSlot === slot) return
+     bot.quickBarSlot = slot
++    bot.usingHeldItem = false
+     bot._client.write('held_item_slot', {
+       slotId: slot
+     })
+@@ -85,7 +86,9 @@ function inject (bot) {
+     await bot.putAway(destSlot)
+   }
+ 
+-  async function equip (item, destination) {
++  async function equip (item, destination, options = {}) {
++    const { signal } = options
++    signal?.throwIfAborted()
+     if (typeof item === 'number') {
+       item = bot.inventory.findInventoryItem(item)
+     }
+@@ -104,7 +107,21 @@ function inject (bot) {
+     }
+ 
+     if (destination !== 'hand') {
+-      await bot.moveSlotItem(sourceSlot, destSlot)
++      if (!signal) {
++        await bot.moveSlotItem(sourceSlot, destSlot)
++        return
++      }
++      assert.ok(sourceSlot >= 9 && sourceSlot <= 45, 'Cancelable equip requires an inventory or off-hand source')
++      if (sourceSlot >= QUICK_BAR_START && sourceSlot < QUICK_BAR_START + QUICK_BAR_COUNT) {
++        await swapWithHotbar(destSlot, sourceSlot, options)
++      } else {
++        // Each SWAP keeps every item in a slot, even if the next step is aborted.
++        // Use an inactive slot so armor/off-hand equip cannot interrupt the main hand.
++        const stagingSlot = QUICK_BAR_START + (bot.quickBarSlot + 1) % QUICK_BAR_COUNT
++        await swapWithHotbar(sourceSlot, stagingSlot, options)
++        await swapWithHotbar(destSlot, stagingSlot, options)
++        await swapWithHotbar(sourceSlot, stagingSlot, options)
++      }
+       return
+     }
+ 
+@@ -121,8 +138,24 @@ function inject (bot) {
+       destSlot = QUICK_BAR_START + nextQuickBarSlot
+       nextQuickBarSlot = (nextQuickBarSlot + 1) % QUICK_BAR_COUNT
+     }
++    // Never pick up food onto the cursor: cancellation must leave it discoverable.
++    if (sourceSlot < 9 && bot.inventory.slots[destSlot]) {
++      throw new Error('Cannot swap armor into an occupied hotbar slot')
++    }
++    await swapWithHotbar(sourceSlot, destSlot, options)
++    signal?.throwIfAborted()
+     setQuickBarSlot(destSlot - QUICK_BAR_START)
+-    await bot.moveSlotItem(sourceSlot, destSlot)
++  }
++
++  async function swapWithHotbar (sourceSlot, hotbarSlot, options) {
++    options.signal?.throwIfAborted()
++    assert.strictEqual(bot.currentWindow, null, 'Equip requires the player inventory')
++    assert.strictEqual(bot.inventory.selectedItem, null, 'Equip requires an empty cursor')
++    // Mode 2 is an atomic swap; unlike PICKUP it never creates a carried stack.
++    await bot.clickWindow(sourceSlot, hotbarSlot - QUICK_BAR_START, 2, { ...options, expectedWindow: bot.inventory })
++    options.signal?.throwIfAborted()
++    bot.updateHeldItem()
++    options.signal?.throwIfAborted()
+   }
+ 
+   function getDestSlot (destination) {
+diff --git a/node_modules/mineflayer/lib/promise_utils.js b/node_modules/mineflayer/lib/promise_utils.js
+index a609111..277d1a4 100644
+--- a/node_modules/mineflayer/lib/promise_utils.js
++++ b/node_modules/mineflayer/lib/promise_utils.js
+@@ -81,17 +81,19 @@ function onceWithCleanup (emitter, event, { timeout = 0, checkCondition = undefi
+     }
+   }
+ 
++  let timer
+   if (typeof timeout === 'number' && timeout > 0) {
+     // For some reason, the call stack gets lost if we don't create the error outside of the .then call
+     const timeoutError = new Error(`Event ${event} did not fire within timeout of ${timeout}ms`)
+-    sleep(timeout).then(() => {
++    timer = setTimeout(() => {
+       if (!task.done) {
+         task.cancel(timeoutError)
+       }
+-    })
++    }, timeout)
+   }
+ 
+   task.promise.catch(() => {}).finally(() => {
++    clearTimeout(timer)
+     emitter.removeListener(event, onEvent)
+     if (onAbort) signal.removeEventListener('abort', onAbort)
+   })

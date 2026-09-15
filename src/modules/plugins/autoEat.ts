@@ -9,8 +9,8 @@ export const loadAutoEat = (bot: Bot): void => {
 export const initAutoEat = (bot: Bot): void => {
 	// bot.autoEat.enableAuto()
 	bot.autoEat.setOpts({
-		eatingTimeout: 10000,
-		strictErrors: false, // Логирование вместо исключений
+		eatingTimeout: 10000, // Вся попытка: экипировка, еда и возврат предмета
+		strictErrors: true, // Активный recovery-актор обрабатывает отказ и повтор
 		// equipOldItem: true, // вернуть предмет после еды
 		priority: 'saturation', // бот выбирает еду, которая даёт максимальное насыщение
 		offhand: false // бот будет использовать вторую руку

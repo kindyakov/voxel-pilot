@@ -4,22 +4,21 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { ItemFactory, createHarness, registry } from './fixtures/handoffBot'
 
-test('without a usable weapon the bot retreats with real movement, and critical health preempts retreat', async t => {
+test('a bow without ammunition does not start combat or flight; critical health still preempts', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, observe, step } = createHarness()
 	t.after(() => actor.stop())
 	bot.inventory.items = () => [new ItemFactory(registry.itemsByName.bow.id, 1)]
 	observe()
 	await flush()
-	assert.ok(
-		actor.getSnapshot().matches({ MAIN_ACTIVITY: { COMBAT: 'RETREATING' } })
-	)
+	assert.ok(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' }))
 	for (let i = 0; i < 20; i++) {
 		t.mock.timers.tick(50)
 		await flush()
 		step()
 	}
-	assert.ok(bot.entity.position.x < -2)
+	assert.equal(bot.entity.position.x, 0)
+	assert.equal(bot.chatMessages.length, 1)
 	assert.equal(bot.attacks.length, 0)
 	assert.equal(bot.digCalls.length, 0)
 	assert.equal(bot.placeCalls.length, 0)

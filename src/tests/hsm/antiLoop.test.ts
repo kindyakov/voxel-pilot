@@ -1,36 +1,56 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { setImmediate as flush } from 'node:timers/promises'
 
 import Logger from '../../config/logger.js'
 import BotStateMachine from '../../core/hsm.js'
+import { MemoryManager } from '../../core/memory/index.js'
+import { ProfileMemoryStore } from '../../core/profile/index.js'
 import { AntiLoopGuard } from '../../hsm/utils/antiLoop.js'
+import { createHarness } from './fixtures/handoffBot'
 
-test('HSM observer resets the guard after its cooldown', t => {
-	t.mock.timers.enable({ apis: ['setTimeout'] })
-	let observer: (snapshot: unknown) => void = () => {}
-	const stops: unknown[] = []
-	const wrapper = Object.create(BotStateMachine.prototype) as any
-	wrapper.antiLoopGuard = new AntiLoopGuard({
-		maxTransitionsPerSecond: 1,
-		emergencyStopAfter: 100,
-		windowMs: 1000
-	})
-	wrapper.actor = {
-		subscribe(callback: typeof observer) {
-			observer = callback
-		}
+test('HSM observer resets the guard after its cooldown', async t => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
+	t.mock.method(Logger, 'info', () => {})
+	t.mock.method(Logger, 'error', () => {})
+	const { bot, actor } = createHarness()
+	actor.stop()
+	const memory = new MemoryManager({ botName: bot.username })
+	const profile = new ProfileMemoryStore({ botName: bot.username })
+	bot.asBot().memory = memory
+	bot.asBot().profileMemory = profile
+	t.mock.method(memory, 'load', async () => {})
+	t.mock.method(memory, 'save', async () => {})
+	t.mock.method(memory, 'close', () => {})
+	t.mock.method(profile, 'load', async () => {})
+	t.mock.method(profile, 'close', () => {})
+	const hsm = new BotStateMachine(bot.asBot())
+	t.after(() => hsm.stop())
+	assert.equal(await hsm.ready, true)
+	hsm.send({ type: 'UPDATE_ENTITIES', entities: [], enemies: [], players: [] })
+	const warnings = () =>
+		bot.chatMessages.filter(message => message.includes('критическая ошибка'))
+	const cycleRecovery = () => {
+		hsm.send({ type: 'START_URGENT_NEEDS', need: 'health' })
+		hsm.send({ type: 'HEALTH_RESTORED' })
 	}
-	wrapper.bot = { chat() {} }
-	wrapper.send = (event: unknown) => {
-		stops.push(event)
-	}
-	wrapper.setupAntiLoopObserver()
-	observer({ value: 'A' })
-	observer({ value: 'B' })
-	assert.equal(stops.length, 1)
+	for (let i = 0; i < 12; i++) cycleRecovery()
+	assert.equal(warnings().length, 1)
 	t.mock.timers.tick(60_000)
-	observer({ value: 'IDLE' })
-	assert.equal(stops.length, 1)
+	await flush()
+	hsm.send({ type: 'UPDATE_ENTITIES', entities: [], enemies: [], players: [] })
+	cycleRecovery()
+	assert.equal(
+		warnings().length,
+		1,
+		'a fresh transition after cooldown is allowed'
+	)
+	for (let i = 0; i < 12; i++) cycleRecovery()
+	assert.equal(
+		warnings().length,
+		2,
+		'the guard still detects a subsequent flood'
+	)
 })
 
 test('AntiLoopGuard ignores repeated updates with the same state signature', () => {

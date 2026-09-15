@@ -1,9 +1,17 @@
+import util from 'node:util'
+
+import chalk from 'chalk'
 import path from 'path'
 import winston from 'winston'
 
 import type { WinstonLogLevel } from '@/types'
 
 import Config from '@/config/config'
+
+// Chalk отключает цвета, когда не видит TTY (сервисный запуск, pipe),
+// поэтому уровень включается принудительно: консольный транспорт
+// всегда идёт человеку, а файловый формат ниже остаётся без ANSI.
+chalk.level = 1
 
 /**
  * Создание корреляционного ID для трекинга операций
@@ -13,13 +21,77 @@ function generateCorrelationId(): string {
 }
 
 /**
- * Форматтер для логов с корреляционным ID
+ * Цветовой уровень для подсветки в консоли.
+ * Bold добавлен осознанно: серый DEBUG и жёлтый WARN иначе
+ * сливаются с обычным текстом на светлой/тёмной теме.
  */
-const logFormat = winston.format.combine(
+function colorLevel(level: string): string {
+	const label = level.toUpperCase()
+	switch (level) {
+		case 'debug':
+			return chalk.bold.gray(label)
+		case 'info':
+			return chalk.bold.blue(label)
+		case 'warn':
+			return chalk.bold.yellow(label)
+		case 'error':
+			return chalk.bold.red(label)
+		default:
+			return label
+	}
+}
+
+/**
+ * Лимит превью meta в консоли. Консоль — для человека (одна строка
+ * на событие), полный дамп всегда остаётся в файловом логе.
+ */
+const CONSOLE_META_LIMIT = 2000
+
+function formatConsoleMeta(meta: object): string {
+	// Winston кладёт в info символьные ключи (Symbol(splat) дублирует
+	// весь meta ещё раз). util.inspect, в отличие от JSON.stringify,
+	// символы печатает — чистим до plain-объекта со строковыми ключами.
+	const plainMeta = Object.fromEntries(Object.entries(meta))
+	if (Object.keys(plainMeta).length === 0) return ''
+	const rendered = util.inspect(plainMeta, {
+		colors: true,
+		depth: 5,
+		breakLength: Infinity,
+		maxArrayLength: 10
+	})
+	if (rendered.length <= CONSOLE_META_LIMIT) return ` ${rendered}`
+	const overflow = rendered.length - CONSOLE_META_LIMIT
+	return ` ${rendered.slice(0, CONSOLE_META_LIMIT)}… (+${overflow} chars, full in ${Config.logging.file})`
+}
+
+/**
+ * Базовый форматтер для логов с корреляционным ID (без подсветки)
+ */
+const baseFormat = winston.format.combine(
 	winston.format.timestamp({
 		format: 'YYYY-MM-DD HH:mm:ss'
 	}),
-	winston.format.errors({ stack: true }),
+	winston.format.errors({ stack: true })
+)
+
+/**
+ * Форматтер для консоли с подсветкой по уровням
+ */
+const consoleFormat = winston.format.combine(
+	baseFormat,
+	winston.format.printf(
+		({ level, message, timestamp, correlationId, ...meta }) => {
+			const corrId = correlationId ? `[${chalk.bold.cyan(correlationId)}]` : ''
+			return `${timestamp} [${colorLevel(level)}]${corrId} ${message}${formatConsoleMeta(meta)}`.trim()
+		}
+	)
+)
+
+/**
+ * Форматтер для файлов (без ANSI-кодов)
+ */
+const fileFormat = winston.format.combine(
+	baseFormat,
 	winston.format.printf(
 		({ level, message, timestamp, correlationId, ...meta }) => {
 			const corrId = correlationId ? `[${correlationId}]` : ''
@@ -35,7 +107,7 @@ const logFormat = winston.format.combine(
 const transports: winston.transport[] = [
 	new winston.transports.Console({
 		level: Config.isDevelopment ? 'debug' : Config.logging.level,
-		format: winston.format.combine(winston.format.colorize(), logFormat)
+		format: consoleFormat
 	})
 ]
 
@@ -46,14 +118,14 @@ if (Config.isProduction || Config.logging.file) {
 		new winston.transports.File({
 			filename: Config.logging.file,
 			level: Config.logging.level,
-			format: logFormat,
+			format: fileFormat,
 			maxsize: 10 * 1024 * 1024,
 			maxFiles: 5
 		}),
 		new winston.transports.File({
 			filename: path.join(logDir, 'error.log'),
 			level: 'error',
-			format: logFormat,
+			format: fileFormat,
 			maxsize: 10 * 1024 * 1024,
 			maxFiles: 5
 		})
@@ -65,7 +137,6 @@ if (Config.isProduction || Config.logging.file) {
  */
 const logger: winston.Logger = winston.createLogger({
 	level: Config.logging.level,
-	format: logFormat,
 	transports,
 	exitOnError: false
 })

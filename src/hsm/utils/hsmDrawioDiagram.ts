@@ -46,6 +46,25 @@ export type HsmDrawioDiagram = {
 
 const outputStateLayouts: StateLayout[] = [
 	{
+		path: 'MAIN_ACTIVITY.OBSERVATION_WAIT',
+		x: 90,
+		y: 305,
+		width: 250,
+		height: 100,
+		kind: 'leaf',
+		summary: 'Execution canceled until valid observations return; no flight.'
+	},
+	{
+		path: 'MAIN_ACTIVITY.COMBAT.WAITING',
+		x: 1100,
+		y: 210,
+		width: 220,
+		height: 85,
+		kind: 'leaf',
+		summary:
+			'Controller stopped. Resume on a usable target or bounded changed-condition retry.'
+	},
+	{
 		path: 'MAIN_ACTIVITY.COMBAT.RETREATING',
 		x: 1345,
 		y: 200,
@@ -53,7 +72,7 @@ const outputStateLayouts: StateLayout[] = [
 		height: 270,
 		kind: 'compound',
 		summary:
-			'Continuous escape; no weapon, explosive/uncertain threat or exhausted approach.'
+			'Creeper danger only; finish when no dangerous creeper remains nearby.'
 	},
 	{
 		path: 'MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING.RUNNING',
@@ -62,7 +81,7 @@ const outputStateLayouts: StateLayout[] = [
 		width: 120,
 		height: 45,
 		kind: 'leaf',
-		summary: 'Observe / flee / eat'
+		summary: 'Eat when safe; otherwise defer'
 	},
 	{
 		path: 'MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING.RETRYING',
@@ -435,13 +454,31 @@ const outputStateLayouts: StateLayout[] = [
 	},
 	{
 		path: 'MONITORING.ENTITIES_MONITOR',
-		x: 1960,
-		y: 330,
-		width: 200,
-		height: 95,
-		kind: 'leaf',
+		x: 1820,
+		y: 315,
+		width: 490,
+		height: 180,
+		kind: 'compound',
 		summary:
-			'Invokes entity tracking and keeps target / removal context up to date.'
+			'Owns observation failures and bounded restart; failure never proves safety.'
+	},
+	{
+		path: 'MONITORING.ENTITIES_MONITOR.RUNNING',
+		x: 1850,
+		y: 375,
+		width: 190,
+		height: 85,
+		kind: 'leaf',
+		summary: 'Invokes tracking and publishes current facts and targets.'
+	},
+	{
+		path: 'MONITORING.ENTITIES_MONITOR.RETRYING',
+		x: 2100,
+		y: 375,
+		width: 190,
+		height: 85,
+		kind: 'leaf',
+		summary: 'Invalidates freshness; waits for recoveryRetry before restarting.'
 	}
 ]
 
@@ -514,6 +551,19 @@ const noteLayouts: NoteLayout[] = [
 
 const edgeLayouts: EdgeLayout[] = [
 	{
+		id: 'edge-observer-failed',
+		source: 'MONITORING.ENTITIES_MONITOR.RUNNING',
+		target: 'MONITORING.ENTITIES_MONITOR.RETRYING',
+		label: 'THREAT_OBSERVATION_FAILED'
+	},
+	{
+		id: 'edge-observer-retry',
+		source: 'MONITORING.ENTITIES_MONITOR.RETRYING',
+		target: 'MONITORING.ENTITIES_MONITOR.RUNNING',
+		label: 'after recoveryRetry',
+		dashed: true
+	},
+	{
 		id: 'edge-safety-error-0',
 		source: 'MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING.RUNNING',
 		target: 'MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING.RETRYING',
@@ -556,13 +606,31 @@ const edgeLayouts: EdgeLayout[] = [
 		id: 'edge-combat-retreat',
 		source: 'MAIN_ACTIVITY.COMBAT',
 		target: 'MAIN_ACTIVITY.COMBAT.RETREATING',
-		label: 'unsafe / unarmed / approach exhausted'
+		label: 'nearby dangerous creeper'
 	},
 	{
 		id: 'edge-combat-resume-approach',
-		source: 'MAIN_ACTIVITY.COMBAT.RETREATING',
+		source: 'MAIN_ACTIVITY.COMBAT.WAITING',
 		target: 'MAIN_ACTIVITY.COMBAT.DECIDING',
 		label: 'changed conditions [bounded retry]'
+	},
+	{
+		id: 'edge-combat-wait',
+		source: 'MAIN_ACTIVITY.COMBAT',
+		target: 'MAIN_ACTIVITY.COMBAT.WAITING',
+		label: 'blocked approach / attack unavailable'
+	},
+	{
+		id: 'edge-observation-wait',
+		source: 'MAIN_ACTIVITY',
+		target: 'MAIN_ACTIVITY.OBSERVATION_WAIT',
+		label: 'invalid observation [outside health recovery]'
+	},
+	{
+		id: 'edge-observation-restored',
+		source: 'MAIN_ACTIVITY.OBSERVATION_WAIT',
+		target: 'MAIN_ACTIVITY.RESUMING',
+		label: 'fresh valid observation'
 	},
 	{
 		id: 'edge-root-user-command',
@@ -636,8 +704,8 @@ const edgeLayouts: EdgeLayout[] = [
 	{
 		id: 'edge-combat-retreat-safe',
 		source: 'MAIN_ACTIVITY.COMBAT.RETREATING',
-		target: 'MAIN_ACTIVITY.RESUMING',
-		label: 'RETREAT_SAFE [fresh observation / safe]',
+		target: 'MAIN_ACTIVITY.COMBAT.DECIDING',
+		label: 'RETREAT_SAFE [fresh observation / no dangerous creeper]',
 		strokeColor: '#64748b'
 	},
 	{
@@ -656,7 +724,7 @@ const edgeLayouts: EdgeLayout[] = [
 		id: 'edge-combat-deciding-melee',
 		source: 'MAIN_ACTIVITY.COMBAT.DECIDING',
 		target: 'MAIN_ACTIVITY.COMBAT.MELEE_ATTACKING',
-		label: 'always [melee or fallback]',
+		label: 'always [usable melee weapon / permitted approach]',
 		animated: true,
 		strokeColor: '#dc2626'
 	},

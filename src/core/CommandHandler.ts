@@ -7,6 +7,9 @@ import type BotStateMachine from '@/core/hsm'
 export default class CommandHandler {
 	private bot: Bot
 	private hsm: BotStateMachine
+	private readonly onChat = (username: string, message: string) =>
+		this.chat(username, message)
+	private listening = false
 
 	constructor(bot: Bot, hsm: BotStateMachine) {
 		this.bot = bot
@@ -15,7 +18,15 @@ export default class CommandHandler {
 	}
 
 	init(): void {
-		this.bot.on('chat', this.chat.bind(this))
+		if (this.listening) return
+		this.listening = true
+		this.bot.on('chat', this.onChat)
+	}
+
+	stop(): void {
+		if (!this.listening) return
+		this.listening = false
+		this.bot.off('chat', this.onChat)
 	}
 
 	chat(username: string, message: string): void {

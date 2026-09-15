@@ -12,7 +12,7 @@ export type BaseServiceState = {
 	[key: string]: unknown
 }
 
-interface ServiceAPI<TState extends BaseServiceState, TOptions = {}> {
+export interface ServiceAPI<TState extends BaseServiceState, TOptions = {}> {
 	bot: Bot
 	readonly context: MachineContext
 	readonly state: TState
@@ -37,6 +37,7 @@ interface StatefulServiceConfig<
 	asyncTickInterval?: number
 	timeoutMs?: number
 	operationTimeoutMs?: number
+	errorEvent?: (error: string) => MachineEvent
 	initialState?: Partial<TState>
 	onStart?: ServiceHandler<TState, TOptions>
 	onTick?: ServiceHandler<TState, TOptions>
@@ -74,7 +75,9 @@ export function createStatefulService<
 				abortController.abort()
 				const message = error instanceof Error ? error.message : String(error)
 				Logger.error(`[${config.name}] service failed`, { error: message })
-				sendBack({ type: 'ERROR', error: message })
+				sendBack(
+					config.errorEvent?.(message) ?? { type: 'ERROR', error: message }
+				)
 			}
 			const api: ServiceAPI<TState, TOptions> = {
 				bot,

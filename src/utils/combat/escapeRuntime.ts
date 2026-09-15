@@ -4,10 +4,15 @@ import { Vec3 } from 'vec3'
 
 import type { Bot } from '@/types'
 
+import Logger from '@/config/logger'
+
 import type { MachineContext, ThreatObservation } from '@/hsm/context'
 
 import { GoalXZ } from '@/modules/plugins/goals'
 
+import { isFinitePosition } from '@/utils/minecraft/spatial'
+
+import { EscapeSafety } from './escapeSafety'
 import { hasMovementController } from './movementController'
 import { MovementProgress } from './movementProgress'
 import {
@@ -20,6 +25,9 @@ type EscapeMode = 'NONE' | 'MOVEMENT' | 'PATHFINDER'
 // Upstream incorrectly narrows generator results to ComputedPath (omits partial).
 type RouteSearch = IterableIterator<{ result: PartiallyComputedPath }>
 
+const snapshotThreats = (threats: ThreatObservation[]) =>
+	new Map(threats.map(threat => [threat.entityId, threat.position.clone()]))
+
 /** One invoked behavior owns this runtime; it owns no independent loop or subscriptions. */
 export class EscapeRuntime {
 	private mode: EscapeMode = 'NONE'
@@ -29,10 +37,15 @@ export class EscapeRuntime {
 	private search: RouteSearch | null = null
 	private candidates: Vec3[] = []
 	private blockedAt: Vec3 | null = null
-	private blockedThreat: Vec3 | null = null
+	private blockedThreats = new Map<number, Vec3>()
 	private microFailed = false
 	private steeringThreat: Vec3 | null = null
-	private plannedThreat: { id: number; position: Vec3 } | null = null
+	// Borrowed read-only: pathfinder consumes this array as it reaches its nodes.
+	private routePath: readonly { x: number; y: number; z: number }[] | null =
+		null
+	private routeComplete = false
+	private threats: ThreatObservation[] = []
+	private routeSafety: EscapeSafety | null = null
 
 	constructor(
 		private readonly bot: Bot,
@@ -43,6 +56,12 @@ export class EscapeRuntime {
 		this.movements.allow1by1towers = false
 		this.movements.scafoldingBlocks = []
 		this.movements.allowSprinting = true
+		this.movements.exclusionAreasStep.push(block =>
+			this.routeSafety?.allowsPosition(block.position.offset(0.5, 0, 0.5)) ===
+			false
+				? Infinity
+				: 0
+		)
 		this.progress = new MovementProgress(
 			preferences.escapeNoProgressMs,
 			preferences.movementProgressDistance
@@ -57,7 +76,9 @@ export class EscapeRuntime {
 		this.search = null
 		this.candidates = []
 		this.steeringThreat = null
-		this.plannedThreat = null
+		this.routePath = null
+		this.routeComplete = false
+		this.routeSafety = null
 		this.progress.reset()
 	}
 
@@ -69,19 +90,62 @@ export class EscapeRuntime {
 		)
 			return
 		this.blockedAt = null
-		this.blockedThreat = null
+		this.blockedThreats.clear()
 		this.microFailed = false
 	}
 
-	routeFailed() {
+	routeFailed(reason = 'pathfinder_failure') {
 		if (!this.goal || this.search) return
+		Logger.warn('[SURVIVAL] route_failed', {
+			reason,
+			goal: { x: this.goal.x, z: this.goal.z },
+			remainingCandidates: this.candidates.length
+		})
 		stopPathfinderMovement(this.bot)
 		this.goal = null
+		this.routePath = null
 		this.progress.reset()
+	}
+
+	routeUpdated(result: {
+		status?: string
+		path?: Array<{ x: number; y: number; z: number }>
+	}) {
+		if (this.mode !== 'PATHFINDER' || !this.goal || this.search) return
+		if (result.status === 'noPath' || result.status === 'timeout') {
+			this.routeFailed(result.status)
+			return
+		}
+		this.routeSafety = new EscapeSafety(
+			this.bot.entity.position,
+			this.threats,
+			this.preferences
+		)
+		if (
+			result.path?.length &&
+			this.routeSafety &&
+			!this.routeSafety.allowsPath(
+				this.bot.entity.position,
+				result.path,
+				result.status === 'success'
+			)
+		) {
+			this.routeFailed('unsafe_escape_path')
+			return
+		}
+		this.routePath = result.path ?? null
+		this.routeComplete = result.status === 'success'
 	}
 
 	async physicsTick() {
 		if (this.mode !== 'MOVEMENT' || !this.steeringThreat) return
+		if (
+			!isFinitePosition(this.bot.entity.position) ||
+			!isFinitePosition(this.steeringThreat)
+		) {
+			this.stop()
+			return
+		}
 		const position: Vec3 = this.bot.entity.position
 		let yaw = Math.atan2(
 			this.steeringThreat.x - position.x,
@@ -105,20 +169,30 @@ export class EscapeRuntime {
 		threats: ThreatObservation[],
 		relocation: Vec3 | null
 	): EscapeMode {
+		this.threats = threats
 		const position: Vec3 = this.bot.entity.position
 		if (
-			this.goal &&
-			threat &&
-			(!this.plannedThreat ||
-				threat.entityId !== this.plannedThreat.id ||
-				threat.position.distanceTo(this.plannedThreat.position) >=
-					this.preferences.escapeThreatChangeDistance) &&
-			(this.goal.x - position.x) * (threat.position.x - position.x) +
-				(this.goal.z - position.z) * (threat.position.z - position.z) >
-				0
+			!isFinitePosition(position) ||
+			(threat && !isFinitePosition(threat.position))
 		) {
 			this.stop()
-			this.microFailed = false
+			return 'NONE'
+		}
+		if (this.mode === 'PATHFINDER') {
+			const safety = new EscapeSafety(position, threats, this.preferences)
+			// Refresh all hazards, but stop only when the remaining path became unsafe
+			// or no longer preserves clearance. Progress already made must not be demanded again.
+			if (
+				this.routePath?.length &&
+				!safety.allowsPath(position, this.routePath, this.routeComplete, 0)
+			) {
+				Logger.info('[SURVIVAL] route_replanned', {
+					reason: 'remaining_route_unsafe',
+					threatId: threat?.entityId ?? null
+				})
+				this.stop()
+				this.microFailed = false
+			} else this.routeSafety = safety
 		}
 		if (this.blockedAt) {
 			const displaced =
@@ -126,23 +200,30 @@ export class EscapeRuntime {
 					position.x - this.blockedAt.x,
 					position.z - this.blockedAt.z
 				) >= this.preferences.movementProgressDistance
-			const threatChanged =
-				threat &&
-				this.blockedThreat &&
-				threat.position.distanceTo(this.blockedThreat) >=
-					this.preferences.escapeThreatChangeDistance
-			if (!displaced && !threatChanged) return 'NONE'
+			const threatsChanged = this.hasThreatLayoutChanged(
+				this.blockedThreats,
+				threats
+			)
+			if (!displaced && !threatsChanged) return 'NONE'
 			this.blockedAt = null
+			this.blockedThreats.clear()
 		}
 		if (
 			!relocation &&
 			threat &&
 			threat.distance < 15 &&
+			threats.filter(
+				candidate => candidate.distance <= this.preferences.selfDefenseDistance
+			).length <= 1 &&
 			!this.microFailed &&
 			this.mode !== 'PATHFINDER' &&
 			hasMovementController(this.bot)
 		) {
 			if (this.mode !== 'MOVEMENT') {
+				Logger.info('[SURVIVAL] micro_flee_started', {
+					threatId: threat.entityId,
+					distance: Number(threat.distance.toFixed(2))
+				})
 				stopPathfinderMovement(this.bot)
 				this.progress.reset()
 			}
@@ -154,6 +235,11 @@ export class EscapeRuntime {
 				return this.mode
 			}
 			this.microFailed = true
+			Logger.warn('[SURVIVAL] movement_stalled', {
+				controller: 'MOVEMENT',
+				noProgressMs: this.preferences.escapeNoProgressMs,
+				threatId: threat.entityId
+			})
 			this.stop()
 		}
 		if (this.goal && !this.search) {
@@ -166,15 +252,13 @@ export class EscapeRuntime {
 				this.microFailed = false
 			} else if (this.progress.observe(position, remaining, Date.now()))
 				return 'PATHFINDER'
-			else this.routeFailed()
+			else this.routeFailed('no_actual_progress')
 		}
 		if (this.mode !== 'PATHFINDER') {
 			clearMicroMovement(this.bot)
+			this.routeSafety = new EscapeSafety(position, threats, this.preferences)
 			this.bot.pathfinder.setMovements(this.movements)
 			this.mode = 'PATHFINDER'
-			this.plannedThreat = threat
-				? { id: threat.entityId, position: threat.position.clone() }
-				: null
 			const away = threat
 				? Math.atan2(
 						position.z - threat.position.z,
@@ -198,9 +282,14 @@ export class EscapeRuntime {
 		if (!this.search) {
 			this.goal = this.candidates.shift() ?? null
 			if (!this.goal) {
+				Logger.warn('[SURVIVAL] routes_exhausted', {
+					attempts: this.preferences.escapeRouteAttempts,
+					threatId: threat?.entityId ?? null,
+					position: { x: position.x, y: position.y, z: position.z }
+				})
 				this.stop()
 				this.blockedAt = position.clone()
-				this.blockedThreat = threat?.position.clone() ?? null
+				this.blockedThreats = snapshotThreats(threats)
 				this.bot.chat(
 					'Застрял: проходимый выход не найден. Продолжаю следить за возможностью отхода.'
 				)
@@ -216,16 +305,29 @@ export class EscapeRuntime {
 					searchRadius: this.preferences.fleeTargetDistance * 2
 				}
 			)
+			Logger.info('[SURVIVAL] route_search_started', {
+				goal: { x: this.goal.x, z: this.goal.z },
+				timeoutMs: this.preferences.escapeRouteTimeoutMs,
+				remainingCandidates: this.candidates.length
+			})
 		}
 		const next = this.search.next()
 		if (next.done || next.value.result.status !== 'partial') {
+			Logger.info('[SURVIVAL] route_search_finished', {
+				status: next.done ? 'empty_result' : next.value.result.status,
+				pathLength: next.done ? 0 : next.value.result.path.length,
+				goal: this.goal ? { x: this.goal.x, z: this.goal.z } : null
+			})
 			this.search = null
 			if (
 				!next.done &&
 				next.value.result.status === 'success' &&
 				next.value.result.path.length &&
-				this.goal
+				this.goal &&
+				this.routeSafety?.allowsPath(position, next.value.result.path, true)
 			) {
+				this.routePath = next.value.result.path
+				this.routeComplete = true
 				this.bot.pathfinder.setGoal(
 					new GoalXZ(Math.floor(this.goal.x), Math.floor(this.goal.z))
 				)
@@ -233,6 +335,23 @@ export class EscapeRuntime {
 			} else this.goal = null
 		}
 		return this.mode
+	}
+
+	private hasThreatLayoutChanged(
+		previous: ReadonlyMap<number, Vec3>,
+		threats: ThreatObservation[]
+	) {
+		return (
+			previous.size !== threats.length ||
+			threats.some(threat => {
+				const position = previous.get(threat.entityId)
+				return (
+					!position ||
+					threat.position.distanceTo(position) >=
+						this.preferences.escapeThreatChangeDistance
+				)
+			})
+		)
 	}
 
 	private clearance(position: Vec3, threats: ThreatObservation[]) {

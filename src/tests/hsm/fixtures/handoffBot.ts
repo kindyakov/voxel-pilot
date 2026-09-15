@@ -26,6 +26,16 @@ export const createEntityFixture = (fields: Partial<Entity>): Entity =>
 const { Physics, PlayerState } = require('prismarine-physics')
 
 export class HandoffBot extends EventEmitter {
+	private blockFactory = BlockFactory
+	constructor(version = '1.20.4') {
+		super()
+		this.version = version
+		this.registry = require('minecraft-data')(version)
+		this.blockFactory = require('prismarine-block')(version)
+		this.physics = Physics(this.registry, {
+			getBlock: (position: Vec3) => this.blockAt(position)
+		})
+	}
 	username = 'HandoffBot'
 	version = '1.20.4'
 	registry = registry
@@ -122,7 +132,15 @@ export class HandoffBot extends EventEmitter {
 		)
 	}
 	getEquipmentDestSlot(destination: string) {
-		return destination === 'off-hand' ? 45 : 36
+		return destination === 'off-hand' ? 45 : 36 + this.quickBarSlot
+	}
+	quickBarSlot = 0
+	QUICK_BAR_START = 36
+	setQuickBarSlot(slot: number) {
+		if (slot === this.quickBarSlot) return
+		this.quickBarSlot = slot
+		this.usingItem = false
+		this.emit('heldItemChanged')
 	}
 	supportFeature() {
 		return false
@@ -138,7 +156,7 @@ export class HandoffBot extends EventEmitter {
 		this.usingItem = false
 	}
 	get heldItem() {
-		return this.inventory.slots[36] ?? null
+		return this.inventory.slots[36 + this.quickBarSlot] ?? null
 	}
 	async equip(item: Item, destination: string) {
 		this.equippedItems.push(item.name)
@@ -174,10 +192,10 @@ export class HandoffBot extends EventEmitter {
 		await this.aimGate
 	}
 	blockAt(position: Vec3) {
-		const block = BlockFactory.fromStateId(
+		const block = this.blockFactory.fromStateId(
 			(this.solidAt(position)
-				? registry.blocksByName.stone
-				: registry.blocksByName.air
+				? this.registry.blocksByName.stone
+				: this.registry.blocksByName.air
 			).minStateId,
 			0
 		)
@@ -186,9 +204,13 @@ export class HandoffBot extends EventEmitter {
 	}
 }
 
-export const createHarness = (backgroundTracking = false) => {
-	const bot = new HandoffBot()
-	const sword = new ItemFactory(registry.itemsByName.iron_sword.id, 1)
+export const createHarness = (
+	backgroundTracking = false,
+	version = '1.20.4'
+) => {
+	const bot = new HandoffBot(version)
+	const VersionItem = require('prismarine-item')(version)
+	const sword = new VersionItem(bot.registry.itemsByName.iron_sword.id, 1)
 	sword.slot = 36
 	bot.inventory.items = () => [sword]
 	bot.loadPlugin(pathfinderPackage.pathfinder)
@@ -229,7 +251,7 @@ export const createHarness = (backgroundTracking = false) => {
 			}
 		})
 	const world = { getBlock: bot.blockAt.bind(bot) }
-	const physics = Physics(registry, world)
+	const physics = Physics(bot.registry, world)
 	const step = () => {
 		bot.emit('physicsTick')
 		bot.emit('physicTick')

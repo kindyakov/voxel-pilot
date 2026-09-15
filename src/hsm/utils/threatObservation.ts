@@ -8,10 +8,10 @@ import type { ThreatObservation } from '@/hsm/context'
 import { readCreeperSignals } from '@/utils/combat/mobSignals'
 import type { ThreatKind } from '@/utils/combat/selfDefense'
 
-/** Keep bounded last-observed positions, never mutable lost Entity references. */
+/** Retain lost threats, but clear visibly safe entities in the current scan. */
 export const observeThreats = (
 	previous: ThreatObservation[],
-	enemies: Entity[],
+	observedEntities: Entity[],
 	position: Vec3,
 	now: number,
 	retentionMs: number,
@@ -28,30 +28,34 @@ export const observeThreats = (
 			})
 		}
 	}
-	for (const enemy of enemies) {
-		if (!enemy.position || enemy.isValid === false) continue
-		const kind = assess(enemy)
+	for (const entity of observedEntities) {
+		if (!entity.position || entity.isValid === false) continue
+		const kind = assess(entity)
 		if (!kind) {
-			byId.delete(enemy.id)
+			byId.delete(entity.id)
 			continue
 		}
 		const signals =
-			enemy.name === 'creeper' ? readCreeperSignals(bot, enemy) : null
+			entity.name === 'creeper' ? readCreeperSignals(bot, entity) : null
 		const creeper = signals
 			? {
 					...signals,
 					disengaged:
-						byId.get(enemy.id)?.creeper?.disengaged === true ||
+						byId.get(entity.id)?.creeper?.disengaged === true ||
 						signals.swelling !== false ||
 						signals.ignited !== false
 				}
 			: null
-		byId.set(enemy.id, {
+		byId.set(entity.id, {
 			creeper,
 			kind,
-			entityId: enemy.id,
-			position: new Vec3(enemy.position.x, enemy.position.y, enemy.position.z),
-			distance: position.distanceTo(enemy.position),
+			entityId: entity.id,
+			position: new Vec3(
+				entity.position.x,
+				entity.position.y,
+				entity.position.z
+			),
+			distance: position.distanceTo(entity.position),
 			lastObservedAt: now,
 			observed: true
 		})

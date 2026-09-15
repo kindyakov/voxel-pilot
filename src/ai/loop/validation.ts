@@ -1,3 +1,5 @@
+import { Vec3 } from 'vec3'
+
 import type { Bot } from '@/types'
 
 import type { PendingExecution } from '../contracts/execution.js'
@@ -108,7 +110,8 @@ export const validateExecutionTool = (
 		taskContext.category === 'craft' &&
 		execution.toolName === 'navigate_to'
 	) {
-		const blockName = bot.blockAt(execution.args.position)?.name
+		const { x, y, z } = execution.args.position
+		const blockName = bot.blockAt(new Vec3(x, y, z))?.name
 		if (
 			blockName &&
 			(

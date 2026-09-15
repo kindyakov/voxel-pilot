@@ -16,3 +16,43 @@ export const vanillaFollowRange: Readonly<Record<string, number>> = {
 	wither_skeleton: 16,
 	blaze: 48
 }
+
+type MobPolicyOverride =
+	| 'passive'
+	| 'avoid'
+	| 'uncertain'
+	| 'slime_size'
+	| 'spider_light'
+	| 'enderman_anger'
+	| 'neutral_anger'
+	| 'rabbit_variant'
+
+/** Exceptions to registry categories, not a second catalogue of ordinary mobs.
+ * A category is a baseline, not evidence of a mob's current target.
+ * Conditions without a reliable observer remain uncertain, never attackable.
+ */
+export const mobPolicyOverrides: Readonly<
+	Partial<Record<string, MobPolicyOverride>>
+> = {
+	wither: 'avoid',
+	ender_dragon: 'avoid',
+	warden: 'avoid',
+	// The 1.20.x registry groups undead horses with hostile mobs.
+	skeleton_horse: 'passive',
+	zombie_horse: 'passive',
+	// These need signals/conditions that the baseline model does not observe.
+	giant: 'uncertain',
+	piglin: 'uncertain',
+	zombified_piglin: 'uncertain',
+	polar_bear: 'uncertain',
+	iron_golem: 'uncertain',
+	goat: 'uncertain',
+	pufferfish: 'uncertain',
+	slime: 'slime_size',
+	spider: 'spider_light',
+	cave_spider: 'spider_light',
+	enderman: 'enderman_anger',
+	wolf: 'neutral_anger',
+	bee: 'neutral_anger',
+	rabbit: 'rabbit_variant'
+}
