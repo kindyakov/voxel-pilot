@@ -7,7 +7,8 @@ import {
 	fromPromise,
 	not,
 	setup,
-	stateIn
+	stateIn,
+	stopChild
 } from 'xstate'
 import type { AnyActorLogic } from 'xstate'
 
@@ -18,6 +19,7 @@ import Logger from '@/config/logger'
 import { miningActions } from '@/hsm/actions/mining.actions'
 import { safetyActions } from '@/hsm/actions/safety.actions'
 import combatActors from '@/hsm/actors/combat.actors'
+import { idleGaze } from '@/hsm/actors/idleGaze.actors'
 import monitoringActors from '@/hsm/actors/monitoring.actors'
 import { primitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive'
 import { primitiveCloseWindow } from '@/hsm/actors/primitives/primitiveCloseWindow.primitive'
@@ -292,6 +294,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			recoveryRetry: ({ context }) => context.preferences.recoveryRetryMs
 		},
 		actors: {
+			idleGaze,
 			serviceTacticalRetreat: survivalActors.serviceTacticalRetreat,
 			worldObservation,
 			windowLifetime: fromCallback<MachineEvent, WindowRuntime>(
@@ -1121,7 +1124,13 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 						}
 					},
 					IDLE: {
+						invoke: {
+							id: 'idleGaze',
+							src: 'idleGaze',
+							input: ({ context }) => ({ bot: context.bot!, options: {} })
+						},
 						on: {
+							IDLE_GAZE_FAILED: { actions: stopChild('idleGaze') },
 							UPDATE_COMBAT_TARGET: [
 								{
 									guard: eventCanAutoEnterCombat,

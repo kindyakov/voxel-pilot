@@ -146,7 +146,7 @@ const outputStateLayouts: StateLayout[] = [
 		height: 100,
 		kind: 'leaf',
 		summary:
-			'Resting state. Waits for commands, combat triggers, or urgent needs.'
+			'Resting state. Watches nearby peaceful entities while alive; yields gaze to tasks, combat and survival.'
 	},
 	{
 		path: 'MAIN_ACTIVITY.RESUMING',

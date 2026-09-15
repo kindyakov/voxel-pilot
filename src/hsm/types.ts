@@ -84,7 +84,8 @@ export type PrimitiveEvents =
 	| { type: 'FOLLOWING_STOPPED'; reason: string }
 	| { type: 'FOLLOWING_FAILED'; reason: string }
 
-export type SystemEvents = { type: 'ERROR'; error: string }
+export type SystemEvents =
+	{ type: 'ERROR'; error: string } | { type: 'IDLE_GAZE_FAILED'; error: string }
 
 export type MachineEvent =
 	| HealthEvents

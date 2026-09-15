@@ -85,6 +85,7 @@ export interface MachineContext {
 		autoEat: boolean
 		autoDefend: boolean
 		followDistance: number
+		idleGazeRadius: number
 		maxDistToEnemy: number
 		maxObservDist: number
 		threatRetentionMs: number
@@ -203,6 +204,7 @@ export const context: MachineContext = {
 		autoEat: true,
 		autoDefend: true,
 		followDistance: 3,
+		idleGazeRadius: 8,
 		maxDistToEnemy: 20,
 		maxObservDist: 50,
 		threatRetentionMs: 2000,

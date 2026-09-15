@@ -69,6 +69,8 @@ Current top-level states:
 - `MAIN_ACTIVITY.TASKS`
 - `MONITORING`
 
+While alive in `MAIN_ACTIVITY.IDLE`, the bot smoothly watches visible players and peaceful mobs within `preferences.idleGazeRadius` (8 blocks by default). It prefers the nearest, holds attention for 3–5 seconds, and occasionally picks another. Obstacles block visibility, endermen are excluded, and losing the entity ends tracking. This only turns the view, without walking; tasks, combat, and survival take over when idle ends.
+
 `TASKS` uses this loop:
 
 - `IDLE`
