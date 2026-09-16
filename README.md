@@ -2,15 +2,16 @@
 
 Language versions: [English](README.md) | [Русский](README.ru.md)
 
-VoxelPilot is an AI-assisted Minecraft bot built with [mineflayer](https://github.com/PrismarineJS/mineflayer) and [XState](https://stately.ai/docs/xstate). It connects to a Minecraft server, builds a deterministic snapshot of the world state, asks an LLM for the next tool decision, and executes the resulting action through a hierarchical state machine.
+VoxelPilot is an autonomous Minecraft bot harness with an optional AI pilot. Built with [mineflayer](https://github.com/PrismarineJS/mineflayer) and [XState](https://stately.ai/docs/xstate), it connects to a Minecraft server and runs a hierarchical state machine that lives independently of LLM availability. The AI/LLM acts as a pilot: with it, the bot solves complex tasks autonomously; without it, the bot operates via player commands (`:`) and its own situational logic — surviving, monitoring, and self-defending.
 
 ## What It Does
 
 - Connects to a Minecraft server and exposes bot state through a structured control loop.
-- Uses an AI agent loop to choose between informational and execution tools.
+- Uses an optional AI pilot to choose between informational and execution tools; without AI the bot lives autonomously (monitoring, tactical retreat, eating from inventory, self-defense, idle gaze).
 - Runs physical actions through isolated primitives such as navigating, breaking, crafting, and smelting.
 - Persists long-term memory in SQLite under `data/`.
 - Supports optional plugins for pathfinding, combat, auto-eating, inventory viewing, and more.
+- Survives AI/network failures: active goals are paused (not cleared) and resumed when AI returns.
 
 ## Requirements
 

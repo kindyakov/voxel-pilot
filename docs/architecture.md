@@ -15,8 +15,9 @@ The current design is small and explicit:
 
 ## System Goal
 
-The goal of this project is not to hardcode behavior for individual requests such as "make an axe".
-The goal is to build a reliable agent runtime for a Minecraft bot.
+The goal of this project is not to hardcode behavior for individual requests such as "make an axe". The goal is to build a reliable autonomous harness for a Minecraft bot with an optional AI pilot.
+
+The XState harness is the runtime authority and survives independently of LLM availability. The AI/LLM is a pilot: it makes the bot more autonomous and able to solve complex tasks, but the bot works via player commands (`:stop`, etc.) and its internal situational logic when the pilot is off.
 
 That runtime must:
 
@@ -25,16 +26,18 @@ That runtime must:
 - execute actions only through clear bot primitives
 - keep the bot state consistent through the HSM
 - remain resilient to failures, interruptions, and partial progress
+- survive a complete loss of AI: pause the active goal (not clear it), switch to autonomous survival (monitoring, tactical retreat, eating from inventory, self-defense with weapons, idle gaze)
 - allow the agent loop, tools, and primitives to evolve without rewriting the system around one-off cases
+- support a start toggle for AI (disabled mode as a first-class operational mode)
 
-In practical terms, the LLM is not the source of truth for behavior.
-The source of truth must be the runtime contract:
+In practical terms, the LLM is not the source of truth for behavior. The source of truth must be the runtime contract:
 
 - deterministic world snapshot in
 - one valid decision at a time
 - execution through bounded primitives
 - explicit success or failure back into the machine
 - recovery paths that preserve bot integrity
+- goal pause (not clear) on AI failure, with resume when AI returns
 
 ## Non-Goals
 
@@ -44,6 +47,7 @@ This system is not meant to:
 - let the model improvise arbitrary behavior outside the tool and primitive contract
 - couple core architecture to isolated examples or regressions
 - trade reliability for short-term "it worked once" behavior
+- treat solo completion of the game with AI as a goal (it is an experiment, not MVP)
 
 ## Runtime Flow
 
