@@ -1,4 +1,4 @@
-import type { Block } from '@/types'
+import type { Block } from '@/types/index.js'
 
 /** Doors and gates change collision geometry without changing their block type. */
 export const hasPassabilityChanged = (

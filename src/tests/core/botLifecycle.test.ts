@@ -2,16 +2,16 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
-import Config from '@/config/config'
-import Logger from '@/config/logger'
+import Config from '@/config/config.js'
+import Logger from '@/config/logger.js'
 
-import MinecraftBot from '@/core/bot'
-import { MemoryManager } from '@/core/memory'
-import { ProfileMemoryStore } from '@/core/profile'
+import MinecraftBot from '@/core/bot.js'
+import { MemoryManager } from '@/core/memory/index.js'
+import { ProfileMemoryStore } from '@/core/profile/index.js'
 
-import { createHarness } from '../hsm/fixtures/handoffBot'
+import { createHarness } from '../hsm/fixtures/handoffBot.js'
 
 const deferred = () => {
 	let resolve!: () => void

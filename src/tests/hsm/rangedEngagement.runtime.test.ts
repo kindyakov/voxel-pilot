@@ -3,11 +3,11 @@ import { createRequire } from 'node:module'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import type { Entity, Item } from '@/types'
+import type { Entity, Item } from '@/types/index.js'
 
-import { loadHawkeye } from '@/modules/plugins/hawkeye'
+import { loadHawkeye } from '@/modules/plugins/hawkeye.js'
 
-import { createEntityFixture, createHarness } from './fixtures/handoffBot'
+import { createEntityFixture, createHarness } from './fixtures/handoffBot.js'
 
 const fixture = (t: test.TestContext, tracking = false) => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

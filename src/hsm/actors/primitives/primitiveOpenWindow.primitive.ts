@@ -1,6 +1,6 @@
 import type { MemoryPosition } from '@/core/memory/types.js'
 
-import { createStatefulService } from '@/hsm/helpers/createStatefulService'
+import { createStatefulService } from '@/hsm/helpers/createStatefulService.js'
 
 export const primitiveOpenWindow = createStatefulService<
 	{ isActive: boolean },

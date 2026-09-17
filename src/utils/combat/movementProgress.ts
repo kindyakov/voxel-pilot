@@ -1,4 +1,4 @@
-import type { Vec3 } from '@/types'
+import type { Vec3 } from '@/types/index.js'
 
 export type ProgressAnchor = {
 	x: number

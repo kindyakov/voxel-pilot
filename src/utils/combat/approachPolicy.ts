@@ -1,8 +1,8 @@
 import { Vec3 } from 'vec3'
 
-import type { MachineContext } from '@/hsm/context'
+import type { MachineContext } from '@/hsm/context.js'
 
-import { type ProgressAnchor, observeProgress } from './movementProgress'
+import { type ProgressAnchor, observeProgress } from './movementProgress.js'
 
 export interface ApproachAttempt {
 	progress: ProgressAnchor | null

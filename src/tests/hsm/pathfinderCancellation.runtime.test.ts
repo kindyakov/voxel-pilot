@@ -6,7 +6,7 @@ import { setImmediate as flush } from 'node:timers/promises'
 import pathfinderPackage from 'mineflayer-pathfinder'
 import { Vec3 } from 'vec3'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
 import {
 	BlockFactory,
@@ -14,7 +14,7 @@ import {
 	ItemFactory,
 	createHarness,
 	registry
-} from './fixtures/handoffBot'
+} from './fixtures/handoffBot.js'
 
 const require = createRequire(import.meta.url)
 const { goals } = pathfinderPackage

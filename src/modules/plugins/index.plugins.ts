@@ -1,15 +1,15 @@
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
 import {
 	initArmorManager,
 	loadArmorManager
-} from '@/modules/plugins/armorManager'
-import { initAutoEat, loadAutoEat } from '@/modules/plugins/autoEat'
-import { loadHawkeye } from '@/modules/plugins/hawkeye'
-import { loadMovement } from '@/modules/plugins/movement'
-import { initPathfinder, loadPathfinder } from '@/modules/plugins/pathfinder'
-import { loadPvp } from '@/modules/plugins/pvp'
-import { loadTool } from '@/modules/plugins/tool'
+} from '@/modules/plugins/armorManager.js'
+import { initAutoEat, loadAutoEat } from '@/modules/plugins/autoEat.js'
+import { loadHawkeye } from '@/modules/plugins/hawkeye.js'
+import { loadMovement } from '@/modules/plugins/movement.js'
+import { initPathfinder, loadPathfinder } from '@/modules/plugins/pathfinder.js'
+import { loadPvp } from '@/modules/plugins/pvp.js'
+import { loadTool } from '@/modules/plugins/tool.js'
 
 export const loadPlugins = (bot: Bot): void => {
 	loadPathfinder(bot)

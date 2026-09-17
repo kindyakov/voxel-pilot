@@ -1,6 +1,6 @@
 import { Vec3 as Vec3Class } from 'vec3'
 
-import type { Block, Bot, Vec3 } from '@/types'
+import type { Block, Bot, Vec3 } from '@/types/index.js'
 
 export interface AnalyzedBlock {
 	block: Block

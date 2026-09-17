@@ -4,9 +4,9 @@ import chalk from 'chalk'
 import path from 'path'
 import winston from 'winston'
 
-import type { WinstonLogLevel } from '@/types'
+import type { WinstonLogLevel } from '@/types/index.js'
 
-import Config from '@/config/config'
+import Config from '@/config/config.js'
 
 // Chalk отключает цвета, когда не видит TTY (сервисный запуск, pipe),
 // поэтому уровень включается принудительно: консольный транспорт

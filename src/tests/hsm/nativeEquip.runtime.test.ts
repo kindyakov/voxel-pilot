@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import { HandoffBot, ItemFactory, registry } from './fixtures/handoffBot'
+import { HandoffBot, ItemFactory, registry } from './fixtures/handoffBot.js'
 
 const require = createRequire(import.meta.url)
 

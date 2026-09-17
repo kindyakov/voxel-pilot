@@ -4,14 +4,14 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { loadAutoEat } from '@/modules/plugins/autoEat'
+import { loadAutoEat } from '@/modules/plugins/autoEat.js'
 
 import {
 	ItemFactory,
 	createEntityFixture,
 	createHarness,
 	registry
-} from './fixtures/handoffBot'
+} from './fixtures/handoffBot.js'
 
 for (const name of ['llama', 'trader_llama']) {
 	test(`an unprovoked ${name} does not trigger retreat or combat`, async t => {

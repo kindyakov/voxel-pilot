@@ -1,13 +1,13 @@
 import { Vec3 as Vec3Class } from 'vec3'
 
-import type { Block, Vec3 } from '@/types'
+import type { Block, Vec3 } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 import {
 	type BaseServiceState,
 	createStatefulService
-} from '@/hsm/helpers/createStatefulService'
+} from '@/hsm/helpers/createStatefulService.js'
 
 interface PlacingState extends BaseServiceState {
 	blockName: string | null

@@ -1,5 +1,5 @@
-import type { MachineContext } from '@/hsm/context'
-import type { MachineEvent } from '@/hsm/types'
+import type { MachineContext } from '@/hsm/context.js'
+import type { MachineEvent } from '@/hsm/types.js'
 
 /** Simulates both outputs of the observer when observation itself is not under test. */
 export const publishEntities = (

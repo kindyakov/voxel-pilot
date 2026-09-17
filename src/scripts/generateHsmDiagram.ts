@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 import { buildHsmDrawioDiagram } from '@/hsm/utils/hsmDrawioDiagram.js'
 

@@ -18,6 +18,10 @@ VoxelPilot - AI-бот для Minecraft на базе Mineflayer и XState. Бо
 3. Заполните `MINECRAFT_*` и `AI_*`.
 4. Запустите `npm run dev`.
 
+## Docker
+
+Один бот на контейнер: `docker compose up -d --build` (использует `.env`, тома `./data` и `./logs`, порты `3000`/`3001`). Для нескольких ботов продублируйте сервис со своим именем, `.env` и томами.
+
 ## Конфигурация
 
 Подробный список переменных окружения находится в [docs/configuration.md](docs/configuration.md).

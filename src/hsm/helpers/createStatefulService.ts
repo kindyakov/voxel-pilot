@@ -1,11 +1,11 @@
 import { fromCallback } from 'xstate'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import type { MachineContext } from '@/hsm/context'
-import type { MachineEvent } from '@/hsm/types'
+import type { MachineContext } from '@/hsm/context.js'
+import type { MachineEvent } from '@/hsm/types.js'
 
 export type BaseServiceState = {
 	isActive: boolean

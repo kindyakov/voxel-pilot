@@ -53,6 +53,17 @@ VoxelPilot is an autonomous Minecraft bot harness with an optional AI pilot. Bui
    npm start
    ```
 
+## Docker
+
+One bot per container. Build once, then run with your `.env` and persistent volumes:
+
+```bash
+docker build -t voxel-pilot .
+docker compose up -d --build
+```
+
+`compose.yaml` wires `.env`, `./data` and `./logs` volumes, viewer/inventory ports (`3000`/`3001`) and restart policy. For more bots, duplicate the service with its own name, `.env` file and volumes.
+
 ## Configuration
 
 Required variables:

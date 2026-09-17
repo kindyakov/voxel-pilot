@@ -1,30 +1,30 @@
 import { Vec3 } from 'vec3'
 
-import type { Block } from '@/types'
+import type { Block } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 import {
 	hasFreshThreatObservation,
 	isHungerRecoverySafe,
 	isRecoveryDistanceSafe,
 	isRecoverySafe
-} from '@/hsm/guards/survival.guards'
+} from '@/hsm/guards/survival.guards.js'
 import {
 	type BaseServiceState,
 	createStatefulService
-} from '@/hsm/helpers/createStatefulService'
+} from '@/hsm/helpers/createStatefulService.js'
 
-import { EscapeRuntime } from '@/utils/combat/escapeRuntime'
-import { hasPassabilityChanged } from '@/utils/combat/passability'
-import { refreshRecoveryRelocation } from '@/utils/combat/recoveryRelocation'
+import { EscapeRuntime } from '@/utils/combat/escapeRuntime.js'
+import { hasPassabilityChanged } from '@/utils/combat/passability.js'
+import { refreshRecoveryRelocation } from '@/utils/combat/recoveryRelocation.js'
 import {
 	stopMeleeAttack,
 	stopRangedAttack
-} from '@/utils/combat/runtimeControl'
-import { nearestRetreatCreeper } from '@/utils/combat/selfDefense'
-import type { SurvivalMode } from '@/utils/combat/survival'
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+} from '@/utils/combat/runtimeControl.js'
+import { nearestRetreatCreeper } from '@/utils/combat/selfDefense.js'
+import type { SurvivalMode } from '@/utils/combat/survival.js'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 interface SafetyState extends BaseServiceState {
 	escape: EscapeRuntime | null

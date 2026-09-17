@@ -4,14 +4,14 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { loadHawkeye } from '@/modules/plugins/hawkeye'
+import { loadHawkeye } from '@/modules/plugins/hawkeye.js'
 
 import {
 	ItemFactory,
 	createEntityFixture,
 	createHarness,
 	registry
-} from './fixtures/handoffBot'
+} from './fixtures/handoffBot.js'
 
 test('a swelling creeper outside the selected target interrupts melee and cannot restart melee after defusing', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

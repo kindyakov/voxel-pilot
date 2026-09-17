@@ -2,24 +2,24 @@ import { Movements } from 'mineflayer-pathfinder'
 import type { PartiallyComputedPath } from 'mineflayer-pathfinder'
 import { Vec3 } from 'vec3'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import type { MachineContext, ThreatObservation } from '@/hsm/context'
+import type { MachineContext, ThreatObservation } from '@/hsm/context.js'
 
-import { GoalXZ } from '@/modules/plugins/goals'
+import { GoalXZ } from '@/modules/plugins/goals.js'
 
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
-import { EscapeSafety } from './escapeSafety'
-import { hasMovementController } from './movementController'
-import { MovementProgress } from './movementProgress'
+import { EscapeSafety } from './escapeSafety.js'
+import { hasMovementController } from './movementController.js'
+import { MovementProgress } from './movementProgress.js'
 import {
 	clearMicroMovement,
 	enableMicroMovement,
 	stopPathfinderMovement
-} from './runtimeControl'
+} from './runtimeControl.js'
 
 type EscapeMode = 'NONE' | 'MOVEMENT' | 'PATHFINDER'
 // Upstream incorrectly narrows generator results to ComputedPath (omits partial).

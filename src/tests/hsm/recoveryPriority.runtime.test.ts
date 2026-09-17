@@ -4,7 +4,7 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { createHarness } from './fixtures/handoffBot'
+import { createHarness } from './fixtures/handoffBot.js'
 
 test('recovery failures cannot release critical survival, and recovery requires health and safety', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

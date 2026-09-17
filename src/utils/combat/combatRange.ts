@@ -1,8 +1,8 @@
-import type { Entity } from '@/types'
+import type { Entity } from '@/types/index.js'
 
-import type { MachineContext } from '@/hsm/context'
+import type { MachineContext } from '@/hsm/context.js'
 
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 /** Actors and guards must use the same live geometry, not a cached scan distance. */
 export const resolveCombatTarget = (

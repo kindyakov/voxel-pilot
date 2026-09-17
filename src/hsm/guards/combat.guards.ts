@@ -1,24 +1,24 @@
-import type { MachineContext } from '@/hsm/context'
-import type { MachineEvent } from '@/hsm/types'
-import type { MachineGuardParams } from '@/hsm/types'
+import type { MachineContext } from '@/hsm/context.js'
+import type { MachineEvent } from '@/hsm/types.js'
+import type { MachineGuardParams } from '@/hsm/types.js'
 
 import {
 	approachIsBlocked,
 	canResumeApproach
-} from '@/utils/combat/approachPolicy'
+} from '@/utils/combat/approachPolicy.js'
 import {
 	getMeleeExitRange,
 	hasRangedLoadout,
 	resolveCombatTarget
-} from '@/utils/combat/combatRange'
-import { canSeeEnemy } from '@/utils/combat/enemyVisibility'
+} from '@/utils/combat/combatRange.js'
+import { canSeeEnemy } from '@/utils/combat/enemyVisibility.js'
 import {
 	forbidsMelee,
 	hasCombatWeapon,
 	isDefensiveCandidate,
 	requiresAvoidance
-} from '@/utils/combat/selfDefense'
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+} from '@/utils/combat/selfDefense.js'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 const canUseRanged = ({ context }: MachineGuardParams): boolean => {
 	const target = resolveCombatTarget(context)

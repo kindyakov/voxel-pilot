@@ -4,7 +4,7 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { createHarness } from './fixtures/handoffBot'
+import { createHarness } from './fixtures/handoffBot.js'
 
 test('real movement and physics increase separation in every flee direction, with a pathfinder fallback', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

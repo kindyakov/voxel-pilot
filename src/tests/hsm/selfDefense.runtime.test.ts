@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import { ItemFactory, createHarness, registry } from './fixtures/handoffBot'
+import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
 
 test('slime with missing metadata remains an uncertain threat rather than disappearing', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

@@ -15,8 +15,8 @@ import { createTaskContext } from '../../ai/taskContext.js'
 import type { MachineContext } from '../../hsm/context.js'
 import { createBotMachine } from '../../hsm/machine.js'
 import type { Bot } from '../../types/index.js'
-import { createEntityFixture, registry } from './fixtures/handoffBot'
-import { publishEntities } from './fixtures/publishEntities'
+import { createEntityFixture, registry } from './fixtures/handoffBot.js'
+import { publishEntities } from './fixtures/publishEntities.js'
 
 test('model arguments rejected by the real turn are explained to the next HSM turn', async () => {
 	const bot = new FakeBot()

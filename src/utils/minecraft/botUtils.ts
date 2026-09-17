@@ -1,6 +1,6 @@
-import type { Bot, Entity, Item } from '@/types'
+import type { Bot, Entity, Item } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 type Priority = 'none' | 'low' | 'medium' | 'high' | 'critical'
 

@@ -1,16 +1,16 @@
-import type { Bot, Entity, Vec3 } from '@/types'
+import type { Bot, Entity, Vec3 } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import type { MachineContext } from '@/hsm/context'
-import { hasFreshThreatObservation } from '@/hsm/guards/survival.guards'
+import type { MachineContext } from '@/hsm/context.js'
+import { hasFreshThreatObservation } from '@/hsm/guards/survival.guards.js'
 import {
 	type BaseServiceState,
 	createStatefulService
-} from '@/hsm/helpers/createStatefulService'
+} from '@/hsm/helpers/createStatefulService.js'
 
-import { assessMob } from '@/utils/combat/selfDefense'
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+import { assessMob } from '@/utils/combat/selfDefense.js'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 const MIN_HOLD_MS = 3000
 const MAX_HOLD_MS = 5000

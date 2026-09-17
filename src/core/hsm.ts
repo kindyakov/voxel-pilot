@@ -1,20 +1,20 @@
 import type { BotEvents } from 'mineflayer'
 import { type ActorRefFrom, createActor } from 'xstate'
 
-import type { Bot, Entity } from '@/types'
+import type { Bot, Entity } from '@/types/index.js'
 
-import Config from '@/config/config'
-import Logger from '@/config/logger'
+import Config from '@/config/config.js'
+import Logger from '@/config/logger.js'
 
-import type { MachineContext } from '@/hsm/context'
-import { machine } from '@/hsm/machine'
-import type { MachineEvent } from '@/hsm/types'
-import { AntiLoopGuard } from '@/hsm/utils/antiLoop'
-import { attachHsmDiagnostics } from '@/hsm/utils/runtimeDiagnostics'
+import type { MachineContext } from '@/hsm/context.js'
+import { machine } from '@/hsm/machine.js'
+import type { MachineEvent } from '@/hsm/types.js'
+import { AntiLoopGuard } from '@/hsm/utils/antiLoop.js'
+import { attachHsmDiagnostics } from '@/hsm/utils/runtimeDiagnostics.js'
 
 import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
 
-import { cleanupPathfindCache } from '@/utils/combat/enemyVisibility'
+import { cleanupPathfindCache } from '@/utils/combat/enemyVisibility.js'
 
 interface StoreLifecycle {
 	started: boolean

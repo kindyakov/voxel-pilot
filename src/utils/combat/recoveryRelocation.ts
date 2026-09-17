@@ -1,8 +1,8 @@
 import type { Vec3 } from 'vec3'
 
-import type { MachineContext, RecoveryRelocation } from '@/hsm/context'
+import type { MachineContext, RecoveryRelocation } from '@/hsm/context.js'
 
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 /** Preserve the obligation without manufacturing a position while observations are invalid. */
 export const planRecoveryRelocation = (

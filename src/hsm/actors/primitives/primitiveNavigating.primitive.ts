@@ -1,13 +1,13 @@
-import type { Block, Entity, Vec3 } from '@/types'
+import type { Block, Entity, Vec3 } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 import {
 	type BaseServiceState,
 	createStatefulService
-} from '@/hsm/helpers/createStatefulService'
+} from '@/hsm/helpers/createStatefulService.js'
 
-import { GoalNear } from '@/modules/plugins/goals'
+import { GoalNear } from '@/modules/plugins/goals.js'
 
 interface NavigatingState extends BaseServiceState {
 	targetPosition: Vec3 | null

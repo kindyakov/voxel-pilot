@@ -1,13 +1,13 @@
-import type { Entity } from '@/types'
+import type { Entity } from '@/types/index.js'
 
-import type { MachineContext } from '@/hsm/context'
+import type { MachineContext } from '@/hsm/context.js'
 
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
-import { hasRangedLoadout } from './combatRange'
-import { canSeeEnemy } from './enemyVisibility'
-import { mobPolicyOverrides, vanillaFollowRange } from './mobProfiles'
-import { readMobMetadata } from './mobSignals'
+import { hasRangedLoadout } from './combatRange.js'
+import { canSeeEnemy } from './enemyVisibility.js'
+import { mobPolicyOverrides, vanillaFollowRange } from './mobProfiles.js'
+import { readMobMetadata } from './mobSignals.js'
 
 export type ThreatKind = 'hostile' | 'uncertain' | 'avoid'
 

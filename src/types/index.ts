@@ -14,8 +14,8 @@ export type WinstonLogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 export interface Bot extends MineflayerBot {
 	movements: Movements
-	utils: import('../utils/minecraft/botUtils').BotUtils
-	hsm: import('../core/hsm').default
+	utils: import('../utils/minecraft/botUtils.js').BotUtils
+	hsm: import('../core/hsm.js').default
 	memory: MemoryManager
 	profileMemory?: ProfileMemoryStore
 }

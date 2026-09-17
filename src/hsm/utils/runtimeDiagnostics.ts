@@ -1,11 +1,11 @@
 import type { ActorRefFrom, StateValue } from 'xstate'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import type { MachineContext } from '@/hsm/context'
-import type { machine } from '@/hsm/machine'
+import type { MachineContext } from '@/hsm/context.js'
+import type { machine } from '@/hsm/machine.js'
 
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 const heartbeatMs = 5000
 const rounded = (value: number) =>

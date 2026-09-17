@@ -1,13 +1,13 @@
-import type { Entity } from '@/types'
+import type { Entity } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 import {
 	type BaseServiceState,
 	createStatefulService
-} from '@/hsm/helpers/createStatefulService'
+} from '@/hsm/helpers/createStatefulService.js'
 
-import { GoalFollow } from '@/modules/plugins/goals'
+import { GoalFollow } from '@/modules/plugins/goals.js'
 
 interface FollowingState extends BaseServiceState {
 	target: Entity | null

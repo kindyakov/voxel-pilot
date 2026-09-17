@@ -1,6 +1,6 @@
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 export const stopMeleeAttack = (
 	bot: Bot,

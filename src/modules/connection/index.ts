@@ -1,8 +1,8 @@
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import { initPlugins, loadPlugins } from '@/modules/plugins/index.plugins'
+import { initPlugins, loadPlugins } from '@/modules/plugins/index.plugins.js'
 
 export const initConnection = (bot: Bot): (() => void) => {
 	const onSpawn = () => {

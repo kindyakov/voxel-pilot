@@ -1,4 +1,4 @@
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
 import type { MemoryManager } from '@/core/memory/index.js'
 import type { UserProfilePrompt } from '@/core/profile/index.js'

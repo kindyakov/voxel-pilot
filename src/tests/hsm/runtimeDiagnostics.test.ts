@@ -4,11 +4,11 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import { attachHsmDiagnostics } from '@/hsm/utils/runtimeDiagnostics'
+import { attachHsmDiagnostics } from '@/hsm/utils/runtimeDiagnostics.js'
 
-import { createHarness } from './fixtures/handoffBot'
+import { createHarness } from './fixtures/handoffBot.js'
 
 test('diagnostics expose nested recovery, bounded heartbeat and stop without leaking command text', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

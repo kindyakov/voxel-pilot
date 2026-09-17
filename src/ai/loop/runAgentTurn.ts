@@ -1,4 +1,4 @@
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 import { createAgentClient } from '@/ai/client.js'
 import { isTransportApiError } from '@/ai/client/retry.js'

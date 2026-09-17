@@ -2,12 +2,12 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import type { Item } from '@/types'
+import type { Item } from '@/types/index.js'
 
-import { initAutoEat, loadAutoEat } from '@/modules/plugins/autoEat'
-import { loadHawkeye } from '@/modules/plugins/hawkeye'
+import { initAutoEat, loadAutoEat } from '@/modules/plugins/autoEat.js'
+import { loadHawkeye } from '@/modules/plugins/hawkeye.js'
 
-import { ItemFactory, createHarness, registry } from './fixtures/handoffBot'
+import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
 
 test('canceling an unfinished melee start cannot reacquire movement from survival', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] })

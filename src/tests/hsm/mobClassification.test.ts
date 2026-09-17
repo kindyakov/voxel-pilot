@@ -3,11 +3,11 @@ import test from 'node:test'
 
 import { Vec3 } from 'vec3'
 
-import { context as initialContext } from '@/hsm/context'
+import { context as initialContext } from '@/hsm/context.js'
 
-import { assessMob } from '@/utils/combat/selfDefense'
+import { assessMob } from '@/utils/combat/selfDefense.js'
 
-import { HandoffBot, createEntityFixture } from './fixtures/handoffBot'
+import { HandoffBot, createEntityFixture } from './fixtures/handoffBot.js'
 
 for (const version of ['1.20.1', '1.20.4', '1.20.6']) {
 	test(`${version}: registry categories classify ordinary mobs independently of representation type`, () => {

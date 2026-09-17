@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import { createHarness } from './fixtures/handoffBot'
+import { createHarness } from './fixtures/handoffBot.js'
 
 test('melee starts after equip without waiting for the periodic tick', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

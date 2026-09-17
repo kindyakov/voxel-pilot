@@ -1,4 +1,4 @@
-import type { Bot, Entity } from '@/types'
+import type { Bot, Entity } from '@/types/index.js'
 
 /** Never assume metadata offsets across protocol versions. */
 export const readMobMetadata = (

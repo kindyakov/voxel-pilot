@@ -12,46 +12,46 @@ import {
 } from 'xstate'
 import type { AnyActorLogic } from 'xstate'
 
-import type { Bot, Entity } from '@/types'
+import type { Bot, Entity } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import { goalActions } from '@/hsm/actions/goal.actions'
-import { miningActions } from '@/hsm/actions/mining.actions'
-import { safetyActions } from '@/hsm/actions/safety.actions'
-import combatActors from '@/hsm/actors/combat.actors'
-import { idleGaze } from '@/hsm/actors/idleGaze.actors'
-import monitoringActors from '@/hsm/actors/monitoring.actors'
-import { primitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive'
-import { primitiveCloseWindow } from '@/hsm/actors/primitives/primitiveCloseWindow.primitive'
-import { primitiveFollowing } from '@/hsm/actors/primitives/primitiveFollowing.primitive'
-import { primitiveNavigating } from '@/hsm/actors/primitives/primitiveNavigating.primitive'
-import { primitiveOpenWindow } from '@/hsm/actors/primitives/primitiveOpenWindow.primitive'
-import { primitivePlacing } from '@/hsm/actors/primitives/primitivePlacing.primitive'
-import { primitiveSearchBlock } from '@/hsm/actors/primitives/primitiveSearchBlock.primitive'
-import { primitiveTransferItem } from '@/hsm/actors/primitives/primitiveTransferItem.primitive'
-import survivalActors from '@/hsm/actors/survival.actors'
-import { worldObservation } from '@/hsm/actors/worldObservation.actors'
-import { type MachineContext, context } from '@/hsm/context'
+import { goalActions } from '@/hsm/actions/goal.actions.js'
+import { miningActions } from '@/hsm/actions/mining.actions.js'
+import { safetyActions } from '@/hsm/actions/safety.actions.js'
+import combatActors from '@/hsm/actors/combat.actors.js'
+import { idleGaze } from '@/hsm/actors/idleGaze.actors.js'
+import monitoringActors from '@/hsm/actors/monitoring.actors.js'
+import { primitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive.js'
+import { primitiveCloseWindow } from '@/hsm/actors/primitives/primitiveCloseWindow.primitive.js'
+import { primitiveFollowing } from '@/hsm/actors/primitives/primitiveFollowing.primitive.js'
+import { primitiveNavigating } from '@/hsm/actors/primitives/primitiveNavigating.primitive.js'
+import { primitiveOpenWindow } from '@/hsm/actors/primitives/primitiveOpenWindow.primitive.js'
+import { primitivePlacing } from '@/hsm/actors/primitives/primitivePlacing.primitive.js'
+import { primitiveSearchBlock } from '@/hsm/actors/primitives/primitiveSearchBlock.primitive.js'
+import { primitiveTransferItem } from '@/hsm/actors/primitives/primitiveTransferItem.primitive.js'
+import survivalActors from '@/hsm/actors/survival.actors.js'
+import { worldObservation } from '@/hsm/actors/worldObservation.actors.js'
+import { type MachineContext, context } from '@/hsm/context.js'
 import combatGuards, {
 	eventCanAutoEnterCombat,
 	eventCanSkirmishRanged,
 	eventCanSkirmishRangedFromMelee,
 	eventEnemyInMeleeRange,
 	isCombatTargetUpdateEvent
-} from '@/hsm/guards/combat.guards'
-import { goalGuards } from '@/hsm/guards/goal.guards'
-import { miningGuards } from '@/hsm/guards/mining.guards'
+} from '@/hsm/guards/combat.guards.js'
+import { goalGuards } from '@/hsm/guards/goal.guards.js'
+import { miningGuards } from '@/hsm/guards/mining.guards.js'
 import {
 	canAttemptRecovery,
 	canPreemptForHungerRecovery,
 	hasFreshThreatObservation,
 	isHungerRecoverySafe,
 	isRecoverySafe
-} from '@/hsm/guards/survival.guards'
-import type { MachineEvent, MiningTaskData } from '@/hsm/types'
-import { getActorError } from '@/hsm/utils/actorEvent'
-import { observeThreats } from '@/hsm/utils/threatObservation'
+} from '@/hsm/guards/survival.guards.js'
+import type { MachineEvent, MiningTaskData } from '@/hsm/types.js'
+import { getActorError } from '@/hsm/utils/actorEvent.js'
+import { observeThreats } from '@/hsm/utils/threatObservation.js'
 
 import type { AgentTurnResult } from '@/ai/contracts/agentTurn.js'
 import { appendConversationEntry } from '@/ai/conversationHistory.js'
@@ -65,8 +65,8 @@ import { type WindowRuntime, getWindowRuntime } from '@/ai/runtime/window.js'
 import { createTaskContext } from '@/ai/taskContext.js'
 import { parseExecution } from '@/ai/tools/executionDefinitions.js'
 
-import { refreshApproaches } from '@/utils/combat/approachPolicy'
-import { hasMovementController } from '@/utils/combat/movementController'
+import { refreshApproaches } from '@/utils/combat/approachPolicy.js'
+import { hasMovementController } from '@/utils/combat/movementController.js'
 import {
 	assessMob,
 	hasCombatWeapon,
@@ -74,8 +74,8 @@ import {
 	nearestRetreatCreeper,
 	requiresAvoidance,
 	selectCombatTarget
-} from '@/utils/combat/selfDefense'
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+} from '@/utils/combat/selfDefense.js'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 const defaultThinkingActor = fromPromise<
 	AgentTurnResult,

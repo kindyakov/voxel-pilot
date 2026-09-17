@@ -1,4 +1,4 @@
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
 import type { WindowRuntime } from '@/ai/runtime/window.js'
 

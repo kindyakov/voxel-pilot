@@ -1,6 +1,6 @@
-import type { Block, Entity, Vec3 } from '@/types'
+import type { Block, Entity, Vec3 } from '@/types/index.js'
 
-import type { MachineContext } from '@/hsm/context'
+import type { MachineContext } from '@/hsm/context.js'
 
 import type { WindowTransferResult } from '@/ai/runtime/window.js'
 

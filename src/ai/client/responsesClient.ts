@@ -1,8 +1,8 @@
 import OpenAI from 'openai'
 import type { Responses } from 'openai/resources/responses/responses'
 
-import defaultConfig from '@/config/config'
-import Logger from '@/config/logger'
+import defaultConfig from '@/config/config.js'
+import Logger from '@/config/logger.js'
 
 import type {
 	AgentModelClient,

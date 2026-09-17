@@ -1,8 +1,8 @@
 import { Vec3 } from 'vec3'
 
-import type { MachineContext, ThreatObservation } from '@/hsm/context'
+import type { MachineContext, ThreatObservation } from '@/hsm/context.js'
 
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 type Position = Pick<Vec3, 'x' | 'y' | 'z'>
 

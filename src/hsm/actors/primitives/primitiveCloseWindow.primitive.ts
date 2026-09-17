@@ -1,4 +1,4 @@
-import { createStatefulService } from '@/hsm/helpers/createStatefulService'
+import { createStatefulService } from '@/hsm/helpers/createStatefulService.js'
 
 export const primitiveCloseWindow = createStatefulService({
 	name: 'primitiveCloseWindow',

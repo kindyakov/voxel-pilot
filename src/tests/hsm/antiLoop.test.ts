@@ -7,7 +7,7 @@ import BotStateMachine from '../../core/hsm.js'
 import { MemoryManager } from '../../core/memory/index.js'
 import { ProfileMemoryStore } from '../../core/profile/index.js'
 import { AntiLoopGuard } from '../../hsm/utils/antiLoop.js'
-import { createHarness } from './fixtures/handoffBot'
+import { createHarness } from './fixtures/handoffBot.js'
 
 test('HSM observer resets the guard after its cooldown', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

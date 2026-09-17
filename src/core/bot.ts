@@ -2,13 +2,13 @@ import EventEmitter from 'node:events'
 
 import * as mineflayer from 'mineflayer'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
-import Config from '@/config/config'
-import Logger from '@/config/logger'
+import Config from '@/config/config.js'
+import Logger from '@/config/logger.js'
 
 import CommandHandler from '@/core/CommandHandler.js'
-import BotStateMachine from '@/core/hsm'
+import BotStateMachine from '@/core/hsm.js'
 import { MemoryManager } from '@/core/memory/index.js'
 import { ProfileMemoryStore } from '@/core/profile/index.js'
 
@@ -16,7 +16,7 @@ import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
 
 import { initConnection } from '@/modules/connection/index.js'
 
-import { BotUtils } from '@/utils/minecraft/botUtils'
+import { BotUtils } from '@/utils/minecraft/botUtils.js'
 
 interface ConnectionDependencies {
 	createBot: (options: typeof Config.minecraft) => Bot

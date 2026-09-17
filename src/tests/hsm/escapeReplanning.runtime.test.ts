@@ -4,12 +4,12 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import type { ThreatObservation } from '@/hsm/context'
+import type { ThreatObservation } from '@/hsm/context.js'
 
-import { EscapeRuntime } from '@/utils/combat/escapeRuntime'
-import { EscapeSafety } from '@/utils/combat/escapeSafety'
+import { EscapeRuntime } from '@/utils/combat/escapeRuntime.js'
+import { EscapeSafety } from '@/utils/combat/escapeSafety.js'
 
-import { createEntityFixture, createHarness } from './fixtures/handoffBot'
+import { createEntityFixture, createHarness } from './fixtures/handoffBot.js'
 
 const threat = (entityId: number, x: number, z: number): ThreatObservation => ({
 	entityId,

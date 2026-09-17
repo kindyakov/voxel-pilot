@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import { createHarness } from './fixtures/handoffBot'
+import { createHarness } from './fixtures/handoffBot.js'
 
 for (const version of ['1.20.1', '1.20.4', '1.20.6']) {
 	test(`${version}: armed bot attacks a close zombie and physically escapes at critical health`, async t => {

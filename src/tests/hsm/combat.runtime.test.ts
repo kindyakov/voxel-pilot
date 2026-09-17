@@ -6,11 +6,11 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
 
-import type { Item } from '@/types'
+import type { Item } from '@/types/index.js'
 
 import { createBotMachine } from '../../hsm/machine.js'
-import { ItemFactory, registry } from './fixtures/handoffBot'
-import { publishEntities } from './fixtures/publishEntities'
+import { ItemFactory, registry } from './fixtures/handoffBot.js'
+import { publishEntities } from './fixtures/publishEntities.js'
 
 const hangingActor = fromPromise(async () => {
 	return await new Promise<never>(() => {})

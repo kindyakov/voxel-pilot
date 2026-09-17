@@ -1,6 +1,6 @@
 import armorManager from 'mineflayer-armor-manager'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
 export const loadArmorManager = (bot: Bot): void => {
 	bot.loadPlugin(armorManager)

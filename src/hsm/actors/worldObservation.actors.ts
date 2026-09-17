@@ -1,11 +1,11 @@
 import { Vec3 } from 'vec3'
 import { fromCallback } from 'xstate'
 
-import type { Block, Bot, Entity } from '@/types'
+import type { Block, Bot, Entity } from '@/types/index.js'
 
-import type { MachineEvent } from '@/hsm/types'
+import type { MachineEvent } from '@/hsm/types.js'
 
-import { hasPassabilityChanged } from '@/utils/combat/passability'
+import { hasPassabilityChanged } from '@/utils/combat/passability.js'
 
 /** Mineflayer normalizes version-specific damage packets; a source is optional. */
 export const worldObservation = fromCallback<MachineEvent, { bot: Bot }>(

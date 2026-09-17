@@ -5,14 +5,14 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { loadHawkeye } from '@/modules/plugins/hawkeye'
+import { loadHawkeye } from '@/modules/plugins/hawkeye.js'
 
 import {
 	ItemFactory,
 	createEntityFixture,
 	createHarness,
 	registry
-} from './fixtures/handoffBot'
+} from './fixtures/handoffBot.js'
 
 const require = createRequire(import.meta.url)
 

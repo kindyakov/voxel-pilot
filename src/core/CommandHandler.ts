@@ -1,7 +1,7 @@
-import Config, { type Config as ConfigInstance } from '@/config/config'
-import logger from '@/config/logger'
+import Config, { type Config as ConfigInstance } from '@/config/config.js'
+import logger from '@/config/logger.js'
 
-import type { UserEvents } from '@/hsm/types'
+import type { UserEvents } from '@/hsm/types.js'
 
 import {
 	AI_PILOT_UNAVAILABLE_COMMAND_MESSAGE,

@@ -6,13 +6,13 @@ import { setImmediate as flush } from 'node:timers/promises'
 import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
-import { createBotMachine } from '@/hsm/machine'
+import { createBotMachine } from '@/hsm/machine.js'
 
-import { loadHawkeye } from '@/modules/plugins/hawkeye'
+import { loadHawkeye } from '@/modules/plugins/hawkeye.js'
 
-import { createEntityFixture, createHarness } from './fixtures/handoffBot'
+import { createEntityFixture, createHarness } from './fixtures/handoffBot.js'
 
 const require = createRequire(import.meta.url)
 const World = require('prismarine-world')('1.20.6')

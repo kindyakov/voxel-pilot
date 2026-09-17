@@ -3,14 +3,14 @@ import { createRequire } from 'node:module'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import { initAutoEat, loadAutoEat } from '@/modules/plugins/autoEat'
+import { initAutoEat, loadAutoEat } from '@/modules/plugins/autoEat.js'
 
 import {
 	HandoffBot,
 	ItemFactory,
 	createHarness,
 	registry
-} from './fixtures/handoffBot'
+} from './fixtures/handoffBot.js'
 
 const require = createRequire(import.meta.url)
 const deferred = () => {

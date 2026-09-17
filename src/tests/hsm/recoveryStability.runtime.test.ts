@@ -4,9 +4,9 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { loadAutoEat } from '@/modules/plugins/autoEat'
+import { loadAutoEat } from '@/modules/plugins/autoEat.js'
 
-import { ItemFactory, createHarness, registry } from './fixtures/handoffBot'
+import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
 
 test('regeneration holds the safe band and resumes escape only at the danger boundary', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

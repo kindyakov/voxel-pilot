@@ -4,9 +4,9 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { loadAutoEat } from '@/modules/plugins/autoEat'
+import { loadAutoEat } from '@/modules/plugins/autoEat.js'
 
-import { ItemFactory, createHarness, registry } from './fixtures/handoffBot'
+import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
 
 test('an active hunger meal continues inside the 30/20 band and stops at 20 without fleeing', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

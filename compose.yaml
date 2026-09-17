@@ -1,0 +1,15 @@
+# Single bot per container. For more bots, duplicate the service
+# with its own name, .env file and data/logs volumes.
+services:
+  bot:
+    build: .
+    image: voxel-pilot:latest
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    restart: unless-stopped

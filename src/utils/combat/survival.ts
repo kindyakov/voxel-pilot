@@ -1,6 +1,6 @@
-import type { Entity } from '@/types'
+import type { Entity } from '@/types/index.js'
 
-import type { MachineContext } from '@/hsm/context'
+import type { MachineContext } from '@/hsm/context.js'
 
 export type SurvivalMode = 'IDLE' | 'EATING' | 'MOVEMENT' | 'PATHFINDER'
 type Position = { x: number; y: number; z: number }

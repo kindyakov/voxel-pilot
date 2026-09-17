@@ -2,17 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import combatGuards from '@/hsm/guards/combat.guards'
+import combatGuards from '@/hsm/guards/combat.guards.js'
 import {
 	hasFreshThreatObservation,
 	isRecoverySafe
-} from '@/hsm/guards/survival.guards'
+} from '@/hsm/guards/survival.guards.js'
 
-import { loadAutoEat } from '@/modules/plugins/autoEat'
+import { loadAutoEat } from '@/modules/plugins/autoEat.js'
 
-import { ItemFactory, createHarness, registry } from './fixtures/handoffBot'
+import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
 
 test('invalid observation interrupts ranged combat into a stopped observation wait', t => {
 	const { bot, actor, enemy } = createHarness()

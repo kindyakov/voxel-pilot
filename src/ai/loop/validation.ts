@@ -1,6 +1,6 @@
 import { Vec3 } from 'vec3'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
 import type { PendingExecution } from '../contracts/execution.js'
 import type { TaskContext } from '../taskContext.js'

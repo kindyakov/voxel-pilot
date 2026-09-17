@@ -9,7 +9,7 @@ import {
 	ItemFactory,
 	createHarness,
 	registry
-} from './fixtures/handoffBot'
+} from './fixtures/handoffBot.js'
 
 test('approach without actual progress stops without fleeing and unchanged observations do not reset its limit', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

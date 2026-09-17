@@ -1,27 +1,27 @@
 import { Weapons } from 'minecrafthawkeye'
 
-import type { Bot, Entity } from '@/types'
+import type { Bot, Entity } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import type { MachineContext } from '@/hsm/context'
+import type { MachineContext } from '@/hsm/context.js'
 import {
 	type BaseServiceState,
 	type ServiceAPI,
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService.js'
-import type { MachineEvent } from '@/hsm/types'
+import type { MachineEvent } from '@/hsm/types.js'
 
 import {
 	getMeleeExitRange,
 	hasRangedLoadout,
 	resolveCombatTarget
-} from '@/utils/combat/combatRange'
-import { canSeeEnemy } from '@/utils/combat/enemyVisibility'
+} from '@/utils/combat/combatRange.js'
+import { canSeeEnemy } from '@/utils/combat/enemyVisibility.js'
 import {
 	stopMeleeAttack,
 	stopRangedAttack
-} from '@/utils/combat/runtimeControl'
+} from '@/utils/combat/runtimeControl.js'
 
 interface MeleeAttackState extends BaseServiceState {
 	currentTarget: Entity | null

@@ -1,6 +1,6 @@
 import pathFinderPkg from 'mineflayer-pathfinder'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
 const { pathfinder, Movements } = pathFinderPkg
 

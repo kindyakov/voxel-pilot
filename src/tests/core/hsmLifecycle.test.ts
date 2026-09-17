@@ -5,12 +5,12 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import BotStateMachine from '@/core/hsm'
-import { MemoryManager } from '@/core/memory'
-import { ProfileMemoryStore } from '@/core/profile'
+import BotStateMachine from '@/core/hsm.js'
+import { MemoryManager } from '@/core/memory/index.js'
+import { ProfileMemoryStore } from '@/core/profile/index.js'
 
-import { createHarness } from '../hsm/fixtures/handoffBot'
-import { createEntityFixture } from '../hsm/fixtures/handoffBot'
+import { createHarness } from '../hsm/fixtures/handoffBot.js'
+import { createEntityFixture } from '../hsm/fixtures/handoffBot.js'
 
 const deferred = () => {
 	let resolve!: () => void

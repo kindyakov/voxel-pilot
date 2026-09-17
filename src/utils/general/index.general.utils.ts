@@ -1,5 +1,5 @@
-import { generateId } from './generateId'
-import { sleep } from './sleep'
+import { generateId } from './generateId.js'
+import { sleep } from './sleep.js'
 
 export default {
 	sleep,

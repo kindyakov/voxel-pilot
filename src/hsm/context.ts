@@ -1,4 +1,4 @@
-import type { Bot, Entity, Item, Vec3 } from '@/types'
+import type { Bot, Entity, Item, Vec3 } from '@/types/index.js'
 
 import type { PendingExecution } from '@/ai/contracts/execution.js'
 import type { ConversationEntry } from '@/ai/conversationHistory.js'
@@ -9,8 +9,8 @@ import {
 import type { WindowRuntime } from '@/ai/runtime/window.js'
 import type { TaskContext } from '@/ai/taskContext.js'
 
-import type { ApproachAttempt } from '@/utils/combat/approachPolicy'
-import type { ThreatKind } from '@/utils/combat/selfDefense'
+import type { ApproachAttempt } from '@/utils/combat/approachPolicy.js'
+import type { ThreatKind } from '@/utils/combat/selfDefense.js'
 
 export interface ThreatObservation {
 	creeper: {

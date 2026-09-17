@@ -1,4 +1,4 @@
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 interface AntiLoopGuardConfig {
 	maxTransitionsPerSecond: number

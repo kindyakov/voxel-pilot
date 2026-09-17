@@ -4,7 +4,7 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { createEntityFixture, createHarness } from './fixtures/handoffBot'
+import { createEntityFixture, createHarness } from './fixtures/handoffBot.js'
 
 for (const enemyX of [3, 18]) {
 	test(`a corridor toward an enemy at ${enemyX} is not an escape route`, async t => {

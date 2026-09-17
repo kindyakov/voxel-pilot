@@ -1,15 +1,15 @@
 import { setTimeout as delay } from 'node:timers/promises'
 
-import type { Block } from '@/types'
+import type { Block } from '@/types/index.js'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
 import {
 	type BaseServiceState,
 	createStatefulService
-} from '@/hsm/helpers/createStatefulService'
+} from '@/hsm/helpers/createStatefulService.js'
 
-import { GoalNear } from '@/modules/plugins/goals'
+import { GoalNear } from '@/modules/plugins/goals.js'
 
 interface PrimitiveBreakingState extends BaseServiceState {
 	block: Block | null

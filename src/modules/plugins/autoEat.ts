@@ -1,6 +1,6 @@
 import { loader as autoEat } from 'mineflayer-auto-eat'
 
-import type { Bot } from '@/types'
+import type { Bot } from '@/types/index.js'
 
 export const loadAutoEat = (bot: Bot): void => {
 	bot.loadPlugin(autoEat)

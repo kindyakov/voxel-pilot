@@ -1,4 +1,4 @@
-import defaultConfig, { type Config as ConfigInstance } from '@/config/config'
+import defaultConfig, { type Config as ConfigInstance } from '@/config/config.js'
 
 import type { AgentModelClient } from '../contracts/agentClient.js'
 import { isAiPilotDisabled } from '../pilotAvailability.js'

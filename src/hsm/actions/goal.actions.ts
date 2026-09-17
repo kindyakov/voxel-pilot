@@ -1,8 +1,8 @@
 import { assign } from 'xstate'
 
-import type { MachineContext } from '@/hsm/context'
-import type { MachineEvent } from '@/hsm/types'
-import { getActorError } from '@/hsm/utils/actorEvent'
+import type { MachineContext } from '@/hsm/context.js'
+import type { MachineEvent } from '@/hsm/types.js'
+import { getActorError } from '@/hsm/utils/actorEvent.js'
 
 import { advanceGoalExecution } from '@/ai/goalExecution.js'
 import { createTaskContext } from '@/ai/taskContext.js'

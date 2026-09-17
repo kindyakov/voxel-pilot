@@ -1,13 +1,13 @@
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import type { MachineContext } from '@/hsm/context'
+import type { MachineContext } from '@/hsm/context.js'
 import {
 	type BaseServiceState,
 	createStatefulService
-} from '@/hsm/helpers/createStatefulService'
+} from '@/hsm/helpers/createStatefulService.js'
 
-import { assessMob, selectCombatDecision } from '@/utils/combat/selfDefense'
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+import { assessMob, selectCombatDecision } from '@/utils/combat/selfDefense.js'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 interface TrackingState extends BaseServiceState {
 	decisionKey: string | null

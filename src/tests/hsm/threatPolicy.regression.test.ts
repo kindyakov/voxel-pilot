@@ -4,7 +4,7 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { createEntityFixture, createHarness } from './fixtures/handoffBot'
+import { createEntityFixture, createHarness } from './fixtures/handoffBot.js'
 
 for (const otherSource of ['skeleton', 'unknown']) {
 	test(`a daylight spider remains an aggressor after damage from ${otherSource}`, async t => {

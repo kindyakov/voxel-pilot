@@ -1,7 +1,7 @@
-import type { MachineContext } from '@/hsm/context'
-import type { MachineGuardParams } from '@/hsm/types'
+import type { MachineContext } from '@/hsm/context.js'
+import type { MachineGuardParams } from '@/hsm/types.js'
 
-import { isFinitePosition } from '@/utils/minecraft/spatial'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 export const hasFreshThreatObservation = (context: MachineContext) =>
 	isFinitePosition(context.bot?.entity?.position) &&

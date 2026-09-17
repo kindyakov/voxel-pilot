@@ -1,9 +1,9 @@
-import type { Block } from '@/types'
+import type { Block } from '@/types/index.js'
 
 import {
 	type BaseServiceState,
 	createStatefulService
-} from '@/hsm/helpers/createStatefulService'
+} from '@/hsm/helpers/createStatefulService.js'
 import {
 	type AnalyzedBlock,
 	type YRangeFilter,
@@ -11,7 +11,7 @@ import {
 	filterByYRange,
 	filterSafeBlocks,
 	selectBestBlocks
-} from '@/hsm/utils/blockAnalysis'
+} from '@/hsm/utils/blockAnalysis.js'
 
 interface SearchBlockState extends BaseServiceState {
 	blockName: string

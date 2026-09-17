@@ -6,11 +6,11 @@ import { setImmediate as flush } from 'node:timers/promises'
 import { Weapons } from 'minecrafthawkeye'
 import itemLoader from 'prismarine-item'
 
-import type { Bot, Item } from '@/types'
+import type { Bot, Item } from '@/types/index.js'
 
-import { loadHawkeye } from '@/modules/plugins/hawkeye'
+import { loadHawkeye } from '@/modules/plugins/hawkeye.js'
 
-import { createEntityFixture, createHarness } from './fixtures/handoffBot'
+import { createEntityFixture, createHarness } from './fixtures/handoffBot.js'
 
 const require = createRequire(import.meta.url)
 const loadInventory: (

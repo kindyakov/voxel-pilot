@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { readCreeperSignals, readMobMetadata } from '@/utils/combat/mobSignals'
+import { readCreeperSignals, readMobMetadata } from '@/utils/combat/mobSignals.js'
 
 import {
 	HandoffBot,
 	createEntityFixture,
 	registry
-} from './fixtures/handoffBot'
+} from './fixtures/handoffBot.js'
 
 test('creeper decoder uses named keys and keeps swelling, charge and ignition distinct', () => {
 	const bot = new HandoffBot()

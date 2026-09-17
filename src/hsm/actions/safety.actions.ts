@@ -1,17 +1,17 @@
 import { assign } from 'xstate'
 
-import type { MachineContext } from '@/hsm/context'
-import type { MachineEvent } from '@/hsm/types'
+import type { MachineContext } from '@/hsm/context.js'
+import type { MachineEvent } from '@/hsm/types.js'
 
 import {
 	blockApproach,
 	recordApproach,
 	resumeApproach
-} from '@/utils/combat/approachPolicy'
+} from '@/utils/combat/approachPolicy.js'
 import {
 	planRecoveryRelocation,
 	refreshRecoveryRelocation
-} from '@/utils/combat/recoveryRelocation'
+} from '@/utils/combat/recoveryRelocation.js'
 
 export const safetyActions = {
 	refreshRecoveryPosition: assign<

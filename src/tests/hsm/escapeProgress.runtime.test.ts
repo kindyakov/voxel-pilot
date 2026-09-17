@@ -4,7 +4,7 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { createHarness } from './fixtures/handoffBot'
+import { createHarness } from './fixtures/handoffBot.js'
 
 for (const distance of [2, 6]) {
 	test(`an active escape route is replaced when a threat moves ${distance} blocks behind the bot`, async t => {

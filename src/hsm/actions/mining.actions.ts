@@ -1,9 +1,9 @@
 import { assign } from 'xstate'
 
-import Logger from '@/config/logger'
+import Logger from '@/config/logger.js'
 
-import type { MachineContext } from '@/hsm/context'
-import type { MachineEvent, MiningTaskData } from '@/hsm/types'
+import type { MachineContext } from '@/hsm/context.js'
+import type { MachineEvent, MiningTaskData } from '@/hsm/types.js'
 
 const getMiningTaskData = (context: MachineContext): MiningTaskData | null =>
 	(context.taskData as MiningTaskData | null) ?? null

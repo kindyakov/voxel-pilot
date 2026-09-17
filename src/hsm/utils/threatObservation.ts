@@ -1,12 +1,12 @@
 import { Vec3 } from 'vec3'
 
-import type { Entity } from '@/types'
-import type { Bot } from '@/types'
+import type { Entity } from '@/types/index.js'
+import type { Bot } from '@/types/index.js'
 
-import type { ThreatObservation } from '@/hsm/context'
+import type { ThreatObservation } from '@/hsm/context.js'
 
-import { readCreeperSignals } from '@/utils/combat/mobSignals'
-import type { ThreatKind } from '@/utils/combat/selfDefense'
+import { readCreeperSignals } from '@/utils/combat/mobSignals.js'
+import type { ThreatKind } from '@/utils/combat/selfDefense.js'
 
 /** Retain lost threats, but clear visibly safe entities in the current scan. */
 export const observeThreats = (

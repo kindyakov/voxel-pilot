@@ -1,5 +1,5 @@
-import type { MachineContext } from '@/hsm/context'
-import { getActorError, getActorEventProperty } from '@/hsm/utils/actorEvent'
+import type { MachineContext } from '@/hsm/context.js'
+import { getActorError, getActorEventProperty } from '@/hsm/utils/actorEvent.js'
 
 import { classifyApiError } from '@/ai/client/retry.js'
 

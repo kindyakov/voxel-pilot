@@ -1,5 +1,5 @@
-import type { MachineContext } from '@/hsm/context'
-import type { MiningTaskData } from '@/hsm/types'
+import type { MachineContext } from '@/hsm/context.js'
+import type { MiningTaskData } from '@/hsm/types.js'
 
 const getMiningTaskData = (context: MachineContext): MiningTaskData | null =>
 	(context.taskData as MiningTaskData | null) ?? null
