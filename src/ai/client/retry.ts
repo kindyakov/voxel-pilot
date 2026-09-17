@@ -1,3 +1,5 @@
+import { AI_PILOT_UNAVAILABLE_CODE } from '../pilotAvailability.js'
+
 export interface ApiRetryOptions {
 	maxAttempts?: number
 	baseDelayMs?: number
@@ -7,11 +9,10 @@ export interface ApiRetryOptions {
 const DEFAULT_MAX_ATTEMPTS = 3
 const DEFAULT_BASE_DELAY_MS = 1000
 
-const RETRYABLE_STATUS_CODES = new Set([
-	408, 409, 425, 429, 500, 502, 503, 504
-])
+const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504])
 
 const RETRYABLE_ERROR_CODES = new Set([
+	'ECONNREFUSED',
 	'ECONNRESET',
 	'ECONNABORTED',
 	'ETIMEDOUT',
@@ -30,26 +31,60 @@ const RETRYABLE_ERROR_NAMES = new Set([
 	'GatewayTimeoutError'
 ])
 
-export const isRetryableApiError = (error: unknown): boolean => {
-	if (!error || typeof error !== 'object') {
-		return false
-	}
+export type ApiErrorKind = 'abort' | 'transport' | 'other'
 
-	const record = error as Record<string, unknown>
-	if (record.name === 'AbortError') {
-		return false
-	}
-
-	if (typeof record.status === 'number') {
-		return RETRYABLE_STATUS_CODES.has(record.status)
-	}
-
-	if (typeof record.code === 'string') {
-		return RETRYABLE_ERROR_CODES.has(record.code)
-	}
-
-	return typeof record.name === 'string' && RETRYABLE_ERROR_NAMES.has(record.name)
+export interface ApiErrorClassification {
+	kind: ApiErrorKind
+	retryable: boolean
 }
+
+const getErrorProperty = (error: unknown, key: string): unknown =>
+	error !== null && (typeof error === 'object' || typeof error === 'function')
+		? Reflect.get(error, key)
+		: undefined
+
+const getStringProperty = (error: unknown, key: string): string | null => {
+	const value = getErrorProperty(error, key)
+	return typeof value === 'string' ? value : null
+}
+
+export const classifyApiError = (error: unknown): ApiErrorClassification => {
+	const name = getStringProperty(error, 'name')
+	const directCode = getStringProperty(error, 'code')
+	if (name === 'AbortError' || directCode === 'ABORT_ERR') {
+		return { kind: 'abort', retryable: false }
+	}
+
+	if (directCode === AI_PILOT_UNAVAILABLE_CODE) {
+		return { kind: 'transport', retryable: false }
+	}
+
+	const status = getErrorProperty(error, 'status')
+	if (typeof status === 'number') {
+		const retryable = RETRYABLE_STATUS_CODES.has(status)
+		return {
+			kind: retryable ? 'transport' : 'other',
+			retryable
+		}
+	}
+
+	const cause = getErrorProperty(error, 'cause')
+	const code = directCode ?? getStringProperty(cause, 'code')
+	if (code && RETRYABLE_ERROR_CODES.has(code)) {
+		return { kind: 'transport', retryable: true }
+	}
+	if (name && (RETRYABLE_ERROR_NAMES.has(name) || name === 'TimeoutError')) {
+		return { kind: 'transport', retryable: true }
+	}
+
+	return { kind: 'other', retryable: false }
+}
+
+export const isTransportApiError = (error: unknown): boolean =>
+	classifyApiError(error).kind === 'transport'
+
+export const isRetryableApiError = (error: unknown): boolean =>
+	classifyApiError(error).retryable
 
 const sleep = (delayMs: number, signal?: AbortSignal): Promise<void> =>
 	new Promise((resolve, reject) => {

@@ -1,6 +1,7 @@
 import Logger from '@/config/logger'
 
 import { createAgentClient } from '@/ai/client.js'
+import { isTransportApiError } from '@/ai/client/retry.js'
 import { assembleAgentPrompt } from '@/ai/prompt.js'
 import {
 	AGENT_TOOLS,
@@ -83,7 +84,8 @@ export const runAgentTurn = async (
 			return {
 				kind: 'failed',
 				reason: `Model request failed: ${reason}`,
-				transcript
+				transcript,
+				isTransport: isTransportApiError(error)
 			}
 		}
 		input.signal?.throwIfAborted()
@@ -265,7 +267,8 @@ export const runAgentTurn = async (
 				return {
 					kind: 'failed',
 					reason: `Inline tool "${toolCall.name}" threw: ${reason}`,
-					transcript
+					transcript,
+					isTransport: false
 				}
 			}
 			input.signal?.throwIfAborted()

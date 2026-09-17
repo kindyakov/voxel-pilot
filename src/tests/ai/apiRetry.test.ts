@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { AiPilotUnavailableError } from '../../ai/client/noOpClient.js'
 import {
 	isRetryableApiError,
+	isTransportApiError,
 	withApiRetry
 } from '../../ai/client/retry.js'
 
@@ -109,4 +111,51 @@ test('isRetryableApiError classifies transport and provider errors', () => {
 	)
 	assert.equal(isRetryableApiError(new Error('plain')), false)
 	assert.equal(isRetryableApiError(null), false)
+	assert.equal(
+		isTransportApiError(
+			Object.assign(retryableError(400), { name: 'APIConnectionError' })
+		),
+		false
+	)
+})
+
+test('withApiRetry retries nested network causes three times', async () => {
+	let calls = 0
+	const networkCause = Object.assign(new Error('connection refused'), {
+		code: 'ECONNREFUSED'
+	})
+	const error = Object.assign(new Error('request failed'), {
+		cause: networkCause
+	})
+
+	await assert.rejects(
+		withApiRetry(
+			async () => {
+				calls += 1
+				throw error
+			},
+			{ baseDelayMs: 1 }
+		),
+		/request failed/
+	)
+
+	assert.equal(calls, 3)
+	assert.equal(isRetryableApiError(error), true)
+})
+
+test('pilot unavailability pauses without transport retries', async () => {
+	let calls = 0
+	const error = new AiPilotUnavailableError('local')
+
+	await assert.rejects(
+		withApiRetry(async () => {
+			calls += 1
+			throw error
+		}),
+		/AI pilot is unavailable/
+	)
+
+	assert.equal(calls, 1)
+	assert.equal(isTransportApiError(error), true)
+	assert.equal(isRetryableApiError(error), false)
 })

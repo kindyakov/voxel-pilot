@@ -2,10 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+	AI_PILOT_UNAVAILABLE_REASON,
+	type DisabledAiProvider,
+	NoOpAgentClient,
 	OpenAICompatibleChatClient,
 	type ParsedToolCall,
 	createAgentClient
 } from '../../ai/client.js'
+import {
+	isRetryableApiError,
+	isTransportApiError
+} from '../../ai/client/retry.js'
 import { Config } from '../../config/config.js'
 
 test('OpenAICompatibleChatClient maps chat completion tool calls into compact tool calls', async () => {
@@ -124,5 +131,36 @@ test('createAgentClient selects chat completions client for routerai provider', 
 				process.env[key] = value
 			}
 		}
+	}
+})
+
+test('createAgentClient selects a pause-worthy network-free client', async () => {
+	const providers: DisabledAiProvider[] = ['disabled', 'local']
+	for (const provider of providers) {
+		const config: Pick<Config, 'ai'> = {
+			ai: {
+				provider,
+				baseUrl: undefined,
+				model: provider,
+				apiKey: undefined,
+				timeout: 1,
+				maxTokens: 1
+			}
+		}
+		const client = createAgentClient(config)
+
+		assert.equal(client instanceof NoOpAgentClient, true)
+		await assert.rejects(
+			client.createResponse({ instructions: '', input: '', tools: [] }),
+			error => {
+				assert.equal(
+					error instanceof Error ? error.message : String(error),
+					AI_PILOT_UNAVAILABLE_REASON
+				)
+				assert.equal(isTransportApiError(error), true)
+				assert.equal(isRetryableApiError(error), false)
+				return true
+			}
+		)
 	}
 })

@@ -107,6 +107,7 @@ export interface MachineContext {
 		healthEmergency: number
 		healthFullyRestored: number
 		recoveryRetryMs: number
+		pausedGoalRetryMs: number
 		escapeNoProgressMs: number
 		movementProgressDistance: number
 		escapeThreatChangeDistance: number
@@ -141,6 +142,8 @@ export interface MachineContext {
 	savedTaskState: unknown | null
 
 	currentGoal: string | null
+	pausedGoal: string | null
+	aiPilotEnabled: boolean
 	subGoal: string | null
 	conversationHistory: ConversationEntry[]
 	taskContext: TaskContext
@@ -226,6 +229,7 @@ export const context: MachineContext = {
 		healthEmergency: 10,
 		healthFullyRestored: 18,
 		recoveryRetryMs: 1000,
+		pausedGoalRetryMs: 30_000,
 		escapeNoProgressMs: 1500,
 		movementProgressDistance: 0.75,
 		escapeThreatChangeDistance: 3,
@@ -260,6 +264,8 @@ export const context: MachineContext = {
 	savedTaskState: null,
 
 	currentGoal: null,
+	pausedGoal: null,
+	aiPilotEnabled: true,
 	subGoal: null,
 	conversationHistory: [],
 	taskContext: {

@@ -122,6 +122,36 @@ test('disconnect disposes the old HSM, commands and autosave before a fresh sess
 	assert.equal(profileClose.mock.callCount(), 2)
 })
 
+test('disconnect carries an active goal as paused state into the next session', async t => {
+	const previousProvider = Config.ai.provider
+	Config.ai.provider = 'disabled'
+	t.after(() => {
+		Config.ai.provider = previousProvider
+	})
+
+	const { runtime, connections } = fixture(t)
+	runtime.start()
+	const first = connections[0]!
+	first.emit('spawn')
+	await flush()
+	first.hsm.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Travel' })
+	await flush()
+	await flush()
+	assert.equal(first.hsm.getContext().currentGoal, null)
+	assert.equal(first.hsm.getContext().pausedGoal, 'Travel')
+	first.emit('end')
+	await flush()
+
+	t.mock.timers.tick(3000)
+	await flush()
+	const second = connections[1]!
+	second.emit('spawn')
+	await flush()
+
+	assert.equal(second.hsm.getContext().currentGoal, null)
+	assert.equal(second.hsm.getContext().pausedGoal, 'Travel')
+})
+
 test('explicit stop before spawn closes the connection and cannot reconnect', async t => {
 	const { runtime, connections, load } = fixture(t)
 	runtime.start()

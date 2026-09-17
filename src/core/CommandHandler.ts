@@ -1,17 +1,42 @@
-import type { Bot } from '@/types'
-
+import Config, { type Config as ConfigInstance } from '@/config/config'
 import logger from '@/config/logger'
 
-import type BotStateMachine from '@/core/hsm'
+import type { UserEvents } from '@/hsm/types'
+
+import {
+	AI_PILOT_UNAVAILABLE_COMMAND_MESSAGE,
+	isAiPilotDisabled
+} from '@/ai/pilotAvailability.js'
+
+interface CommandBot {
+	username: string
+	chat(message: string): void
+	on(
+		event: 'chat',
+		listener: (username: string, message: string) => void
+	): unknown
+	off(
+		event: 'chat',
+		listener: (username: string, message: string) => void
+	): unknown
+}
+
+interface CommandEventTarget {
+	send(event: UserEvents): void
+}
 
 export default class CommandHandler {
-	private bot: Bot
-	private hsm: BotStateMachine
+	private bot: CommandBot
+	private hsm: CommandEventTarget
 	private readonly onChat = (username: string, message: string) =>
 		this.chat(username, message)
 	private listening = false
 
-	constructor(bot: Bot, hsm: BotStateMachine) {
+	constructor(
+		bot: CommandBot,
+		hsm: CommandEventTarget,
+		private readonly config: Pick<ConfigInstance, 'ai'> = Config
+	) {
 		this.bot = bot
 		this.hsm = hsm
 		this.init()
@@ -45,6 +70,10 @@ export default class CommandHandler {
 				type: 'STOP_CURRENT_GOAL',
 				username
 			})
+			return
+		}
+		if (isAiPilotDisabled(this.config.ai.provider)) {
+			this.bot.chat(AI_PILOT_UNAVAILABLE_COMMAND_MESSAGE)
 			return
 		}
 

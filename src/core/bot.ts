@@ -12,6 +12,8 @@ import BotStateMachine from '@/core/hsm'
 import { MemoryManager } from '@/core/memory/index.js'
 import { ProfileMemoryStore } from '@/core/profile/index.js'
 
+import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
+
 import { initConnection } from '@/modules/connection/index.js'
 
 import { BotUtils } from '@/utils/minecraft/botUtils'
@@ -47,6 +49,7 @@ class MinecraftBot extends EventEmitter {
 	private closing: Promise<void> | null = null
 	private running = false
 	private reconnectAttempts = 0
+	private reconnectPausedGoal: string | null = null
 	private reconnectTimer?: ReturnType<typeof setTimeout>
 	private readonly maxReconnectAttempts = 5
 	private readonly reconnectDelay = 3000
@@ -118,7 +121,9 @@ class MinecraftBot extends EventEmitter {
 			bot.utils = new BotUtils(bot)
 			bot.memory = new MemoryManager({ botName: bot.username })
 			bot.profileMemory = new ProfileMemoryStore({ botName: bot.username })
-			const hsm = new BotStateMachine(bot)
+			const hsm = new BotStateMachine(bot, {
+				pausedGoal: this.reconnectPausedGoal
+			})
 			session.hsm = hsm
 			bot.hsm = hsm
 			session.commands = new CommandHandler(bot, hsm)
@@ -128,6 +133,11 @@ class MinecraftBot extends EventEmitter {
 				this.failSession(session, new Error('HSM initialization failed'))
 				return
 			}
+			const shouldResumePausedGoal =
+				this.reconnectPausedGoal !== null &&
+				!isAiPilotDisabled(Config.ai.provider)
+			this.reconnectPausedGoal = null
+			if (shouldResumePausedGoal) hsm.resumePausedGoal()
 			this.reconnectAttempts = 0
 			session.saveTimer = setInterval(
 				() => {
@@ -163,6 +173,10 @@ class MinecraftBot extends EventEmitter {
 	): Promise<void> {
 		if (session.disposal) return session.disposal
 		session.disposed = true
+		if (this.running && session.hsm) {
+			const reconnectGoal = session.hsm.getReconnectGoal()
+			if (reconnectGoal) this.reconnectPausedGoal = reconnectGoal
+		}
 		if (this.session === session) this.session = null
 		if (session.saveTimer) clearInterval(session.saveTimer)
 		for (const dispose of session.listeners.splice(0)) this.cleanup(dispose)
@@ -189,6 +203,7 @@ class MinecraftBot extends EventEmitter {
 
 	stop(reason: string = 'Бот остановлен вручную.'): Promise<void> {
 		this.running = false
+		this.reconnectPausedGoal = null
 		this.clearReconnect()
 		this.reconnectAttempts = 0
 		return this.session

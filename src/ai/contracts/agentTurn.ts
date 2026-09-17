@@ -44,4 +44,6 @@ export type AgentTurnResult =
 			kind: 'failed'
 			reason: string
 			transcript: string[]
+			/** Maps to `transport_failed`: pause the goal without consuming its budget. */
+			isTransport?: boolean
 	  }

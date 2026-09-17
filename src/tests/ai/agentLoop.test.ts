@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { OpenAIResponsesClient } from '../../ai/client.js'
+import { NoOpAgentClient, OpenAIResponsesClient } from '../../ai/client.js'
 import { runAgentTurn } from '../../ai/loop.js'
 import { WindowRuntime, getWindowDescriptor } from '../../ai/runtime/window.js'
 import { createTaskContext } from '../../ai/taskContext.js'
@@ -1102,9 +1102,10 @@ test('runAgentTurn finishes with plain text after grounded inspect data was gath
 	assert.equal(result.message, 'Дом находится на отмеченной позиции.')
 })
 
-test('runAgentTurn converts a model request error into a failed turn', async () => {
-	const requestError = new Error('Request failed with status 400')
-	;(requestError as unknown as { status: number }).status = 400
+test('runAgentTurn marks a network request error as a transport failure', async () => {
+	const requestError = Object.assign(new Error('Connection refused'), {
+		code: 'ECONNREFUSED'
+	})
 	const client = {
 		createResponse: async () => {
 			throw requestError
@@ -1155,6 +1156,25 @@ test('runAgentTurn converts a model request error into a failed turn', async () 
 		assert.fail('Expected failed result')
 	}
 	assert.match(result.reason, /Model request failed/)
+	assert.equal(result.isTransport, true)
+
+	const noOpResult = await runAgentTurn({
+		bot,
+		memory,
+		currentGoal: 'Что у тебя в инвентаре?',
+		subGoal: null,
+		lastAction: null,
+		lastResult: null,
+		lastReason: null,
+		errorHistory: [],
+		taskContext: createTaskContext('Что у тебя в инвентаре?', null),
+		client: new NoOpAgentClient('disabled')
+	})
+	assert.equal(noOpResult.kind, 'failed')
+	if (noOpResult.kind !== 'failed') {
+		assert.fail('Expected NoOp failure result')
+	}
+	assert.equal(noOpResult.isTransport, true)
 })
 
 test('runAgentTurn converts an inline tool throw into a failed turn', async () => {

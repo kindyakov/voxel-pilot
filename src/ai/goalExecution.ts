@@ -11,6 +11,7 @@ type GoalExecutionEvent =
 	| { type: 'interrupted' }
 	| { type: 'rejected'; reason: string }
 	| { type: 'failed'; reason: string }
+	| { type: 'transport_failed'; reason: string }
 
 export const createGoalExecution = (): GoalExecutionState => ({
 	attempts: 0,
@@ -22,7 +23,8 @@ export const advanceGoalExecution = (
 	state: GoalExecutionState,
 	event: GoalExecutionEvent
 ): GoalExecutionState => {
-	if (event.type === 'interrupted') return state
+	if (event.type === 'interrupted' || event.type === 'transport_failed')
+		return state
 	if (event.type === 'started')
 		return { ...state, attempts: state.attempts + 1 }
 	if (event.type === 'succeeded') {

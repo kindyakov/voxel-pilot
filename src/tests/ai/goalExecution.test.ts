@@ -43,3 +43,20 @@ test('rejection consumes failure budget, interruption preserves it, and a new go
 	assert.match(getGoalStopReason(goal) ?? '', /Bad count/)
 	assert.equal(getGoalStopReason(createGoalExecution()), null)
 })
+
+test('transport failures preserve the validation failure budget', () => {
+	let goal = createGoalExecution()
+	goal = advanceGoalExecution(goal, { type: 'rejected', reason: 'Bad range' })
+	goal = advanceGoalExecution(goal, {
+		type: 'transport_failed',
+		reason: 'Connection refused'
+	})
+	goal = advanceGoalExecution(goal, {
+		type: 'transport_failed',
+		reason: 'DNS unavailable'
+	})
+
+	assert.equal(goal.consecutiveFailures, 1)
+	assert.equal(goal.lastFailure, 'Bad range')
+	assert.equal(getGoalStopReason(goal), null)
+})

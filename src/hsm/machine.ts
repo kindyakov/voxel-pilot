@@ -16,6 +16,7 @@ import type { Bot, Entity } from '@/types'
 
 import Logger from '@/config/logger'
 
+import { goalActions } from '@/hsm/actions/goal.actions'
 import { miningActions } from '@/hsm/actions/mining.actions'
 import { safetyActions } from '@/hsm/actions/safety.actions'
 import combatActors from '@/hsm/actors/combat.actors'
@@ -39,6 +40,7 @@ import combatGuards, {
 	eventEnemyInMeleeRange,
 	isCombatTargetUpdateEvent
 } from '@/hsm/guards/combat.guards'
+import { goalGuards } from '@/hsm/guards/goal.guards'
 import { miningGuards } from '@/hsm/guards/mining.guards'
 import {
 	canAttemptRecovery,
@@ -48,6 +50,7 @@ import {
 	isRecoverySafe
 } from '@/hsm/guards/survival.guards'
 import type { MachineEvent, MiningTaskData } from '@/hsm/types'
+import { getActorError } from '@/hsm/utils/actorEvent'
 import { observeThreats } from '@/hsm/utils/threatObservation'
 
 import type { AgentTurnResult } from '@/ai/contracts/agentTurn.js'
@@ -288,10 +291,15 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 		types: {} as {
 			context: MachineContext
 			events: MachineEvent
-			input: { bot: Bot }
+			input: {
+				bot: Bot
+				pausedGoal?: string | null
+				aiPilotEnabled?: boolean
+			}
 		},
 		delays: {
-			recoveryRetry: ({ context }) => context.preferences.recoveryRetryMs
+			recoveryRetry: ({ context }) => context.preferences.recoveryRetryMs,
+			pausedGoalRetry: ({ context }) => context.preferences.pausedGoalRetryMs
 		},
 		actors: {
 			idleGaze,
@@ -325,6 +333,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 		},
 		guards: {
 			...combatGuards,
+			...goalGuards,
 			...miningGuards,
 			hasCurrentGoal: ({ context }) => Boolean(context.currentGoal),
 			isAgentLoopStuck: ({ context }) =>
@@ -360,6 +369,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				context.pendingExecution?.toolName === 'mine_resource'
 		},
 		actions: {
+			...goalActions,
 			...miningActions,
 			...safetyActions,
 			logStateEntry: ({ context, event }, params: unknown) => {
@@ -448,8 +458,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				})
 			},
 			logThinkingError: ({ event }) => {
-				const error =
-					(event as { error?: unknown }).error ?? 'Unknown thinking error'
+				const error = getActorError(event)
 				Logger.error('[AI] thinking_error', {
 					error: error instanceof Error ? error.message : String(error)
 				})
@@ -688,6 +697,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				},
 				movementOwner: 'NONE',
 				currentGoal: null,
+				pausedGoal: null,
 				subGoal: null,
 				taskContext: createTaskContext(null, null),
 				pendingExecution: null,
@@ -715,6 +725,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 
 				return {
 					currentGoal: event.text,
+					pausedGoal: null,
 					subGoal: null,
 					conversationHistory: appendConversationEntry(
 						context.conversationHistory,
@@ -734,6 +745,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			clearGoal: assign(() => {
 				return {
 					currentGoal: null,
+					pausedGoal: null,
 					subGoal: null,
 					taskContext: createTaskContext(null, null),
 					pendingExecution: null,
@@ -895,7 +907,12 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					pendingExecution: null,
 					errorHistory: [...context.errorHistory, output.reason].slice(-3),
 					goalExecution: advanceGoalExecution(context.goalExecution, {
-						type: output.kind === 'rejected' ? 'rejected' : 'failed',
+						type:
+							output.kind === 'rejected'
+								? 'rejected'
+								: output.isTransport
+									? 'transport_failed'
+									: 'failed',
 						reason: output.reason
 					})
 				}
@@ -965,6 +982,8 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			position: input.bot.entity?.position ?? null,
 			aggressionByEntity: {},
 			windows: getWindowRuntime(input.bot),
+			pausedGoal: input.pausedGoal ?? null,
+			aiPilotEnabled: input.aiPilotEnabled ?? true,
 			goalExecution: createGoalExecution()
 		}),
 		invoke: [
@@ -1001,6 +1020,11 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			USER_COMMAND: {
 				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.THINKING',
 				actions: ['closeActiveWindowSession', 'setGoalFromUserCommand']
+			},
+			RESUME_PAUSED_GOAL: {
+				guard: 'canResumePausedGoal',
+				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING',
+				actions: 'resumePausedGoal'
 			},
 			STOP_CURRENT_GOAL: {
 				target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
@@ -1124,6 +1148,13 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 						}
 					},
 					IDLE: {
+						after: {
+							pausedGoalRetry: {
+								guard: 'canResumePausedGoal',
+								target: 'RESUMING',
+								actions: 'resumePausedGoal'
+							}
+						},
 						invoke: {
 							id: 'idleGaze',
 							src: 'idleGaze',
@@ -1531,6 +1562,18 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 									}),
 									onDone: [
 										{
+											guard: 'thinkingProducedTransportFailure',
+											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+											actions: [
+												'closeActiveWindowSession',
+												'logThinkingFailure',
+												'storeThinkingFailure',
+												'appendFailureConversationEntry',
+												'notifyThinkingFailure',
+												'pauseCurrentGoal'
+											]
+										},
+										{
 											guard: 'thinkingProducedInvalidExecution',
 											target: 'DECIDE_NEXT',
 											actions: ['storeThinkingFailure']
@@ -1571,14 +1614,36 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											]
 										}
 									],
-									onError: {
-										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
-										actions: [
-											'closeActiveWindowSession',
-											'logThinkingError',
-											'clearGoal'
-										]
-									}
+									onError: [
+										{
+											guard: 'thinkingErrorWasAbort',
+											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+											actions: ['closeActiveWindowSession', 'clearGoal']
+										},
+										{
+											guard: 'thinkingErrorWasTransport',
+											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+											actions: [
+												'closeActiveWindowSession',
+												'logThinkingError',
+												'storeTransportThinkingError',
+												'appendFailureConversationEntry',
+												'notifyThinkingFailure',
+												'pauseCurrentGoal'
+											]
+										},
+										{
+											target: '#MINECRAFT_BOT.MAIN_ACTIVITY.IDLE',
+											actions: [
+												'closeActiveWindowSession',
+												'logThinkingError',
+												'storeThinkingError',
+												'appendFailureConversationEntry',
+												'notifyThinkingFailure',
+												'clearGoal'
+											]
+										}
+									]
 								}
 							},
 							EXECUTING: {

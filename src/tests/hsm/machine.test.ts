@@ -1,15 +1,21 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import test from 'node:test'
+import { setImmediate as flushImmediate } from 'node:timers/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 
+import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
+import type { AnyActorLogic } from 'xstate'
 
+import { NoOpAgentClient } from '../../ai/client.js'
+import type { AgentTurnResult } from '../../ai/contracts/agentTurn.js'
 import { runAgentTurn } from '../../ai/loop.js'
 import { createTaskContext } from '../../ai/taskContext.js'
+import type { MachineContext } from '../../hsm/context.js'
 import { createBotMachine } from '../../hsm/machine.js'
 import type { Bot } from '../../types/index.js'
-import { registry } from './fixtures/handoffBot'
+import { createEntityFixture, registry } from './fixtures/handoffBot'
 import { publishEntities } from './fixtures/publishEntities'
 
 test('model arguments rejected by the real turn are explained to the next HSM turn', async () => {
@@ -93,6 +99,265 @@ test('three rejected model actions terminate the goal without starting a primiti
 		await waitForTurn()
 		assert.equal(turns, 3)
 		assert.equal(actor.getSnapshot().context.currentGoal, null)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('transport failures pause a goal without exhausting its failure budget and resume it', async () => {
+	let turns = 0
+	const { actor } = createTestActor({
+		thinkingActor: fromPromise(async () => {
+			turns += 1
+			if (turns <= 3) {
+				return {
+					kind: 'failed',
+					reason: 'Connection refused',
+					transcript: [],
+					isTransport: true
+				} satisfies AgentTurnResult
+			}
+
+			return await new Promise<never>(() => {})
+		})
+	})
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Travel' })
+		for (let failure = 0; failure < 3; failure += 1) {
+			await waitForTurn()
+			assert.equal(actor.getSnapshot().context.currentGoal, null)
+			assert.equal(actor.getSnapshot().context.pausedGoal, 'Travel')
+			assert.equal(
+				actor.getSnapshot().context.goalExecution.consecutiveFailures,
+				0
+			)
+			actor.send({ type: 'RESUME_PAUSED_GOAL' })
+		}
+
+		await waitForTurn()
+		assert.equal(turns, 4)
+		assert.equal(actor.getSnapshot().context.currentGoal, 'Travel')
+		assert.equal(actor.getSnapshot().context.pausedGoal, null)
+		assert.match(
+			JSON.stringify(actor.getSnapshot().value),
+			/"TASKS":"THINKING"/
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('NoOp failures pause the active goal without consuming budget', async () => {
+	const { actor } = createTestActor({
+		thinkingActor: noOpThinkingActor,
+		aiPilotEnabled: false
+	})
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Travel' })
+		await waitForTurn()
+
+		assert.equal(actor.getSnapshot().context.currentGoal, null)
+		assert.equal(actor.getSnapshot().context.pausedGoal, 'Travel')
+		assert.equal(
+			actor.getSnapshot().context.goalExecution.consecutiveFailures,
+			0
+		)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('transport actor errors pause while implementation bugs clear the goal', async () => {
+	for (const scenario of [
+		{
+			name: 'transport',
+			error: Object.assign(new Error('Model connection lost'), {
+				code: 'ECONNRESET'
+			}),
+			pausedGoal: 'Travel'
+		},
+		{
+			name: 'bug',
+			error: new Error('Unexpected implementation bug'),
+			pausedGoal: null
+		}
+	]) {
+		const { actor } = createTestActor({
+			thinkingActor: fromPromise(async () => {
+				throw scenario.error
+			}),
+			aiPilotEnabled: false
+		})
+
+		try {
+			actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Travel' })
+			await waitForTurn()
+
+			assert.equal(actor.getSnapshot().context.currentGoal, null, scenario.name)
+			assert.equal(
+				actor.getSnapshot().context.pausedGoal,
+				scenario.pausedGoal,
+				scenario.name
+			)
+		} finally {
+			actor.stop()
+		}
+	}
+})
+
+test('STOP cancellation cannot recreate the goal as paused', async () => {
+	let started = false
+	const { actor } = createTestActor({
+		thinkingActor: fromPromise(async ({ signal }) => {
+			started = true
+			return await new Promise<never>((_resolve, reject) => {
+				signal.addEventListener(
+					'abort',
+					() => reject(new DOMException('Cancelled', 'AbortError')),
+					{ once: true }
+				)
+			})
+		})
+	})
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Travel' })
+		await flushImmediate()
+		assert.equal(started, true)
+		actor.send({ type: 'STOP_CURRENT_GOAL', username: 'Steve' })
+		await flushImmediate()
+
+		assert.equal(actor.getSnapshot().context.currentGoal, null)
+		assert.equal(actor.getSnapshot().context.pausedGoal, null)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('paused goals automatically resume from IDLE after the configured delay', async t => {
+	t.mock.timers.enable({ apis: ['setTimeout'] })
+	let turns = 0
+	const { actor } = createTestActor({
+		preferences: { pausedGoalRetryMs: 30_000 },
+		thinkingActor: fromPromise(async () => {
+			turns += 1
+			if (turns === 1) {
+				return {
+					kind: 'failed',
+					reason: 'Temporary transport outage',
+					transcript: [],
+					isTransport: true
+				} satisfies AgentTurnResult
+			}
+			return await new Promise<never>(() => {})
+		})
+	})
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Travel' })
+		await flushImmediate()
+		await flushImmediate()
+		assert.equal(actor.getSnapshot().context.pausedGoal, 'Travel')
+
+		t.mock.timers.tick(29_999)
+		await flushImmediate()
+		assert.equal(turns, 1)
+
+		t.mock.timers.tick(1)
+		await flushImmediate()
+		assert.equal(turns, 2)
+		assert.equal(actor.getSnapshot().context.currentGoal, 'Travel')
+		assert.equal(actor.getSnapshot().context.pausedGoal, null)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('a new goal replaces the paused goal and STOP cancels its pending retry', async t => {
+	t.mock.timers.enable({ apis: ['setTimeout'] })
+	let turns = 0
+	const { actor } = createTestActor({
+		preferences: { pausedGoalRetryMs: 30_000 },
+		thinkingActor: fromPromise(async () => {
+			turns += 1
+			if (turns === 1) {
+				return {
+					kind: 'failed',
+					reason: 'Temporary transport outage',
+					transcript: [],
+					isTransport: true
+				} satisfies AgentTurnResult
+			}
+			return await new Promise<never>(() => {})
+		})
+	})
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Old goal' })
+		await flushImmediate()
+		await flushImmediate()
+		assert.equal(actor.getSnapshot().context.pausedGoal, 'Old goal')
+
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'New goal' })
+		await flushImmediate()
+		assert.equal(turns, 2)
+		assert.equal(actor.getSnapshot().context.currentGoal, 'New goal')
+		assert.equal(actor.getSnapshot().context.pausedGoal, null)
+
+		actor.send({ type: 'STOP_CURRENT_GOAL', username: 'Steve' })
+		t.mock.timers.tick(30_000)
+		await flushImmediate()
+		assert.equal(turns, 2)
+		assert.equal(actor.getSnapshot().context.currentGoal, null)
+		assert.equal(actor.getSnapshot().context.pausedGoal, null)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('disabled AI leaves autonomous healing and armed combat operational', async () => {
+	let thinkingCalls = 0
+	const noOpClient = new NoOpAgentClient('disabled')
+	const { actor } = createTestActor({
+		aiPilotEnabled: false,
+		thinkingActor: fromPromise(async () => {
+			thinkingCalls += 1
+			return noOpClient.createResponse({
+				instructions: '',
+				input: '',
+				tools: []
+			})
+		})
+	})
+
+	try {
+		actor.send({ type: 'UPDATE_HEALTH', health: 8 })
+		assert.match(
+			JSON.stringify(actor.getSnapshot().value),
+			/"EMERGENCY_HEALING":"RUNNING"/
+		)
+		assert.equal(thinkingCalls, 0)
+
+		actor.send({ type: 'UPDATE_HEALTH', health: 20 })
+		actor.send({ type: 'HEALTH_RESTORED' })
+		actor.send({
+			type: 'UPDATE_ENTITIES',
+			entities: [enemy],
+			enemies: [enemy],
+			players: []
+		})
+		actor.send({
+			type: 'UPDATE_COMBAT_TARGET',
+			combatTarget: { entity: enemy, distance: 2 }
+		})
+		await waitForTurn()
+		assert.match(
+			JSON.stringify(actor.getSnapshot().value),
+			/"COMBAT":"MELEE_ATTACKING"/
+		)
+		assert.equal(thinkingCalls, 0)
 	} finally {
 		actor.stop()
 	}
@@ -336,19 +601,51 @@ const hangingActor = fromPromise(async () => {
 
 const noopActor = fromPromise(async () => {})
 
-const enemy = {
+const noOpThinkingActor = fromPromise<
+	AgentTurnResult,
+	{ bot: Bot; context: MachineContext }
+>(async ({ input, signal }) => {
+	if (!input.context.currentGoal) {
+		throw new Error('Expected an active goal')
+	}
+
+	return runAgentTurn({
+		bot: input.bot,
+		memory: input.bot.memory,
+		currentGoal: input.context.currentGoal,
+		subGoal: input.context.subGoal,
+		conversationHistory: input.context.conversationHistory,
+		lastAction: input.context.lastAction,
+		lastResult: input.context.lastResult,
+		lastReason: input.context.lastReason,
+		errorHistory: input.context.errorHistory,
+		taskContext: input.context.taskContext,
+		windows: input.context.windows!,
+		signal,
+		client: new NoOpAgentClient('disabled')
+	})
+})
+
+const enemy = createEntityFixture({
 	id: 1,
 	type: 'hostile',
 	name: 'zombie',
-	position: createVec3(2, 64, 0),
+	position: new Vec3(2, 64, 0),
 	isValid: true
+})
+
+interface TestActorOptions {
+	thinkingActor?: AnyActorLogic
+	aiPilotEnabled?: boolean
+	preferences?: Partial<MachineContext['preferences']>
 }
 
-const createTestActor = () => {
+const createTestActor = (options: TestActorOptions = {}) => {
 	const bot = new FakeBot() as any
 	const actor = createActor(
 		createBotMachine({
-			thinkingActor: hangingActor,
+			thinkingActor: options.thinkingActor ?? hangingActor,
+			preferences: options.preferences,
 			actors: {
 				serviceEntitiesTracking: noopActor,
 				serviceMeleeAttack: noopActor,
@@ -359,7 +656,7 @@ const createTestActor = () => {
 			}
 		}),
 		{
-			input: { bot }
+			input: { bot, aiPilotEnabled: options.aiPilotEnabled }
 		}
 	)
 

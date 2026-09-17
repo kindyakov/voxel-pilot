@@ -17,7 +17,7 @@ The current design is small and explicit:
 
 The goal of this project is not to hardcode behavior for individual requests such as "make an axe". The goal is to build a reliable autonomous harness for a Minecraft bot with an optional AI pilot.
 
-The XState harness is the runtime authority and survives independently of LLM availability. The AI/LLM is a pilot: it makes the bot more autonomous and able to solve complex tasks, but the bot works via player commands (`:stop`, etc.) and its internal situational logic when the pilot is off.
+The XState harness is the runtime authority and survives independently of LLM availability. The AI/LLM is a pilot: it makes the bot more autonomous and able to solve complex tasks, while the harness keeps its internal situational logic when the pilot is off; new goals are rejected and `:stop` remains available.
 
 That runtime must:
 

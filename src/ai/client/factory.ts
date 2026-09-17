@@ -1,13 +1,20 @@
 import defaultConfig, { type Config as ConfigInstance } from '@/config/config'
 
 import type { AgentModelClient } from '../contracts/agentClient.js'
+import { isAiPilotDisabled } from '../pilotAvailability.js'
 import { OpenAICompatibleChatClient } from './chatClient.js'
+import { NoOpAgentClient } from './noOpClient.js'
 import { OpenAIResponsesClient } from './responsesClient.js'
 
 export const createAgentClient = (
 	config: Pick<ConfigInstance, 'ai'> = defaultConfig
 ): AgentModelClient => {
-	switch (config.ai.provider) {
+	const provider = config.ai.provider
+	if (isAiPilotDisabled(provider)) {
+		return new NoOpAgentClient(provider)
+	}
+
+	switch (provider) {
 		case 'routerai':
 		case 'openrouter':
 		case 'openai_compatible':

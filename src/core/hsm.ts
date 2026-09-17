@@ -12,12 +12,18 @@ import type { MachineEvent } from '@/hsm/types'
 import { AntiLoopGuard } from '@/hsm/utils/antiLoop'
 import { attachHsmDiagnostics } from '@/hsm/utils/runtimeDiagnostics'
 
+import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
+
 import { cleanupPathfindCache } from '@/utils/combat/enemyVisibility'
 
 interface StoreLifecycle {
 	started: boolean
 	loading: boolean
 	closed: boolean
+}
+
+interface BotStateMachineOptions {
+	pausedGoal?: string | null
 }
 
 class BotStateMachine {
@@ -49,7 +55,7 @@ class BotStateMachine {
 	}
 	readonly ready: Promise<boolean>
 
-	constructor(bot: Bot) {
+	constructor(bot: Bot, options: BotStateMachineOptions = {}) {
 		this.bot = bot
 		this.memory = bot.memory
 		this.profileMemory = bot.profileMemory
@@ -62,10 +68,10 @@ class BotStateMachine {
 		const cancelled = new Promise<false>(resolve => {
 			this.cancelReady = resolve
 		})
-		this.ready = Promise.race([this.init(), cancelled])
+		this.ready = Promise.race([this.init(options.pausedGoal), cancelled])
 	}
 
-	private async init(): Promise<boolean> {
+	private async init(pausedGoal: string | null | undefined): Promise<boolean> {
 		try {
 			await this.loadStore(this.memory, this.memoryLifecycle)
 			if (this.stopped) return false
@@ -74,7 +80,13 @@ class BotStateMachine {
 				if (this.stopped) return false
 			}
 			// Construction reads current vitals; no stale pre-load health events are replayed.
-			this.actor = createActor(machine, { input: { bot: this.bot } })
+			this.actor = createActor(machine, {
+				input: {
+					bot: this.bot,
+					pausedGoal,
+					aiPilotEnabled: !isAiPilotDisabled(Config.ai.provider)
+				}
+			})
 			this.bot.hsm = this
 			this.stopDiagnostics = attachHsmDiagnostics(
 				this.actor,
@@ -124,6 +136,10 @@ class BotStateMachine {
 		this.actor.send(event)
 	}
 
+	resumePausedGoal(): void {
+		this.send({ type: 'RESUME_PAUSED_GOAL' })
+	}
+
 	private flushPendingEvents(): void {
 		while (this.pendingEvents.length > 0) {
 			const event = this.pendingEvents.shift()
@@ -158,6 +174,11 @@ class BotStateMachine {
 	getContext(): MachineContext {
 		if (!this.actor) throw new Error('HSM is not initialized')
 		return this.actor.getSnapshot().context
+	}
+
+	getReconnectGoal(): string | null {
+		const context = this.actor?.getSnapshot().context
+		return context?.pausedGoal ?? context?.currentGoal ?? null
 	}
 
 	getCurrentState(): unknown {

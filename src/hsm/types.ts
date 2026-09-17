@@ -66,6 +66,8 @@ export type UserEvents =
 	| { type: 'USER_COMMAND'; username: string; text: string }
 	| { type: 'STOP_CURRENT_GOAL'; username?: string }
 
+export type InternalEvents = { type: 'RESUME_PAUSED_GOAL' }
+
 export type PrimitiveEvents =
 	| { type: 'NOT_FOUND'; reason: string }
 	| { type: 'BLOCKS_FOUND'; blocks: Block[] }
@@ -92,6 +94,7 @@ export type MachineEvent =
 	| CombatEvents
 	| UpdateEvents
 	| UserEvents
+	| InternalEvents
 	| PrimitiveEvents
 	| SystemEvents
 

@@ -1,5 +1,7 @@
 import 'dotenv/config'
 
+import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
+
 import { WinstonLogLevel } from '../types/index.js'
 import { validateEnv } from './env.js'
 
@@ -61,10 +63,7 @@ export class Config {
 
 		this._diagnostics = {
 			viewerPort: parseInt(env.MINECRAFT_VIEWER_PORT || '3000', 10),
-			webInventoryPort: parseInt(
-				env.MINECRAFT_WEB_INVENTORY_PORT || '3001',
-				10
-			)
+			webInventoryPort: parseInt(env.MINECRAFT_WEB_INVENTORY_PORT || '3001', 10)
 		}
 	}
 
@@ -90,8 +89,7 @@ export class Config {
 	}
 
 	assertAIConfigured(): void {
-		if (this._ai.provider === 'disabled' || this._ai.provider === 'local')
-			return
+		if (isAiPilotDisabled(this._ai.provider)) return
 		if (!this._ai.apiKey) throw new Error('Missing AI_API_KEY in .env')
 	}
 }

@@ -793,7 +793,7 @@ const edgeLayouts: EdgeLayout[] = [
 		id: 'edge-thinking-finish-idle',
 		source: 'MAIN_ACTIVITY.TASKS.THINKING',
 		target: 'MAIN_ACTIVITY.IDLE',
-		label: 'onDone [finish or failed] / onError',
+		label: 'onDone [finish or transport failure] / onError [pause]',
 		strokeColor: '#475569'
 	},
 	{
