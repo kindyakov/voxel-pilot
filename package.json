@@ -16,12 +16,7 @@
     "clean": "rm -rf dist"
   },
   "engines": {
-    "node": ">=22.0.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3"
-    ]
+    "node": ">=24.0.0"
   },
   "keywords": [
     "minecraft",
@@ -44,7 +39,6 @@
   "homepage": "https://github.com/kindyakov/voxel-pilot#readme",
   "dependencies": {
     "ajv": "^8.17.1",
-    "better-sqlite3": "^12.8.0",
     "chalk": "^4.1.2",
     "dotenv": "^17.2.1",
     "minecrafthawkeye": "1.3.9",
@@ -65,7 +59,6 @@
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.12.0",
     "knip": "^6.0.0",
     "prettier": "^3.6.2",

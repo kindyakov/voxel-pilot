@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-
-import BetterSqlite3 from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 
 import type {
 	BotMemoryData,
@@ -18,7 +17,7 @@ import type {
 	TaskStats
 } from './types.js'
 
-type SqliteDatabase = InstanceType<typeof BetterSqlite3>
+type SqliteDatabase = DatabaseSync
 
 const DB_VERSION = '2.0.0'
 
@@ -121,7 +120,7 @@ export class MemoryManager {
 
 	async load(): Promise<void> {
 		await fs.mkdir(this.dataDir, { recursive: true })
-		this.db ??= new BetterSqlite3(this.dbPath)
+		this.db ??= new DatabaseSync(this.dbPath)
 		this.initializeSchema()
 		this.ensureMeta()
 		this.restoreRuntimeState()
@@ -253,26 +252,30 @@ export class MemoryManager {
 				.prepare('DELETE FROM memory_entries WHERE id = ?')
 				.run(selector.id)
 			void this.save()
-			return result.changes > 0
+			return Number(result.changes) > 0
 		}
 
 		if (selector.position) {
-			const result = db
-				.prepare(
-					`
-						DELETE FROM memory_entries
-						WHERE x = @x AND y = @y AND z = @z
-						${selector.type ? 'AND type = @type' : ''}
-					`
-				)
-				.run({
-					x: selector.position.x,
-					y: selector.position.y,
-					z: selector.position.z,
-					type: selector.type
-				})
+			const { x, y, z } = selector.position
+			const result = selector.type
+				? db
+						.prepare(
+							`
+								DELETE FROM memory_entries
+								WHERE x = @x AND y = @y AND z = @z AND type = @type
+							`
+						)
+						.run({ x, y, z, type: selector.type })
+				: db
+						.prepare(
+							`
+								DELETE FROM memory_entries
+								WHERE x = @x AND y = @y AND z = @z
+							`
+						)
+						.run({ x, y, z })
 			void this.save()
-			return result.changes > 0
+			return Number(result.changes) > 0
 		}
 
 		return false

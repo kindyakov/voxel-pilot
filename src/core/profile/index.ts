@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-
-import BetterSqlite3 from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 
 import type {
 	ProfileMemoryStoreOptions,
@@ -12,7 +11,7 @@ import {
 	normalizeUserProfilePrompt
 } from './types.js'
 
-type SqliteDatabase = InstanceType<typeof BetterSqlite3>
+type SqliteDatabase = DatabaseSync
 
 const DB_VERSION = '1.0.0'
 
@@ -38,7 +37,7 @@ export class ProfileMemoryStore {
 
 	async load(): Promise<void> {
 		await fs.mkdir(this.dataDir, { recursive: true })
-		this.db ??= new BetterSqlite3(this.dbPath)
+		this.db ??= new DatabaseSync(this.dbPath)
 		this.initializeSchema()
 		this.ensureMeta()
 		this.profilePrompt = this.readStoredProfilePrompt()

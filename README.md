@@ -15,10 +15,9 @@ VoxelPilot is an autonomous Minecraft bot harness with an optional AI pilot. Bui
 
 ## Requirements
 
-- Node.js 22 or newer (required by Mineflayer).
+- Node.js 24 or newer (built-in `node:sqlite` storage, no native build tools required).
 - A Minecraft server you control or are explicitly allowed to use.
 - An AI provider and model if `AI_PROVIDER` is not `local` or `disabled`.
-- Native build tools required by `better-sqlite3` on your platform.
 
 ## Quick Start
 

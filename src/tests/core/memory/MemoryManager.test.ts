@@ -93,6 +93,45 @@ test('updateEntryData and deleteEntry mutate persisted records', async () => {
 	)
 })
 
+test('deleteEntry by position respects the optional type filter', async () => {
+	const dataDir = await createTempDataDir()
+	const manager = new MemoryManager({
+		botName: 'TestBot',
+		dataDir
+	})
+
+	await manager.load()
+
+	const position = { x: 1, y: 2, z: 3 }
+	manager.saveEntry({
+		type: 'resource',
+		position,
+		tags: ['iron'],
+		description: 'Iron vein',
+		data: {}
+	})
+	manager.saveEntry({
+		type: 'container',
+		position,
+		tags: ['chest'],
+		description: 'Chest at the same spot',
+		data: {}
+	})
+
+	assert.equal(
+		manager.deleteEntry({ position, type: 'resource' }),
+		true
+	)
+	assert.equal(manager.readEntries({}).length, 1)
+	assert.equal(manager.deleteEntry({ position }), true)
+	assert.equal(manager.readEntries({}).length, 0)
+	assert.equal(
+		manager.deleteEntry({ position: { x: 9, y: 9, z: 9 } }),
+		false
+	)
+	manager.close()
+})
+
 test('save persists players, task stats and completed goals across restarts', async () => {
 	const dataDir = await createTempDataDir()
 	const manager = new MemoryManager({
