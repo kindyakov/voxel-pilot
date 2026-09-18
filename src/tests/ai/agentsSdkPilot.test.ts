@@ -12,7 +12,7 @@ import {
 	AgentSdkPilotError,
 	type AgentSdkTool,
 	createAgentsSdkPilot
-} from '../../ai/agentSdkPilot.js'
+} from '@/ai/agentSdkPilot.js'
 
 interface ChatCompletionMessage {
 	role?: string
