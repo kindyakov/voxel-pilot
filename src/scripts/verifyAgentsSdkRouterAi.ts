@@ -8,7 +8,7 @@ import {
 	AgentSdkPilotError,
 	type AgentSdkTool,
 	createAgentsSdkPilot
-} from '../ai/agentSdkPilot.js'
+} from '@/ai/agentSdkPilot.js'
 
 interface StreamMetrics {
 	eventCount: number
@@ -114,7 +114,19 @@ const abortStream = async (
 	const startedAt = performance.now()
 	const controller = new AbortController()
 	const stream = pilot.stream(input, { signal: controller.signal })
-	const first = await stream.next()
+	let firstProviderEvent: AgentSdkEvent | null = null
+	while (firstProviderEvent === null) {
+		const next = await stream.next()
+		if (next.done) break
+		if (next.value.type !== 'run_started') {
+			firstProviderEvent = next.value
+		}
+	}
+	if (firstProviderEvent === null || firstProviderEvent.type === 'completed') {
+		throw new Error(
+			'RouterAI stream completed before a provider event was observed; cancellation was not verified.'
+		)
+	}
 	controller.abort()
 
 	let abortedErrorKind: AgentSdkPilotError['kind'] | null = null
@@ -130,7 +142,7 @@ const abortStream = async (
 
 	return {
 		abortedErrorKind,
-		firstEvent: first.done ? null : first.value.type,
+		firstEvent: firstProviderEvent.type,
 		totalMs: roundMs(performance.now() - startedAt)
 	}
 }

@@ -23,14 +23,15 @@ npm run verify:agents-sdk:routerai
 Один прогон выполнен 2026-09-19 без Minecraft через `https://routerai.ru/api/v1` на модели `deepseek/deepseek-v4-flash-0731`:
 
 ```text
-stream.firstModelEventMs = 3853.8
-stream.completedMs       = 5730.8
+stream.firstModelEventMs = 3495.7
+stream.completedMs       = 5536.5
 stream.toolCalls         = 1
 stream.toolResults       = 1
 abort.abortedErrorKind   = aborted
-abort.totalMs            = 2.5
-continuation.elapsedMs   = 5983.4
+abort.firstEvent         = text_delta
+abort.totalMs            = 4338.0
+continuation.elapsedMs   = 4682.5
 historyHasInterruptedInput = true
 ```
 
-Порог начала первого модельного события в две секунды этим прогоном не достигнут. Значения являются одной измеренной выборкой и не заменяют серию сравнительных запусков на выбранных моделях.
+Порог начала первого модельного события в две секунды этим прогоном не достигнут. Отмена была запрошена после `abort.firstEvent = text_delta`, то есть после события от потокового ответа провайдера; `abort.totalMs` включает ожидание этого события и обработку отмены. Значения являются одной измеренной выборкой и не заменяют серию сравнительных запусков на выбранных моделях.
