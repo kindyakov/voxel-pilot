@@ -40,6 +40,7 @@ voxel-pilot/
 │   │   ├── loop.ts                  # Публичный вход в цикл агента
 │   │   ├── loop/                    # Реализация хода, валидация и grounding
 │   │   │   └── runAgentTurn.ts      # Один ход: запрос модели → решение
+│   │   ├── agentSdkPilot.ts         # Изолированный адаптер OpenAI Agents SDK для нового пилота
 │   │   ├── tools.ts                 # Публичный API инструментов
 │   │   ├── tools/                   # Каталог, имена и inline-исполнители
 │   │   │   ├── catalog.ts           # Собранный каталог инструментов для модели
@@ -76,6 +77,7 @@ voxel-pilot/
 | Переход состояния, приоритет, прерывание     | [src/hsm/machine.ts](src/hsm/machine.ts), [src/hsm/context.ts](src/hsm/context.ts), [src/hsm/types.ts](src/hsm/types.ts). Условия выноси в `src/hsm/guards/`, обновления контекста — в `src/hsm/actions/`.                                                                                                       |
 | Действие в мире, бой, выживание, мониторинг  | `src/hsm/actors/`; одно execution-действие — в `src/hsm/actors/primitives/`. Жизненный цикл callback-сервиса подключай через [createStatefulService.ts](src/hsm/helpers/createStatefulService.ts).                                                                                                               |
 | Решение LLM, проверка аргументов и grounding | Публичный вход [src/ai/loop.ts](src/ai/loop.ts), реализация [runAgentTurn.ts](src/ai/loop/runAgentTurn.ts). Схема и parser execution — в `src/ai/tools/executionDefinitions.ts`; grounding и допустимость — в `src/ai/loop/`.                                                                                    |
+| Новый Agents SDK-пилот и RouterAI-совместимый транспорт | Изолированный контракт и адаптер находятся в [src/ai/agentSdkPilot.ts](src/ai/agentSdkPilot.ts). До задачи cutover он не подключается к HSM и не меняет поведение старого цикла. |
 | Повторы и остановка цели                     | [goalExecution.ts](src/ai/goalExecution.ts) — единственная политика бюджета цели; HSM передаёт исходы и выполняет остановку. Транспортные повторы остаются в клиенте модели.                                                                                                                                     |
 | Открытие, осмотр, перенос и закрытие окна    | [window.ts](src/ai/runtime/window.ts): получай общего владельца через `getWindowRuntime(bot)`. Inline и примитивы вызывают его API; сырыми оконными handle управляет только этот модуль.                                                                                                                         |
 | Новый инструмент агента                      | Публичный вход [src/ai/tools.ts](src/ai/tools.ts); описание и маршрутизация — в `src/ai/tools/`. Inline-исполнители размещай в `src/ai/tools/executors/`; execution-исполнитель — в HSM. Следуй чек-листу ниже.                                                                                                  |
