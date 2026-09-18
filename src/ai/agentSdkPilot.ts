@@ -15,6 +15,8 @@ import {
 import Ajv, { type AnySchema } from 'ajv'
 import OpenAI from 'openai'
 
+import { isTransportApiError } from './client/retry.js'
+
 export interface AgentSdkToolSchema {
 	type: 'object'
 	properties: Record<string, Record<string, unknown>>
@@ -343,46 +345,7 @@ const isAbortError = (error: unknown, signal?: AbortSignal): boolean => {
 }
 
 const isTransportError = (error: unknown): boolean => {
-	if (
-		error === null ||
-		(typeof error !== 'object' && typeof error !== 'function')
-	) {
-		return false
-	}
-
-	const record = error as Record<string, unknown>
-	const status = record.status
-	if (
-		typeof status === 'number' &&
-		[408, 409, 425, 429, 500, 502, 503, 504].includes(status)
-	) {
-		return true
-	}
-
-	const code = record.code
-	const name = record.name
-	return (
-		(typeof code === 'string' &&
-			[
-				'ECONNREFUSED',
-				'ECONNRESET',
-				'ECONNABORTED',
-				'ETIMEDOUT',
-				'EAI_AGAIN',
-				'ENOTFOUND',
-				'EPIPE'
-			].includes(code)) ||
-		(typeof name === 'string' &&
-			[
-				'APIConnectionError',
-				'APIConnectionTimeoutError',
-				'InternalServerError',
-				'RateLimitError',
-				'BadGatewayError',
-				'ServiceUnavailableError',
-				'GatewayTimeoutError'
-			].includes(name))
-	)
+	return isTransportApiError(error)
 }
 
 const toPilotError = (

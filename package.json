@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "inspect-schematic": "node --import tsx src/scripts/inspectSchematic.ts",
+    "verify:agents-sdk:routerai": "tsx src/scripts/verifyAgentsSdkRouterAi.ts",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,js}\"",
     "knip": "knip",
