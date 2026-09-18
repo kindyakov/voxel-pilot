@@ -1,3 +1,5 @@
+import { TASK_STATUSES } from '@/core/memory/types.js'
+
 import type { AgentToolDefinition } from '../contracts/agentClient.js'
 import type { AgentToolName } from '../contracts/execution.js'
 import { executionDefinitions } from './executionDefinitions.js'
@@ -80,6 +82,17 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
 		type: 'object',
 		additionalProperties: false,
 		properties: {},
+		required: []
+	}),
+	tool('tasks_list', 'List persistent tasks (survive restarts as suspended).', {
+		type: 'object',
+		additionalProperties: false,
+		properties: {
+			status: {
+				type: 'string',
+				enum: [...TASK_STATUSES]
+			}
+		},
 		required: []
 	}),
 	tool(

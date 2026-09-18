@@ -1,17 +1,19 @@
-import type { ConversationEntry } from '@/ai/conversationHistory.js'
-import { trimConversationHistory } from '@/ai/conversationHistory.js'
-import type { AgentToolDefinition } from '@/ai/contracts/agentClient.js'
-import type { WindowSession } from '@/ai/runtime/window.js'
-import {
-	buildSnapshot,
-	type ActiveWindowSessionState,
-	type SnapshotBot
-} from '@/ai/snapshot.js'
 import type { UserProfilePrompt } from '@/core/profile/index.js'
 import {
 	createEmptyUserProfilePrompt,
 	normalizeUserProfilePrompt
 } from '@/core/profile/index.js'
+
+import type { AgentToolDefinition } from '@/ai/contracts/agentClient.js'
+import type { CompletedMiningTask } from '@/ai/contracts/agentTurn.js'
+import type { ConversationEntry } from '@/ai/conversationHistory.js'
+import { trimConversationHistory } from '@/ai/conversationHistory.js'
+import type { WindowSession } from '@/ai/runtime/window.js'
+import {
+	type ActiveWindowSessionState,
+	type SnapshotBot,
+	buildSnapshot
+} from '@/ai/snapshot.js'
 
 export type PromptSectionSource =
 	| 'core_policy'
@@ -48,6 +50,8 @@ interface AssembleAgentPromptInput {
 	subGoal: string | null
 	conversationHistory?: ConversationEntry[]
 	lastAction: string | null
+	lastActionArgs?: Record<string, unknown> | null
+	completedMiningTasks?: readonly CompletedMiningTask[]
 	lastResult: 'SUCCESS' | 'FAILED' | null
 	lastReason: string | null
 	errorHistory: string[]
@@ -68,6 +72,10 @@ const CORE_POLICY_LINES = [
 	'Use inspect_blocks to find blocks, inspect_entities for entities, inspect_inventory for player inventory, and inspect_window for container state.',
 	'Before using navigate_to, break_block, place_block, follow_entity, or open_window, call memory_read or inspect tools in this turn to ground world facts.',
 	'Use mine_resource for repeated resource gathering and do not require inspect_blocks before mine_resource.',
+	'completed_mining_tasks contains confirmed completed work for CURRENT_GOAL: requested and collected are new net resource items for each task, excluding pre-existing stock. Count this work toward the goal; never order the same quantity again merely because a new thinking turn began or a tool was received. If it fulfills the entire goal, call finish_goal. For a compound goal, perform only the remaining steps; for a larger quantity, request only the remaining amount. These receipts are historical outcomes, not proof that the items are still in inventory.',
+	'For mine_resource and tasks_create, specify resource_name as the exact desired inventory item and block_name as its source. Count means NEW net items, not broken blocks or pre-existing stock. Example: coal_ore -> coal, or coal_ore -> coal_ore for Silk Touch blocks. Ask the player in chat if the desired output is ambiguous; never silently choose between raw material and preserved ore blocks.',
+	'Persistent tasks survive restarts as suspended: use tasks_list to see them, tasks_create to save work for later, tasks_start with a task id to resume, tasks_cancel to drop.',
+	'Start a stored task only when idle with no active task; create returns the id that start needs. tasks_start also adopts an orphaned active row (sync failure left it ownerless); a task that is already done goes straight to completion without digging.',
 	'Never invent coordinates, blocks, entities, containers, or tools that are not present in runtime facts, inspect results, memory results, or the tool contract.',
 	'If the user asks you to come to them, follow them, or stay near them, prefer follow_entity with the matching nearby player name instead of navigate_to.',
 	'Use open_window, transfer_item, and close_window for direct window interactions when the task requires moving items.',
@@ -166,6 +174,8 @@ export const assembleAgentPrompt = (
 			content: buildSnapshot({
 				bot: input.bot,
 				lastAction: input.lastAction,
+				lastActionArgs: input.lastActionArgs,
+				completedMiningTasks: input.completedMiningTasks,
 				lastResult: input.lastResult,
 				lastReason: input.lastReason,
 				errorHistory: input.errorHistory,

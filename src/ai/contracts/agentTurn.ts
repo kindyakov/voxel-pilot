@@ -10,6 +10,15 @@ import type { TaskContext } from '@/ai/taskContext.js'
 import type { AgentModelClient } from './agentClient.js'
 import type { PendingExecution } from './execution.js'
 
+/** Confirmed mining outcomes for the current goal, not current inventory stock. */
+export interface CompletedMiningTask {
+	taskId: string | null
+	blockName: string
+	resourceName: string
+	requested: number
+	collected: number
+}
+
 export interface AgentTurnInput {
 	bot: Bot
 	memory: MemoryManager
@@ -18,6 +27,8 @@ export interface AgentTurnInput {
 	conversationHistory?: ConversationEntry[]
 	userProfilePrompt?: UserProfilePrompt | null
 	lastAction: string | null
+	lastActionArgs?: Record<string, unknown> | null
+	completedMiningTasks?: readonly CompletedMiningTask[]
 	lastResult: 'SUCCESS' | 'FAILED' | null
 	lastReason: string | null
 	errorHistory: string[]

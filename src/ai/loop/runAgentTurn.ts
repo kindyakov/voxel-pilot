@@ -42,6 +42,8 @@ export const runAgentTurn = async (
 		conversationHistory: input.conversationHistory ?? [],
 		userProfilePrompt: input.userProfilePrompt ?? null,
 		lastAction: input.lastAction,
+		lastActionArgs: input.lastActionArgs,
+		completedMiningTasks: input.completedMiningTasks,
 		lastResult: input.lastResult,
 		lastReason: input.lastReason,
 		errorHistory: input.errorHistory,

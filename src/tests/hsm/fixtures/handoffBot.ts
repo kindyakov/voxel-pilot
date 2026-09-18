@@ -1,11 +1,10 @@
 import { EventEmitter } from 'node:events'
 import { createRequire } from 'node:module'
 
+import type { Bot, Entity, Item } from '@/types/index.js'
 import pathfinderPackage from 'mineflayer-pathfinder'
 import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
-
-import type { Bot, Entity, Item } from '@/types/index.js'
 
 import { createBotMachine } from '@/hsm/machine.js'
 
@@ -102,6 +101,10 @@ export class HandoffBot extends EventEmitter {
 	declare pathfinder: Bot['pathfinder']
 	declare movements: Bot['movements']
 	declare hsm: Bot['hsm']
+	tool: Pick<Bot['tool'], 'equipForBlock'> = {
+		equipForBlock: async () => {}
+	}
+	declare memory: Bot['memory']
 
 	asBot() {
 		// This fixture replaces the Minecraft server, not the HSM or its actors.

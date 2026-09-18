@@ -148,7 +148,10 @@ test('aborting breaking during drop spawn cannot replace the next movement owner
 		stopDigging: () => {
 			stops++
 		},
-		utils: { countItemInInventory: () => 0 },
+		utils: {
+			countItemInInventory: () => 0,
+			waitForInventoryChange: () => new Promise<boolean>(() => {})
+		},
 		entity: { position: new Vec3(0, 64, 0) },
 		nearestEntity: () => ({ position: new Vec3(2, 64, 0) }),
 		pathfinder: {

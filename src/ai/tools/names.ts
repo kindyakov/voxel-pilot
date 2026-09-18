@@ -15,7 +15,8 @@ const inlineToolNames = new Set<InlineToolName>([
 	'inspect_inventory',
 	'inspect_blocks',
 	'inspect_entities',
-	'inspect_window'
+	'inspect_window',
+	'tasks_list'
 ])
 
 const controlToolNames = new Set<ControlToolName>(['finish_goal'])

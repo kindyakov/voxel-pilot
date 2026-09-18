@@ -1,22 +1,143 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import test from 'node:test'
 import { setImmediate as flushImmediate } from 'node:timers/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 
+import type { Block, Bot, Item } from '@/types/index.js'
 import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
 import type { AnyActorLogic } from 'xstate'
 
-import { NoOpAgentClient } from '../../ai/client.js'
-import type { AgentTurnResult } from '../../ai/contracts/agentTurn.js'
-import { runAgentTurn } from '../../ai/loop.js'
-import { createTaskContext } from '../../ai/taskContext.js'
-import type { MachineContext } from '../../hsm/context.js'
-import { createBotMachine } from '../../hsm/machine.js'
-import type { Bot } from '../../types/index.js'
-import { createEntityFixture, registry } from './fixtures/handoffBot.js'
+import { MemoryManager } from '@/core/memory/index.js'
+import {
+	type CreatePersistentTaskInput,
+	type ListTasksQuery,
+	type PersistentTaskRecord,
+	type PersistentTaskStatus,
+	type UpdateTaskProgressOptions,
+	normalizeTaskDone
+} from '@/core/memory/types.js'
+
+import type { MachineContext } from '@/hsm/context.js'
+import { createBotMachine } from '@/hsm/machine.js'
+import { getMiningTask } from '@/hsm/tasks/task.js'
+
+import { NoOpAgentClient } from '@/ai/client.js'
+import type { AgentTurnResult } from '@/ai/contracts/agentTurn.js'
+import type { PendingExecution } from '@/ai/contracts/execution.js'
+import { runAgentTurn } from '@/ai/loop.js'
+import { createTaskContext } from '@/ai/taskContext.js'
+import { parseExecution } from '@/ai/tools/executionDefinitions.js'
+
+import {
+	BlockFactory,
+	ItemFactory,
+	createEntityFixture,
+	registry
+} from './fixtures/handoffBot.js'
 import { publishEntities } from './fixtures/publishEntities.js'
+
+const miningOre = (position: { x: number; y: number; z: number }) => {
+	const block = BlockFactory.fromStateId(
+		registry.blocksByName.iron_ore.defaultState,
+		0
+	)
+	block.position = position
+	return block
+}
+
+for (const batches of [1, 2]) {
+	test(`completed mining quantities reach the next real model turn across ${batches} batches and reset for a new goal`, async () => {
+		let inventory = 40
+		let digs = 0
+		const sand: Block = BlockFactory.fromStateId(
+			registry.blocksByName.sand.defaultState,
+			0
+		)
+		sand.position = new Vec3(1, 64, 0)
+		const bot = Object.assign(new FakeBot(), {
+			findBlocks: () => [sand.position],
+			blockAt: (pos: { x: number; y: number; z: number }) =>
+				pos.y === 64 ? sand : miningOre(pos),
+			dig: async () => {
+				digs++
+				inventory++
+			}
+		})
+		bot.utils.countItemInInventory = () => inventory
+		Object.assign(bot.utils, { waitForInventoryChange: async () => true })
+		const prompts: string[] = []
+		const actor = createActor(
+			createBotMachine({
+				agentClient: {
+					createResponse: async request => {
+						prompts.push(String(request.input))
+						return {
+							id: String(prompts.length),
+							outputText: '',
+							toolCalls: [
+								{
+									callId: String(prompts.length),
+									name:
+										prompts.length <= batches ? 'mine_resource' : 'finish_goal',
+									arguments:
+										prompts.length <= batches
+											? { block_name: 'sand', resource_name: 'sand', count: 5 }
+											: { message: 'Done' }
+								}
+							]
+						}
+					}
+				},
+				actors: {
+					serviceEntitiesTracking: noopActor,
+					worldObservation: noopActor
+				}
+			}),
+			{ input: { bot: bot as unknown as Bot } }
+		)
+		bot.hsm = { getContext: () => actor.getSnapshot().context }
+		actor.start()
+		try {
+			actor.send({
+				type: 'USER_COMMAND',
+				username: 'Steve',
+				text: `Mine ${5 * batches} sand`
+			})
+			await waitUntil(() => prompts.length >= batches + 1)
+			assert.match(
+				prompts[1]!,
+				/completed_mining_tasks: \[.*"resourceName":"sand".*"requested":5.*"collected":5/
+			)
+			assert.match(prompts[1]!, /last_action_args: .*"count":5/)
+			const completedLine = prompts[batches]!.split('\n').find(line =>
+				line.startsWith('completed_mining_tasks: ')
+			)!
+			const completed = JSON.parse(
+				completedLine.slice('completed_mining_tasks: '.length)
+			)
+			assert.equal(completed.length, batches)
+			assert.equal(inventory, 40 + 5 * batches)
+			assert.equal(digs, 5 * batches)
+			assert.equal(bot.memory.listTasks().length, batches)
+			await waitUntil(() => actor.getSnapshot().context.currentGoal === null)
+			actor.send({
+				type: 'USER_COMMAND',
+				username: 'Steve',
+				text: 'Mine five more sand'
+			})
+			await waitUntil(() => prompts.length === batches + 2)
+			assert.match(prompts[batches + 1]!, /completed_mining_tasks: \[\]/)
+			assert.match(prompts[batches + 1]!, /last_action_args: -/)
+		} finally {
+			actor.stop()
+		}
+	})
+}
 
 test('model arguments rejected by the real turn are explained to the next HSM turn', async () => {
 	const bot = new FakeBot()
@@ -411,6 +532,15 @@ const trackWindow = (
 	return window
 }
 
+type FakeTaskMemory = Pick<
+	MemoryManager,
+	| 'createTask'
+	| 'getTask'
+	| 'listTasks'
+	| 'updateTaskProgress'
+	| 'setTaskStatus'
+>
+
 class FakeBot extends EventEmitter {
 	username = 'Bot'
 	entity = { id: 999, position: createVec3(0, 64, 0), height: 1.8 }
@@ -421,7 +551,7 @@ class FakeBot extends EventEmitter {
 	oxygenLevel = 20
 	inventory = {
 		slots: Array.from({ length: 46 }, () => null),
-		items: () => []
+		items: (): Item[] => []
 	}
 	registry = registry
 	movement = {
@@ -501,6 +631,8 @@ class FakeBot extends EventEmitter {
 		searchPlayer: () => null,
 		countItemInInventory: () => 0
 	}
+	taskStore = new Map<string, PersistentTaskRecord>()
+	taskSeq = 0
 	memory = {
 		load: async () => {},
 		save: async () => {},
@@ -508,8 +640,52 @@ class FakeBot extends EventEmitter {
 		readEntries: () => [],
 		saveEntry: () => null,
 		updateEntryData: () => null,
-		deleteEntry: () => false
-	}
+		deleteEntry: () => false,
+		createTask: (input: CreatePersistentTaskInput) => {
+			this.taskSeq += 1
+			const record: PersistentTaskRecord = {
+				id: `test-task-${this.taskSeq}`,
+				kind: input.kind,
+				blockName: input.blockName,
+				...(input.resourceName ? { resourceName: input.resourceName } : {}),
+				total: input.total,
+				done: 0,
+				status: 'suspended',
+				createdAt: 0,
+				updatedAt: 0
+			}
+			this.taskStore.set(record.id, record)
+			return { ...record }
+		},
+		getTask: (id: string) => {
+			const record = this.taskStore.get(id)
+			return record ? { ...record } : null
+		},
+		listTasks: (query: ListTasksQuery = {}) =>
+			[...this.taskStore.values()]
+				.filter(record => !query.status || record.status === query.status)
+				.map(record => ({ ...record })),
+		updateTaskProgress: (
+			id: string,
+			done: number,
+			options: UpdateTaskProgressOptions = {}
+		) => {
+			const record = this.taskStore.get(id)
+			if (!record) return null
+			if (options.onlyFrom && record.status !== options.onlyFrom) {
+				return null
+			}
+			record.done = normalizeTaskDone(done, record.total)
+			if (options.status) record.status = options.status
+			return { ...record }
+		},
+		setTaskStatus: (id: string, status: PersistentTaskStatus) => {
+			const record = this.taskStore.get(id)
+			if (!record) return null
+			record.status = status
+			return { ...record }
+		}
+	} satisfies FakeTaskMemory & Record<string, unknown>
 	hsm: any
 	chatMessages: string[] = []
 
@@ -900,6 +1076,105 @@ test('interrupting the last allowed action cannot issue action 129 after recover
 	}
 })
 
+test('an exhausted mining action cannot resume after observation recovery', async () => {
+	type MiningResumeBot = Omit<FakeBot, 'findBlocks' | 'blockAt'> & {
+		findBlocks: () => ReturnType<typeof createVec3>[]
+		blockAt: (position: { x: number; y: number; z: number }) => {
+			name: string
+			position: ReturnType<typeof createVec3>
+			drops?: number[]
+		}
+	}
+	const bot = new FakeBot() as unknown as MiningResumeBot
+	withIronRegistry(bot)
+	const orePosition = createVec3(10, 64, 0)
+	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 10 && position.y === 64 && position.z === 0) {
+			return miningOre(orePosition)
+		}
+		return { name: 'stone', position: createVec3(position.x, 63, position.z) }
+	}
+
+	let turns = 0
+	const thinkingActor = fromPromise(async () => {
+		turns += 1
+		const execution =
+			turns === 128
+				? taskExecution('mine_resource', {
+						block_name: 'iron_ore',
+						count: 2
+					})
+				: taskExecution('navigate_to', {
+						position: { x: (turns % 2) + 10, y: 64, z: 0 }
+					})
+		return {
+			kind: 'execute' as const,
+			execution,
+			subGoal: turns === 128 ? 'Mine iron' : 'Spend the action budget',
+			transcript: []
+		}
+	})
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot: bot as unknown as Bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Mine later' })
+		for (let index = 0; index < 127; index += 1) {
+			await waitForTurn()
+			actor.send({ type: 'ARRIVED' })
+		}
+		await waitUntil(() =>
+			actor.getSnapshot().matches({
+				MAIN_ACTIVITY: { TASKS: { EXECUTING: { MINING: 'NAVIGATING' } } }
+			})
+		)
+		assert.equal(actor.getSnapshot().context.goalExecution.attempts, 128)
+		const taskId = getMiningTask(actor.getSnapshot().context.taskData)?.taskId
+		assert.ok(taskId)
+
+		actor.send({
+			type: 'THREAT_OBSERVATION_INVALID',
+			reason: 'invalid_bot_position'
+		})
+		await waitUntil(() =>
+			actor.getSnapshot().matches({
+				MAIN_ACTIVITY: 'OBSERVATION_WAIT'
+			})
+		)
+		assert.equal(bot.memory.getTask(taskId)?.status, 'suspended')
+
+		actor.send({
+			type: 'UPDATE_ENTITIES',
+			entities: [],
+			enemies: [],
+			players: []
+		})
+		await waitUntil(() => actor.getSnapshot().context.currentGoal === null)
+
+		assert.equal(turns, 128)
+		assert.equal(actor.getSnapshot().context.taskData, null)
+		assert.equal(actor.getSnapshot().context.movementOwner, 'NONE')
+		assert.equal(bot.memory.getTask(taskId)?.status, 'suspended')
+	} finally {
+		actor.stop()
+	}
+})
+
 test('late cleanup of an old window does not complete the new execution', async () => {
 	const bot = new FakeBot() as any
 	let resolveOpen: (value: unknown) => void = () => {}
@@ -971,6 +1246,32 @@ const waitUntil = async (predicate: () => boolean, attempts = 40) => {
 			return
 		}
 	}
+}
+
+const createTaskMemory = async (): Promise<MemoryManager> => {
+	const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'voxel-pilot-tasks-'))
+	const memory = new MemoryManager({ botName: 'TaskBot', dataDir })
+	await memory.load()
+	return memory
+}
+
+const withIronRegistry = (bot: any): void => {
+	bot.registry = {
+		...bot.registry,
+		blocksByName: { iron_ore: { id: 15, name: 'iron_ore' } }
+	}
+}
+
+/**
+ * Typed fixture builder: the execution goes through the same parser as the
+ * pilot path, so the test proves contract consistency instead of casting.
+ */
+const taskExecution = (name: string, args: unknown): PendingExecution => {
+	const parsed = parseExecution(name, args)
+	if (!parsed.ok) {
+		throw new Error(`Bad task fixture: ${parsed.reason}`)
+	}
+	return parsed.execution
 }
 
 test('machine enters TASKS.THINKING on USER_COMMAND', async () => {
@@ -2063,13 +2364,12 @@ test('mine_resource records failure after repeated navigation failures', async (
 		}
 	}
 	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
 	bot.blockAt = (position: { x: number; y: number; z: number }) => {
 		if (position.x === 10 && position.y === 64 && position.z === 0) {
-			return {
-				name: 'iron_ore',
-				position: orePosition,
-				drops: [1]
-			}
+			return miningOre(orePosition)
 		}
 		if (position.x === 10 && position.y === 63 && position.z === 0) {
 			return {
@@ -2159,13 +2459,12 @@ test('mine_resource records failure after repeated breaking failures', async () 
 		}
 	}
 	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
 	bot.blockAt = (position: { x: number; y: number; z: number }) => {
 		if (position.x === 1 && position.y === 64 && position.z === 0) {
-			return {
-				name: 'iron_ore',
-				position: orePosition,
-				drops: [1]
-			}
+			return miningOre(orePosition)
 		}
 		if (position.x === 1 && position.y === 63 && position.z === 0) {
 			return {
@@ -2180,6 +2479,7 @@ test('mine_resource records failure after repeated breaking failures', async () 
 			throw new Error('no harvest tool')
 		}
 	}
+	bot.inventory.items = () => []
 
 	const actor = createActor(
 		createBotMachine({
@@ -3919,5 +4219,1231 @@ test('stopping the machine releases its window without a final transition', asyn
 		)
 	} finally {
 		actor.stop()
+	}
+})
+
+test('mining progress survives observation preemption and resumes without rethinking', async () => {
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		return {
+			kind: 'execute' as const,
+			execution: {
+				toolName: 'mine_resource' as any,
+				args: { block_name: 'iron_ore', count: 2 }
+			},
+			subGoal: 'Mine iron ore',
+			transcript: ['mine_resource']
+		}
+	})
+
+	const bot = new FakeBot() as any
+	bot.registry = {
+		...bot.registry,
+		blocksByName: { iron_ore: { id: 15, name: 'iron_ore' } }
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Mine iron' })
+		await waitUntil(() =>
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: { TASKS: { EXECUTING: { MINING: 'SEARCHING' } } }
+			})
+		)
+		const callsBeforePreempt = thinkingCalls
+
+		actor.send({
+			type: 'THREAT_OBSERVATION_INVALID',
+			reason: 'invalid_bot_position'
+		})
+		await waitUntil(() =>
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: 'OBSERVATION_WAIT'
+			})
+		)
+		// Suspended, not wiped.
+		assert.equal(
+			(actor.getSnapshot().context.taskData as any)?.blockName,
+			'iron_ore'
+		)
+
+		actor.send({
+			type: 'UPDATE_ENTITIES',
+			entities: [],
+			enemies: [],
+			players: []
+		})
+		await waitUntil(() =>
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: { TASKS: { EXECUTING: { MINING: 'SEARCHING' } } }
+			})
+		)
+		assert.equal(
+			(actor.getSnapshot().context.taskData as any)?.blockName,
+			'iron_ore'
+		)
+		assert.equal(actor.getSnapshot().context.movementOwner, 'PATHFINDER')
+		// Resume bypassed THINKING: no new agent turn was spent.
+		assert.equal(thinkingCalls, callsBeforePreempt)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('mining failure chat names the collected progress and the reason', async () => {
+	const thinkingActor = fromPromise(async () => ({
+		kind: 'execute' as const,
+		execution: {
+			toolName: 'mine_resource' as any,
+			args: { block_name: 'iron_ore', count: 1 }
+		},
+		subGoal: 'Mine iron ore',
+		transcript: ['mine_resource']
+	}))
+
+	const bot = new FakeBot() as any
+	const orePosition = createVec3(1, 64, 0)
+	bot.registry = {
+		...bot.registry,
+		blocksByName: { iron_ore: { id: 15, name: 'iron_ore' } }
+	}
+	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 1 && position.y === 64 && position.z === 0) {
+			return miningOre(orePosition)
+		}
+		if (position.x === 1 && position.y === 63 && position.z === 0) {
+			return { name: 'stone', position: createVec3(1, 63, 0) }
+		}
+		return null
+	}
+	bot.tool = {
+		equipForBlock: async () => {
+			throw new Error('no harvest tool')
+		}
+	}
+	bot.inventory.items = () => []
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Mine iron' })
+		await waitUntil(() => actor.getSnapshot().context.lastResult === 'FAILED')
+		assert.match(bot.chatMessages.join('\n'), /Собрано: 0\/1/)
+		assert.match(bot.chatMessages.join('\n'), /Причина:/)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('tasks_create stores a suspended record without starting work', async () => {
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls > 1) {
+			return { kind: 'finish' as const, message: 'Saved for later' }
+		}
+		return {
+			kind: 'execute' as const,
+			execution: taskExecution('tasks_create', {
+				block_name: 'iron_ore',
+				count: 3
+			}),
+			subGoal: 'Save mining for later',
+			transcript: ['tasks_create']
+		}
+	})
+
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Save work' })
+		await waitUntil(() => actor.getSnapshot().context.currentGoal === null)
+
+		assert.equal(actor.getSnapshot().context.lastAction, 'tasks_create')
+		assert.equal(actor.getSnapshot().context.lastResult, 'SUCCESS')
+		const records = memory.listTasks({ status: 'suspended' })
+		assert.equal(records.length, 1)
+		assert.equal(records[0]?.blockName, 'iron_ore')
+		assert.equal(records[0]?.total, 3)
+		assert.equal(records[0]?.done, 0)
+		assert.equal(actor.getSnapshot().context.taskData, null)
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+test('tasks_start lifts a suspended record into MINING with kept progress', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+	const stored = memory.createTask({
+		kind: 'mining',
+		blockName: 'iron_ore',
+		total: 4
+	})
+	memory.updateTaskProgress(stored.id, 1)
+
+	const orePosition = createVec3(10, 64, 0)
+	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 10 && position.y === 64 && position.z === 0) {
+			return miningOre(orePosition)
+		}
+		if (position.x === 10 && position.y === 63 && position.z === 0) {
+			return { name: 'stone', position: createVec3(10, 63, 0) }
+		}
+		return null
+	}
+
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls > 1) {
+			return await new Promise<never>(() => {})
+		}
+		return {
+			kind: 'execute' as const,
+			execution: taskExecution('tasks_start', { task_id: stored.id }),
+			subGoal: 'Resume stored mining',
+			transcript: ['tasks_start']
+		}
+	})
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Resume work' })
+		await waitUntil(
+			() =>
+				(actor.getSnapshot() as any).matches({
+					MAIN_ACTIVITY: { TASKS: { EXECUTING: { MINING: 'NAVIGATING' } } }
+				}) && (actor.getSnapshot().context.taskData as any)?.collected === 1
+		)
+
+		assert.equal(
+			(actor.getSnapshot().context.taskData as any)?.taskId,
+			stored.id
+		)
+		assert.equal(actor.getSnapshot().context.movementOwner, 'PATHFINDER')
+		assert.equal(memory.getTask(stored.id)?.status, 'active')
+		assert.equal(thinkingCalls, 1)
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+test('tasks_cancel drops a suspended record without touching runtime', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+	const stored = memory.createTask({
+		kind: 'mining',
+		blockName: 'iron_ore',
+		total: 2
+	})
+
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls > 1) {
+			return { kind: 'finish' as const, message: 'Cancelled' }
+		}
+		return {
+			kind: 'execute' as const,
+			execution: taskExecution('tasks_cancel', { task_id: stored.id }),
+			subGoal: 'Drop stored mining',
+			transcript: ['tasks_cancel']
+		}
+	})
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Drop work' })
+		await waitUntil(() => actor.getSnapshot().context.currentGoal === null)
+
+		assert.equal(actor.getSnapshot().context.lastAction, 'tasks_cancel')
+		assert.equal(actor.getSnapshot().context.lastResult, 'SUCCESS')
+		assert.equal(memory.getTask(stored.id)?.status, 'cancelled')
+		assert.equal(actor.getSnapshot().context.taskData, null)
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+test('tasks_start on a finished record completes without digging', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+	const stored = memory.createTask({
+		kind: 'mining',
+		blockName: 'iron_ore',
+		total: 2
+	})
+	memory.updateTaskProgress(stored.id, 2)
+	let dug = 0
+	const realDig = bot.dig.bind(bot)
+	bot.dig = async (...args: unknown[]) => {
+		dug += 1
+		await (realDig as (...a: unknown[]) => Promise<void>)(...args)
+	}
+
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls > 1) {
+			return { kind: 'finish' as const, message: 'Already done' }
+		}
+		return {
+			kind: 'execute' as const,
+			execution: taskExecution('tasks_start', { task_id: stored.id }),
+			subGoal: 'Resume finished work',
+			transcript: ['tasks_start']
+		}
+	})
+
+	const actor = miningTestActor(bot, thinkingActor)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Resume work' })
+		await waitUntil(() => actor.getSnapshot().context.currentGoal === null)
+
+		assert.equal(actor.getSnapshot().context.lastResult, 'SUCCESS')
+		assert.equal(dug, 0)
+		assert.equal(memory.getTask(stored.id)?.status, 'completed')
+		assert.equal(memory.getTask(stored.id)?.done, 2)
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+test('tasks_start with an unknown id fails with a reason', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls > 1) {
+			return await new Promise<never>(() => {})
+		}
+		return {
+			kind: 'execute' as const,
+			execution: taskExecution('tasks_start', { task_id: 'missing-id' }),
+			subGoal: 'Resume nothing',
+			transcript: ['tasks_start']
+		}
+	})
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Resume work' })
+		await waitUntil(() => actor.getSnapshot().context.lastResult === 'FAILED')
+
+		assert.equal(actor.getSnapshot().context.lastAction, 'tasks_start')
+		assert.match(actor.getSnapshot().context.lastReason ?? '', /Unknown task/)
+		assert.equal(actor.getSnapshot().context.taskData, null)
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+test('mining record flips active/suspended across two preemptions', async () => {
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls > 1) {
+			return await new Promise<never>(() => {})
+		}
+		return {
+			kind: 'execute' as const,
+			execution: taskExecution('mine_resource', {
+				block_name: 'iron_ore',
+				count: 2
+			}),
+			subGoal: 'Mine iron ore',
+			transcript: ['mine_resource']
+		}
+	})
+
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const orePosition = createVec3(10, 64, 0)
+	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 10 && position.y === 64 && position.z === 0) {
+			return miningOre(orePosition)
+		}
+		if (position.x === 10 && position.y === 63 && position.z === 0) {
+			return { name: 'stone', position: createVec3(10, 63, 0) }
+		}
+		return null
+	}
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	const recordStatus = (): string | null => {
+		const taskId = (actor.getSnapshot().context.taskData as any)?.taskId
+		if (!taskId) return null
+		return bot.memory.getTask(taskId)?.status ?? null
+	}
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Mine iron' })
+		await waitUntil(() =>
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: { TASKS: { EXECUTING: { MINING: 'NAVIGATING' } } }
+			})
+		)
+		// Linked on MINING entry and active while running.
+		assert.equal(recordStatus(), 'active')
+
+		actor.send({
+			type: 'THREAT_OBSERVATION_INVALID',
+			reason: 'invalid_bot_position'
+		})
+		await waitUntil(() =>
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: 'OBSERVATION_WAIT'
+			})
+		)
+		assert.equal(recordStatus(), 'suspended')
+
+		actor.send({
+			type: 'UPDATE_ENTITIES',
+			entities: [],
+			enemies: [],
+			players: []
+		})
+		await waitUntil(() =>
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: { TASKS: { EXECUTING: { MINING: 'NAVIGATING' } } }
+			})
+		)
+		// Resume reactivates instead of leaving a stale suspended row.
+		assert.equal(recordStatus(), 'active')
+
+		actor.send({
+			type: 'THREAT_OBSERVATION_INVALID',
+			reason: 'invalid_bot_position'
+		})
+		await waitUntil(() =>
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: 'OBSERVATION_WAIT'
+			})
+		)
+		assert.equal(recordStatus(), 'suspended')
+		assert.equal(
+			(actor.getSnapshot().context.taskData as any)?.blockName,
+			'iron_ore'
+		)
+		assert.equal(thinkingCalls, 1)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('store holds done after every BROKEN, not just at the end', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+
+	let digs = 0
+	let count = 0
+	bot.utils.countItemInInventory = () => count
+	bot.utils.waitForInventoryChange = async (_itemId: number, initial: number) =>
+		count > initial
+	bot.dig = async () => {
+		digs += 1
+		if (digs === 1) count += 1
+	}
+	const orePosition = createVec3(1, 64, 0)
+	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 1 && position.y === 64 && position.z === 0) {
+			return miningOre(orePosition)
+		}
+		if (position.x === 1 && position.y === 63 && position.z === 0) {
+			return { name: 'stone', position: createVec3(1, 63, 0) }
+		}
+		return null
+	}
+
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls > 1) {
+			return await new Promise<never>(() => {})
+		}
+		return {
+			kind: 'execute' as const,
+			execution: taskExecution('mine_resource', {
+				block_name: 'iron_ore',
+				count: 2
+			}),
+			subGoal: 'Mine iron ore',
+			transcript: ['mine_resource']
+		}
+	})
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Mine iron' })
+		// First unit collected while the task is still running.
+		await waitUntil(
+			() => (actor.getSnapshot().context.taskData as any)?.collected === 1
+		)
+
+		const taskId = (actor.getSnapshot().context.taskData as any)?.taskId
+		assert.ok(taskId, 'expected a linked record mid-run')
+		assert.equal(memory.getTask(taskId)?.done, 1)
+		assert.equal(memory.getTask(taskId)?.status, 'active')
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+const createBreakingBot = (bot: any): { done: () => number } => {
+	let count = 0
+	let digs = 0
+	bot.utils.countItemInInventory = () => count
+	bot.utils.waitForInventoryChange = async (_itemId: number, initial: number) =>
+		count > initial
+	bot.dig = async () => {
+		digs += 1
+		if (digs === 1) count += 1
+	}
+	const orePosition = createVec3(1, 64, 0)
+	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 1 && position.y === 64 && position.z === 0) {
+			return miningOre(orePosition)
+		}
+		if (position.x === 1 && position.y === 63 && position.z === 0) {
+			return { name: 'stone', position: createVec3(1, 63, 0) }
+		}
+		return null
+	}
+	return { done: () => count }
+}
+
+const mineOnceThinking = (
+	blockName: string,
+	count: number,
+	resourceName?: string
+) => {
+	let thinkingCalls = 0
+	return {
+		thinkingActor: fromPromise(async () => {
+			thinkingCalls += 1
+			if (thinkingCalls > 1) {
+				return await new Promise<never>(() => {})
+			}
+			return {
+				kind: 'execute' as const,
+				execution: taskExecution('mine_resource', {
+					block_name: blockName,
+					...(resourceName ? { resource_name: resourceName } : {}),
+					count
+				}),
+				subGoal: `Mine ${blockName}`,
+				transcript: ['mine_resource']
+			}
+		}),
+		calls: () => thinkingCalls
+	}
+}
+
+const miningTestActor = (bot: any, thinkingActor: AnyActorLogic) =>
+	createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+
+for (const stage of [
+	'navigation',
+	'digging',
+	'terminal-write-failure'
+] as const) {
+	test(`external resource receipt finishes mining during ${stage} and cancels its actor`, async () => {
+		let inventory = 20
+		let digs = 0
+		let stopped = 0
+		let finishDig = () => {}
+		const waitingDig = new Promise<void>(resolve => {
+			finishDig = resolve
+		})
+		const ore: Block = BlockFactory.fromStateId(
+			registry.blocksByName.coal_ore.defaultState,
+			0
+		)
+		ore.position = new Vec3(stage !== 'digging' ? 10 : 1, 64, 0)
+		const bot = Object.assign(new FakeBot(), {
+			findBlocks: () => [ore.position],
+			blockAt: (pos: { x: number; y: number; z: number }) =>
+				pos.y === 64 ? ore : miningOre(pos),
+			dig: async () => {
+				digs++
+				await waitingDig
+			},
+			stopDigging: () => {
+				stopped++
+			}
+		})
+		bot.inventory.items = () => [
+			new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+		]
+		bot.utils.countItemInInventory = () => inventory
+		if (stage === 'terminal-write-failure') {
+			const update = bot.memory.updateTaskProgress
+			bot.memory.updateTaskProgress = (id, done, options) => {
+				if (options?.status === 'completed') throw new Error('disk failure')
+				return update(id, done, options)
+			}
+		}
+		const { thinkingActor } = mineOnceThinking('coal_ore', 10, 'coal')
+		const actor = miningTestActor(bot, thinkingActor)
+		bot.hsm = { getContext: () => actor.getSnapshot().context }
+		actor.start()
+		try {
+			actor.send({
+				type: 'USER_COMMAND',
+				username: 'Steve',
+				text: 'Collect ten coal'
+			})
+			await waitUntil(() =>
+				stage !== 'digging'
+					? bot.pathfinder.goals.some(goal => goal !== null)
+					: digs === 1
+			)
+			assert.equal(
+				getMiningTask(actor.getSnapshot().context.taskData)?.collected,
+				0
+			)
+			inventory += 10
+			bot.emit('physicsTick')
+			await waitUntil(
+				() =>
+					actor.getSnapshot().context.lastResult ===
+					(stage === 'terminal-write-failure' ? 'FAILED' : 'SUCCESS')
+			)
+			assert.equal(
+				bot.memory.listTasks()[0]?.status,
+				stage === 'terminal-write-failure' ? 'active' : 'completed'
+			)
+			assert.equal(bot.memory.listTasks()[0]?.done, 10)
+			assert.equal(
+				actor.getSnapshot().context.completedMiningTasks.length,
+				stage === 'terminal-write-failure' ? 0 : 1
+			)
+			assert.equal(digs, stage === 'digging' ? 1 : 0)
+			if (stage === 'digging') assert.ok(stopped > 0)
+			const goals = bot.pathfinder.goals.length
+			finishDig()
+			await new Promise(resolve => setImmediate(resolve))
+			assert.equal(
+				bot.pathfinder.goals.length,
+				goals,
+				'late digging must not start pickup movement'
+			)
+		} finally {
+			finishDig()
+			actor.stop()
+		}
+	})
+}
+
+for (const lostDrop of [false, true]) {
+	test(`mining keeps its batch after ${lostDrop ? 'a lost drop' : 'a vanished target'} and counts multi-item drops`, async () => {
+		let inventory = 0
+		let searches = 0
+		const dug: number[] = []
+		const ores = [1, 2, 3].map(x => {
+			const block: Block = BlockFactory.fromStateId(
+				registry.blocksByName.coal_ore.defaultState,
+				0
+			)
+			block.position = new Vec3(x, 64, 0)
+			return block
+		})
+		const remaining = new Map(ores.map(block => [block.position.x, block]))
+		const bot = Object.assign(new FakeBot(), {
+			findBlocks: () => {
+				searches++
+				return ores.map(block => block.position)
+			},
+			blockAt: (pos: { x: number; y: number; z: number }) =>
+				pos.y === 64 ? (remaining.get(pos.x) ?? null) : miningOre(pos),
+			dig: async (block: Block) => {
+				dug.push(block.position.x)
+				remaining.delete(block.position.x)
+				if (!lostDrop) remaining.delete(2)
+				inventory += lostDrop
+					? dug.length === 1
+						? 0
+						: dug.length === 2
+							? 4
+							: 6
+					: dug.length === 1
+						? 4
+						: 6
+			}
+		})
+		bot.inventory.items = () => [
+			new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+		]
+		bot.utils.countItemInInventory = () => inventory
+		Object.assign(bot.utils, { waitForInventoryChange: async () => true })
+		const { thinkingActor } = mineOnceThinking('coal_ore', 10, 'coal')
+		const actor = miningTestActor(bot, thinkingActor)
+		bot.hsm = { getContext: () => actor.getSnapshot().context }
+		actor.start()
+		try {
+			actor.send({
+				type: 'USER_COMMAND',
+				username: 'Steve',
+				text: 'Collect coal'
+			})
+			await waitUntil(
+				() => actor.getSnapshot().context.lastResult === 'SUCCESS'
+			)
+			assert.deepEqual(dug, lostDrop ? [1, 2, 3] : [1, 3])
+			assert.equal(searches, 1)
+			assert.equal(bot.memory.listTasks()[0]?.done, 10)
+		} finally {
+			actor.stop()
+		}
+	})
+}
+
+test('a destroyed navigation target switches to the next queued block without searching', async () => {
+	let searches = 0
+	const targets = [10, 12].map(x => {
+		const block: Block = BlockFactory.fromStateId(
+			registry.blocksByName.coal_ore.defaultState,
+			0
+		)
+		block.position = new Vec3(x, 64, 0)
+		return block
+	})
+	const remaining = new Map(targets.map(block => [block.position.x, block]))
+	const bot = Object.assign(new FakeBot(), {
+		findBlocks: () => {
+			searches++
+			return targets.map(block => block.position)
+		},
+		blockAt: (pos: { x: number; y: number; z: number }) =>
+			pos.y === 64 ? (remaining.get(pos.x) ?? null) : miningOre(pos)
+	})
+	const { thinkingActor } = mineOnceThinking('coal_ore', 10, 'coal')
+	const actor = miningTestActor(bot, thinkingActor)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+	try {
+		actor.send({
+			type: 'USER_COMMAND',
+			username: 'Steve',
+			text: 'Collect coal'
+		})
+		await waitUntil(() => bot.pathfinder.goals.some(goal => goal !== null))
+		remaining.delete(10)
+		bot.emit('blockUpdate', targets[0], null)
+		await waitUntil(
+			() =>
+				getMiningTask(actor.getSnapshot().context.taskData)?.targetBlocks[0]
+					?.position.x === 12
+		)
+		const lastGoal = bot.pathfinder.goals.at(-1)
+		assert.ok(lastGoal && typeof lastGoal === 'object' && 'x' in lastGoal)
+		assert.equal(lastGoal.x, 12)
+		assert.equal(searches, 1)
+	} finally {
+		actor.stop()
+	}
+})
+
+test('link failure fails the execution before any digging', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+	memory.createTask = () => {
+		throw new Error('disk full')
+	}
+	const orePosition = createVec3(1, 64, 0)
+	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
+	let dug = 0
+	const realDig = bot.dig.bind(bot)
+	bot.dig = async (...args: unknown[]) => {
+		dug += 1
+		await (realDig as (...a: unknown[]) => Promise<void>)(...args)
+	}
+	const { thinkingActor } = mineOnceThinking('iron_ore', 1)
+
+	const actor = miningTestActor(bot, thinkingActor)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Mine iron' })
+		await waitUntil(() => actor.getSnapshot().context.lastResult === 'FAILED')
+
+		assert.equal(actor.getSnapshot().context.lastAction, 'mine_resource')
+		assert.match(bot.chatMessages.join('\n'), /Task record link failed/)
+		assert.equal(actor.getSnapshot().context.taskData, null)
+		assert.equal(dug, 0)
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+test('terminal sync failure fails instead of reporting false success', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+	const failingSync = memory.updateTaskProgress.bind(memory)
+	// Terminal-only fault: progress writes carry only the active CAS guard,
+	// so the fault must match completed/failed and spare progress writes.
+	// The test then proves no failed-write fallback fires (failedWrites stays
+	// empty) and the row is left resumable instead of terminal.
+	const terminalWrites: string[] = []
+	memory.updateTaskProgress = (id, done, options) => {
+		if (options?.status === 'completed' || options?.status === 'failed') {
+			terminalWrites.push(options.status)
+			throw new Error('disk full')
+		}
+		return failingSync(id, done, options)
+	}
+	createBreakingBot(bot)
+	let digs = 0
+	const innerDig = bot.dig.bind(bot)
+	bot.dig = async (...args: unknown[]) => {
+		digs += 1
+		await (innerDig as (...a: unknown[]) => Promise<void>)(...args)
+	}
+	// The first search finds nearby ore (it gets dug). The adopted run is
+	// already complete, so it routes straight to TASK_SYNCING with no dig.
+	const nearOre = createVec3(1, 64, 0)
+	const farOre = createVec3(10, 64, 0)
+	let searches = 0
+	bot.findBlocks = () => {
+		searches += 1
+		return [searches === 1 ? nearOre : farOre]
+	}
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 1 && position.y === 64 && position.z === 0) {
+			return miningOre(nearOre)
+		}
+		if (position.x === 1 && position.y === 63 && position.z === 0) {
+			return { name: 'stone', position: createVec3(1, 63, 0) }
+		}
+		if (position.x === 10 && position.y === 64 && position.z === 0) {
+			return miningOre(farOre)
+		}
+		if (position.x === 10 && position.y === 63 && position.z === 0) {
+			return { name: 'stone', position: createVec3(10, 63, 0) }
+		}
+		return null
+	}
+
+	// The resume turn is parked behind a gate: without it the FAILED window
+	// between sync-failure and adoption is ~10ms and unpollable. Deterministic
+	// beats fast here.
+	const resumeGate: { release: (() => void) | null } = { release: null }
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls === 1) {
+			return {
+				kind: 'execute' as const,
+				execution: taskExecution('mine_resource', {
+					block_name: 'iron_ore',
+					count: 1
+				}),
+				subGoal: 'Mine iron ore',
+				transcript: ['mine_resource']
+			}
+		}
+		if (thinkingCalls > 2) {
+			return await new Promise<never>(() => {})
+		}
+		await new Promise<void>(resolve => {
+			resumeGate.release = resolve
+		})
+		const [record] = memory.listTasks()
+		return {
+			kind: 'execute' as const,
+			execution: taskExecution('tasks_start', { task_id: record?.id ?? '' }),
+			subGoal: 'Adopt the orphaned row',
+			transcript: ['tasks_start']
+		}
+	})
+
+	const actor = miningTestActor(bot, thinkingActor)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Mine iron' })
+		await waitUntil(() => actor.getSnapshot().context.lastResult === 'FAILED')
+
+		// No success lie: the chat names the sync failure, the row keeps the
+		// last synced progress as resumable active work. Exactly one
+		// terminal attempt happened and no failed-write fallback fired.
+		assert.match(bot.chatMessages.join('\n'), /Task record sync failed/)
+		assert.deepEqual(terminalWrites, ['completed'])
+		const [record] = memory.listTasks()
+		assert.equal(record?.status, 'active')
+		assert.equal(record?.done, 1)
+		assert.equal(actor.getSnapshot().context.taskData, null)
+		await waitUntil(() => resumeGate.release !== null)
+		assert.ok(resumeGate.release)
+		resumeGate.release()
+
+		// The orphaned row is adoptable in-session: no restart needed. It is
+		// already complete (1/1), so adoption routes straight to TASK_SYNCING
+		// with zero additional digs — and fails there on the same dead disk.
+		await waitUntil(
+			() =>
+				actor.getSnapshot().context.lastAction === 'tasks_start' &&
+				actor.getSnapshot().context.lastResult === 'FAILED'
+		)
+		assert.equal(digs, 1)
+		assert.equal(actor.getSnapshot().context.taskData, null)
+		assert.equal(memory.getTask(record?.id ?? '')?.status, 'active')
+		assert.equal(memory.getTask(record?.id ?? '')?.done, 1)
+		// think3 starts synchronously in the post-adopt cascade and parks
+		// there; the adopt itself needed exactly think1+think2.
+		assert.equal(thinkingCalls, 3)
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+test('terminal sync returning null fails like a thrown sync error', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+	const failingSync = memory.updateTaskProgress.bind(memory)
+	memory.updateTaskProgress = (id, done, options) => {
+		if (options?.status === 'completed' || options?.status === 'failed') {
+			return null
+		}
+		return failingSync(id, done, options)
+	}
+	createBreakingBot(bot)
+	const { thinkingActor } = mineOnceThinking('iron_ore', 1)
+
+	const actor = miningTestActor(bot, thinkingActor)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Mine iron' })
+		await waitUntil(() => actor.getSnapshot().context.lastResult === 'FAILED')
+
+		assert.match(bot.chatMessages.join('\n'), /no completed row/)
+		const [record] = memory.listTasks()
+		assert.equal(record?.status, 'active')
+		assert.equal(record?.done, 1)
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+test('transient progress-write failure still completes on a landed terminal write', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+	const failingSync = memory.updateTaskProgress.bind(memory)
+	// Single-shot fault on the first active CAS progress write. Proves a
+	// transient progress failure is tolerated when the terminal write lands.
+	let progressFaults = 0
+	memory.updateTaskProgress = (id, done, options) => {
+		if (
+			options?.status === undefined &&
+			options?.onlyFrom === 'active' &&
+			progressFaults++ === 0
+		) {
+			throw new Error('transient io error')
+		}
+		return failingSync(id, done, options)
+	}
+	createBreakingBot(bot)
+	const { thinkingActor } = mineOnceThinking('iron_ore', 1)
+
+	const actor = miningTestActor(bot, thinkingActor)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Mine iron' })
+		await waitUntil(() => actor.getSnapshot().context.lastResult !== null)
+
+		assert.equal(progressFaults, 1)
+		assert.equal(actor.getSnapshot().context.lastResult, 'SUCCESS')
+		const [record] = memory.listTasks()
+		assert.equal(record?.status, 'completed')
+		assert.equal(record?.done, 1)
+	} finally {
+		actor.stop()
+		memory.close()
+	}
+})
+
+test('tasks_start keeps the failure budget until mining delivers its verdict', async () => {
+	const bot = new FakeBot() as any
+	withIronRegistry(bot)
+	const memory = await createTaskMemory()
+	bot.memory = memory
+	const stored = memory.createTask({
+		kind: 'mining',
+		blockName: 'iron_ore',
+		total: 4
+	})
+
+	const orePosition = createVec3(10, 64, 0)
+	bot.findBlocks = () => [orePosition]
+	bot.inventory.items = () => [
+		new ItemFactory(registry.itemsByName.iron_pickaxe.id, 1)
+	]
+	bot.blockAt = (position: { x: number; y: number; z: number }) => {
+		if (position.x === 10 && position.y === 64 && position.z === 0) {
+			return miningOre(orePosition)
+		}
+		if (position.x === 10 && position.y === 63 && position.z === 0) {
+			return { name: 'stone', position: createVec3(10, 63, 0) }
+		}
+		return null
+	}
+
+	let thinkingCalls = 0
+	const thinkingActor = fromPromise(async () => {
+		thinkingCalls += 1
+		if (thinkingCalls === 1) {
+			return { kind: 'rejected' as const, reason: 'bad args', transcript: [] }
+		}
+		if (thinkingCalls > 2) {
+			return await new Promise<never>(() => {})
+		}
+		return {
+			kind: 'execute' as const,
+			execution: taskExecution('tasks_start', { task_id: stored.id }),
+			subGoal: 'Resume stored mining',
+			transcript: ['tasks_start']
+		}
+	})
+
+	const actor = createActor(
+		createBotMachine({
+			thinkingActor,
+			actors: {
+				serviceEntitiesTracking: noopActor,
+				serviceMeleeAttack: noopActor,
+				serviceRangedSkirmish: noopActor,
+				serviceFleeing: noopActor,
+				serviceEmergencyEating: hangingActor,
+				serviceEmergencyHealing: hangingActor
+			}
+		}),
+		{ input: { bot } }
+	)
+	bot.hsm = { getContext: () => actor.getSnapshot().context }
+	actor.start()
+
+	try {
+		actor.send({ type: 'USER_COMMAND', username: 'Steve', text: 'Resume work' })
+		await waitUntil(() =>
+			(actor.getSnapshot() as any).matches({
+				MAIN_ACTIVITY: { TASKS: { EXECUTING: { MINING: 'NAVIGATING' } } }
+			})
+		)
+
+		// One rejection before the start, zero resets on routing.
+		assert.equal(
+			actor.getSnapshot().context.goalExecution.consecutiveFailures,
+			1
+		)
+		assert.equal(actor.getSnapshot().context.goalExecution.attempts, 1)
+	} finally {
+		actor.stop()
+		memory.close()
 	}
 })

@@ -1,6 +1,5 @@
-import { Vec3 } from 'vec3'
-
 import type { Bot } from '@/types/index.js'
+import { Vec3 } from 'vec3'
 
 import type { PendingExecution } from '../contracts/execution.js'
 import type { TaskContext } from '../taskContext.js'
@@ -143,6 +142,12 @@ export const validateExecutionTool = (
 			}
 			return null
 		case 'mine_resource':
+			return null
+		case 'tasks_create':
+		case 'tasks_start':
+		case 'tasks_cancel':
+			// No world grounding: task existence and state are checked by the
+			// HSM, which reports Unknown task / wrong state as execution failure.
 			return null
 		case 'open_window':
 			if (

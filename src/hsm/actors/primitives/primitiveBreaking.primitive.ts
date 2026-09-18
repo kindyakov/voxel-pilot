@@ -1,5 +1,3 @@
-import { setTimeout as delay } from 'node:timers/promises'
-
 import type { Block } from '@/types/index.js'
 
 import Logger from '@/config/logger.js'
@@ -8,8 +6,12 @@ import {
 	type BaseServiceState,
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService.js'
+import type { MiningResource } from '@/hsm/tasks/miningResource.js'
+import { getMiningTask, sampleMiningInventory } from '@/hsm/tasks/task.js'
 
 import { GoalNear } from '@/modules/plugins/goals.js'
+
+import { equipMiningTool } from '@/utils/minecraft/miningTool.js'
 
 interface PrimitiveBreakingState extends BaseServiceState {
 	block: Block | null
@@ -17,8 +19,21 @@ interface PrimitiveBreakingState extends BaseServiceState {
 
 interface BreakingOptions {
 	block: Block | null
+	miningResource?: MiningResource
 }
 
+const shouldUnequipSword = (
+	block: Block,
+	heldItemName: string | undefined
+): boolean =>
+	block.name !== 'cobweb' && heldItemName?.endsWith('_sword') === true
+
+/**
+ * Breaks one block and counts it ONLY on inventory growth (Q2).
+ * Drop identity is the inventory delta — no raw entity-metadata sniffing (Q10a).
+ * After digging the bot steps to the broken position so the drop is picked up,
+ * then the delta decides BROKEN vs BREAKING_FAILED (feeds the per-block blacklist, Q6).
+ */
 export const primitiveBreaking = createStatefulService<
 	PrimitiveBreakingState,
 	BreakingOptions
@@ -30,7 +45,7 @@ export const primitiveBreaking = createStatefulService<
 	},
 
 	onStart: async ({ sendBack, setState, input, bot, abortSignal }) => {
-		const { block } = input
+		let { block } = input
 
 		if (!block) {
 			Logger.error('❌ primitiveBreaking: No block provided')
@@ -40,33 +55,91 @@ export const primitiveBreaking = createStatefulService<
 
 		setState({ block })
 
+		const fail = (reason: string) => {
+			sendBack({ type: 'BREAKING_FAILED', reason })
+		}
+
 		try {
-			// Проверка отмены
 			if (abortSignal.aborted) return
+			if (input.miningResource) {
+				const current = bot.blockAt(block.position)
+				if (!current || current.name !== block.name) {
+					sendBack({ type: 'MINING_TARGET_CHANGED' })
+					return
+				}
+				block = current
+			}
 
-			// Экипируем инструмент
-			await bot.tool.equipForBlock(block, { requireHarvest: true })
+			try {
+				if (input.miningResource) {
+					await equipMiningTool(bot, block, input.miningResource)
+				} else await bot.tool.equipForBlock(block, { requireHarvest: true })
+				if (abortSignal.aborted) return
 
-			// Проверка отмены
+				// mineflayer-tool keeps the held item when its mining speed ties the
+				// empty hand. That would waste sword durability on blocks such as sand.
+				// Cobweb is the intentional exception: a sword is its mining tool.
+				if (shouldUnequipSword(block, bot.heldItem?.name)) {
+					await bot.unequip('hand')
+				}
+			} catch (error) {
+				// A cancelled actor must not publish a stale failure either.
+				if (abortSignal.aborted) return
+				const detail = error instanceof Error ? error.message : String(error)
+				if (input.miningResource) {
+					sendBack({ type: 'MINING_TOOL_FAILED', reason: detail })
+					return
+				}
+				fail(
+					/tool|harvest|equip/i.test(detail)
+						? `No harvest tool for ${block.name}`
+						: `Equip failed for ${block.name}: ${detail}`
+				)
+				return
+			}
+
 			if (abortSignal.aborted) return
+			if (input.miningResource) {
+				const current = bot.blockAt(block.position)
+				if (!current || current.name !== block.name) {
+					sendBack({ type: 'MINING_TARGET_CHANGED' })
+					return
+				}
+				block = current
+			}
 
+			if (input.miningResource) {
+				const task = getMiningTask(bot.hsm.getContext().taskData)
+				const baseline = task?.inventoryBaseline
+				if (
+					task &&
+					baseline &&
+					sampleMiningInventory(
+						task,
+						bot.utils.countItemInInventory(input.miningResource.itemId)
+					).collected >= task.count
+				) {
+					sendBack({ type: 'MINING_INVENTORY_CHANGED' })
+					return
+				}
+			}
 			Logger.debug(
 				`⛏️ [primitiveBreaking] Breaking ${block.name} at ${block.position}`
 			)
 
-			// Ожидаемый дроп
-			const expectedItemDrop = block.drops?.[0]
+			const expectedItemDrop = input.miningResource?.itemId ?? block.drops?.[0]
 
 			if (!expectedItemDrop) {
 				Logger.debug(
 					'⚠️ [primitiveBreaking] Блока нет в списке дропов, пропускаем сбор'
 				)
 				await bot.dig(block)
+				// A cancelled actor must not publish a stale success.
+				if (abortSignal.aborted) return
 				sendBack({ type: 'BROKEN' })
 				return
 			}
 
-			// Нормализуем drop - может быть number или объект
 			const expectedItemId: number =
 				typeof expectedItemDrop === 'number'
 					? expectedItemDrop
@@ -74,108 +147,49 @@ export const primitiveBreaking = createStatefulService<
 						? expectedItemDrop.drop
 						: expectedItemDrop.drop.id
 
-			// Запоминаем количество до копания
 			const countBefore = bot.utils.countItemInInventory(expectedItemId)
 			Logger.debug(
 				`📊 [primitiveBreaking] ${block.name} в инвентаре до копания: ${countBefore}`
 			)
 
-			// Копаем блок
 			await bot.dig(block)
 			Logger.debug(`✅ [primitiveBreaking] Блок сломан: ${block.name}`)
 
-			// Проверка отмены после копания
 			if (abortSignal.aborted) return
 
-			// Ждём спавн item'а
-			await delay(300, undefined, { signal: abortSignal })
-			if (abortSignal.aborted) return
+			// Step onto the broken position so the drop is picked up, then judge by delta.
+			const { x, y, z } = block.position
+			bot.pathfinder.setGoal(new GoalNear(x, y, z, 0.5))
 
-			// Ищем выпавший предмет
-			const item = bot.nearestEntity((e: any) => {
-				if (e.name !== 'item') return false
-				const itemId = e.metadata?.[8]?.itemId
-				return itemId === expectedItemId
-			})
-
-			if (!item) {
-				Logger.debug(
-					'⚠️ [primitiveBreaking] Объект Item, не найденный в world после копания блока'
-				)
-
-				// Проверяем инвентарь на всякий случай
-				const countAfter = bot.utils.countItemInInventory(expectedItemId)
-				if (countAfter > countBefore) {
-					Logger.debug(
-						`✅ [primitiveBreaking] Item автоматически собран (+${countAfter - countBefore})`
-					)
-				}
-
-				sendBack({ type: 'BROKEN' })
-				return
-			}
-
-			const distance = bot.entity.position.distanceTo(item.position)
-			Logger.debug(
-				`📦 [primitiveBreaking] Найден объект Item в мире на расстоянии: ${distance.toFixed(2)}`
-			)
-
-			// Если item далеко - идём к нему
-			if (distance >= 0.5) {
-				Logger.debug(`🏃 [primitiveBreaking] Навигация к объекту Item...`)
-				const { x, y, z } = item.position
-				bot.pathfinder.setGoal(new GoalNear(x, y, z, 0.5))
-
-				// Ждём подбор через проверку инвентаря
-				const collected = await bot.utils.waitForInventoryChange(
+			try {
+				await bot.utils.waitForInventoryChange(
 					expectedItemId,
 					countBefore,
 					3000,
 					abortSignal
 				)
-				if (abortSignal.aborted) return
-
-				// Останавливаем навигацию
-				bot.pathfinder.setGoal(null)
-
-				if (collected) {
-					const countAfter = bot.utils.countItemInInventory(expectedItemId)
-					Logger.debug(
-						`✅ [primitiveBreaking] Объект Item собран (+${countAfter - countBefore})`
-					)
-				} else {
-					Logger.warn(
-						`⚠️ [primitiveBreaking] Не удалось забрать объект Item (тайм-аут)`
-					)
-				}
-			} else {
-				Logger.debug(
-					`✅ [primitiveBreaking] Объект Item близко, ожидание автоподбора...`
-				)
-
-				// Даём время на автоподбор
-				await bot.utils.waitForInventoryChange(
-					expectedItemId,
-					countBefore,
-					2000,
-					abortSignal
-				)
-				if (abortSignal.aborted) return
-
-				const countAfter = bot.utils.countItemInInventory(expectedItemId)
-				if (countAfter > countBefore) {
-					Logger.debug(
-						`✅ [primitiveBreaking] Объект Item собран (+${countAfter - countBefore})`
-					)
-				} else {
-					Logger.warn(
-						`⚠️ [primitiveBreaking] Не удалось забрать объект Item (тайм-аут)`
-					)
+			} finally {
+				// A late callback of a cancelled owner must not clear the next
+				// owner's goal; cleanup on actor stop already released ours.
+				if (!abortSignal.aborted) {
+					bot.pathfinder.setGoal(null)
 				}
 			}
+			if (abortSignal.aborted) return
 
-			// В любом случае - блок успешно сломан
-			sendBack({ type: 'BROKEN' })
+			const countAfter = bot.utils.countItemInInventory(expectedItemId)
+			if (countAfter > countBefore) {
+				Logger.debug(
+					`✅ [primitiveBreaking] Добыто ${block.name} (+${countAfter - countBefore})`
+				)
+				sendBack({ type: 'BROKEN' })
+				return
+			}
+
+			Logger.warn(
+				`⚠️ [primitiveBreaking] Блок сломан, но дроп не подобран: ${block.name}`
+			)
+			fail(`Item not collected: ${block.name}`)
 		} catch (error) {
 			if (abortSignal.aborted) {
 				Logger.debug('⚠️ [primitiveBreaking] Aborted')
@@ -186,10 +200,7 @@ export const primitiveBreaking = createStatefulService<
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined
 			})
-			sendBack({
-				type: 'BREAKING_FAILED',
-				reason: error instanceof Error ? error.message : 'Unknown error'
-			})
+			fail(error instanceof Error ? error.message : 'Unknown error')
 		}
 	},
 

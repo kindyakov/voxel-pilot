@@ -16,5 +16,6 @@ export type InlineToolName =
 	| 'inspect_blocks'
 	| 'inspect_entities'
 	| 'inspect_window'
+	| 'tasks_list'
 
 export type ControlToolName = 'finish_goal'

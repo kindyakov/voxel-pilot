@@ -1,5 +1,8 @@
 import type { Bot, Entity, Item, Vec3 } from '@/types/index.js'
 
+import type { TaskState } from '@/hsm/tasks/task.js'
+
+import type { CompletedMiningTask } from '@/ai/contracts/agentTurn.js'
 import type { PendingExecution } from '@/ai/contracts/execution.js'
 import type { ConversationEntry } from '@/ai/conversationHistory.js'
 import {
@@ -121,6 +124,11 @@ export interface MachineContext {
 		pathfindTimeout: number
 		maxPathLengthMultiplier: number
 		pathfindCacheDuration: number
+		miningSearchMaxDistance: number
+		miningMaxYAbove: number
+		miningMaxYBelow: number
+		miningMaxBlockAttempts: number
+		miningMaxTotalSearches: number
 	}
 
 	combatTarget: {
@@ -136,7 +144,7 @@ export interface MachineContext {
 	recoveryFailure: 'no_food' | 'error' | null
 
 	isActiveTask: boolean
-	taskData: unknown | null
+	taskData: TaskState | null
 	plan: unknown | null
 	pausedPlan: unknown | null
 	savedTaskState: unknown | null
@@ -149,6 +157,7 @@ export interface MachineContext {
 	taskContext: TaskContext
 	lastAction: string | null
 	lastActionArgs: Record<string, unknown> | null
+	completedMiningTasks: CompletedMiningTask[]
 	lastResult: 'SUCCESS' | 'FAILED' | null
 	lastReason: string | null
 	errorHistory: string[]
@@ -242,7 +251,12 @@ export const context: MachineContext = {
 		approachForgetMs: 30000,
 		pathfindTimeout: 800,
 		maxPathLengthMultiplier: 2,
-		pathfindCacheDuration: 3000
+		pathfindCacheDuration: 3000,
+		miningSearchMaxDistance: 64,
+		miningMaxYAbove: 6,
+		miningMaxYBelow: 2,
+		miningMaxBlockAttempts: 2,
+		miningMaxTotalSearches: 20
 	},
 
 	combatTarget: {
@@ -273,6 +287,7 @@ export const context: MachineContext = {
 	},
 	lastAction: null,
 	lastActionArgs: null,
+	completedMiningTasks: [],
 	lastResult: null,
 	lastReason: null,
 	errorHistory: [],

@@ -1,3 +1,4 @@
+import type { Bot, Entity } from '@/types/index.js'
 import { Vec3 as Vec3Class } from 'vec3'
 import {
 	and,
@@ -12,15 +13,21 @@ import {
 } from 'xstate'
 import type { AnyActorLogic } from 'xstate'
 
-import type { Bot, Entity } from '@/types/index.js'
-
 import Logger from '@/config/logger.js'
 
 import { goalActions } from '@/hsm/actions/goal.actions.js'
 import { miningActions } from '@/hsm/actions/mining.actions.js'
 import { safetyActions } from '@/hsm/actions/safety.actions.js'
+import {
+	computeTaskCancel,
+	computeTaskCreate,
+	computeTaskStart,
+	enterTaskRecord,
+	taskRecordActions
+} from '@/hsm/actions/taskRecords.actions.js'
 import combatActors from '@/hsm/actors/combat.actors.js'
 import { idleGaze } from '@/hsm/actors/idleGaze.actors.js'
+import { miningInventory } from '@/hsm/actors/miningInventory.actors.js'
 import monitoringActors from '@/hsm/actors/monitoring.actors.js'
 import { primitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive.js'
 import { primitiveCloseWindow } from '@/hsm/actors/primitives/primitiveCloseWindow.primitive.js'
@@ -49,10 +56,13 @@ import {
 	isHungerRecoverySafe,
 	isRecoverySafe
 } from '@/hsm/guards/survival.guards.js'
-import type { MachineEvent, MiningTaskData } from '@/hsm/types.js'
+import { resolveMiningResource } from '@/hsm/tasks/miningResource.js'
+import { createMiningTask, getMiningTask } from '@/hsm/tasks/task.js'
+import type { MachineEvent } from '@/hsm/types.js'
 import { getActorError } from '@/hsm/utils/actorEvent.js'
 import { observeThreats } from '@/hsm/utils/threatObservation.js'
 
+import type { AgentModelClient } from '@/ai/contracts/agentClient.js'
 import type { AgentTurnResult } from '@/ai/contracts/agentTurn.js'
 import { appendConversationEntry } from '@/ai/conversationHistory.js'
 import {
@@ -77,33 +87,37 @@ import {
 } from '@/utils/combat/selfDefense.js'
 import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
-const defaultThinkingActor = fromPromise<
-	AgentTurnResult,
-	{
-		bot: Bot
-		context: MachineContext
-	}
->(async ({ input, signal }) => {
-	if (!input.context.currentGoal) {
-		throw new Error('No current goal to think about')
-	}
+const createThinkingActor = (client?: AgentModelClient) =>
+	fromPromise<
+		AgentTurnResult,
+		{
+			bot: Bot
+			context: MachineContext
+		}
+	>(async ({ input, signal }) => {
+		if (!input.context.currentGoal) {
+			throw new Error('No current goal to think about')
+		}
 
-	return runAgentTurn({
-		bot: input.bot,
-		memory: input.bot.memory,
-		currentGoal: input.context.currentGoal,
-		subGoal: input.context.subGoal,
-		conversationHistory: input.context.conversationHistory,
-		userProfilePrompt: input.bot.profileMemory?.getProfilePrompt() ?? null,
-		lastAction: input.context.lastAction,
-		lastResult: input.context.lastResult,
-		lastReason: input.context.lastReason,
-		errorHistory: input.context.errorHistory,
-		taskContext: input.context.taskContext,
-		windows: input.context.windows!,
-		signal
+		return runAgentTurn({
+			client,
+			bot: input.bot,
+			memory: input.bot.memory,
+			currentGoal: input.context.currentGoal,
+			subGoal: input.context.subGoal,
+			conversationHistory: input.context.conversationHistory,
+			userProfilePrompt: input.bot.profileMemory?.getProfilePrompt() ?? null,
+			lastAction: input.context.lastAction,
+			lastActionArgs: input.context.lastActionArgs,
+			completedMiningTasks: input.context.completedMiningTasks,
+			lastResult: input.context.lastResult,
+			lastReason: input.context.lastReason,
+			errorHistory: input.context.errorHistory,
+			taskContext: input.context.taskContext,
+			windows: input.context.windows!,
+			signal
+		})
 	})
-})
 
 const normalizeEntitySelector = (value: unknown): string | null => {
 	if (typeof value !== 'string') {
@@ -243,6 +257,7 @@ const resolveExecutionInput = (
 }
 
 interface MachineFactoryOptions {
+	agentClient?: AgentModelClient
 	preferences?: Partial<MachineContext['preferences']>
 	thinkingActor?: AnyActorLogic
 	actors?: Record<string, AnyActorLogic>
@@ -314,7 +329,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			agentThinking:
 				actorOverrides.agentThinkingTurn ??
 				options?.thinkingActor ??
-				defaultThinkingActor,
+				createThinkingActor(options?.agentClient),
 			emergencyEating:
 				actorOverrides.serviceEmergencyEating ??
 				survivalActors.serviceEmergencyEating,
@@ -366,12 +381,19 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			isFollowExecution: ({ context }) =>
 				context.pendingExecution?.toolName === 'follow_entity',
 			isMiningExecution: ({ context }) =>
-				context.pendingExecution?.toolName === 'mine_resource'
+				context.pendingExecution?.toolName === 'mine_resource',
+			isTaskCreateExecution: ({ context }) =>
+				context.pendingExecution?.toolName === 'tasks_create',
+			isTaskStartExecution: ({ context }) =>
+				context.pendingExecution?.toolName === 'tasks_start',
+			isTaskCancelExecution: ({ context }) =>
+				context.pendingExecution?.toolName === 'tasks_cancel'
 		},
 		actions: {
 			...goalActions,
 			...miningActions,
 			...safetyActions,
+			...taskRecordActions,
 			logStateEntry: ({ context, event }, params: unknown) => {
 				const state =
 					params && typeof params === 'object' && 'state' in params
@@ -697,10 +719,12 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				},
 				movementOwner: 'NONE',
 				currentGoal: null,
+				completedMiningTasks: [],
 				pausedGoal: null,
 				subGoal: null,
 				taskContext: createTaskContext(null, null),
 				pendingExecution: null,
+				taskData: null,
 				lastToolTranscript: [],
 				preferredCombatTargetId: null,
 				combatStopRequested: false,
@@ -711,12 +735,30 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			markTaskActive: assign({
 				isActiveTask: true
 			}),
-			markTaskInactive: assign({
+			ensureTaskRecord: enqueueActions(({ context, enqueue }) => {
+				const task = enterTaskRecord(context)
+				if (task) {
+					enqueue.assign({ taskData: task })
+				}
+			}),
+			applyTaskCreate: enqueueActions(({ context, enqueue }) => {
+				enqueue.assign(computeTaskCreate(context))
+			}),
+			applyTaskStart: enqueueActions(({ context, enqueue }) => {
+				enqueue.assign(computeTaskStart(context))
+			}),
+			applyTaskCancel: enqueueActions(({ context, enqueue }) => {
+				enqueue.assign(computeTaskCancel(context))
+			}),
+			/**
+			 * Suspend, never wipe (Q4): combat/survival/observation preemption
+			 * retains task progress and the pending execution for resume.
+			 * Terminal paths clear explicitly via clearGoal/setGoal/updateAfterDeath.
+			 */
+			suspendTask: assign({
 				isActiveTask: false,
-				pendingExecution: null,
 				goalExecution: ({ context }) =>
-					advanceGoalExecution(context.goalExecution, { type: 'interrupted' }),
-				taskData: null
+					advanceGoalExecution(context.goalExecution, { type: 'interrupted' })
 			}),
 			setGoalFromUserCommand: assign(({ context, event }) => {
 				if (event.type !== 'USER_COMMAND') {
@@ -725,6 +767,11 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 
 				return {
 					currentGoal: event.text,
+					completedMiningTasks: [],
+					lastAction: null,
+					lastActionArgs: null,
+					lastResult: null,
+					lastReason: null,
 					pausedGoal: null,
 					subGoal: null,
 					conversationHistory: appendConversationEntry(
@@ -737,6 +784,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					),
 					taskContext: createTaskContext(event.text, null),
 					pendingExecution: null,
+					taskData: null,
 					lastToolTranscript: [],
 					goalExecution: createGoalExecution(),
 					errorHistory: []
@@ -745,10 +793,12 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			clearGoal: assign(() => {
 				return {
 					currentGoal: null,
+					completedMiningTasks: [],
 					pausedGoal: null,
 					subGoal: null,
 					taskContext: createTaskContext(null, null),
 					pendingExecution: null,
+					taskData: null,
 					lastToolTranscript: [],
 					goalExecution: createGoalExecution(),
 					preferredCombatTargetId: null,
@@ -849,6 +899,9 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			}),
 			ownMovementPvp: assign({
 				movementOwner: 'PVP'
+			}),
+			ownMovementPathfinder: assign({
+				movementOwner: 'PATHFINDER'
 			}),
 			syncSurvivalModeOwner: assign({
 				movementOwner: ({ event, context }) => {
@@ -1180,6 +1233,20 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					},
 					RESUMING: {
 						always: [
+							{
+								guard: 'isAgentLoopStuck',
+								target: 'IDLE',
+								actions: [
+									'closeActiveWindowSession',
+									'notifyLoopAbort',
+									'clearGoal'
+								]
+							},
+							{
+								guard: 'hasSuspendedMiningTask',
+								target:
+									'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_PRECONDITIONS'
+							},
 							{ guard: 'hasCurrentGoal', target: 'TASKS.THINKING' },
 							{ target: 'IDLE' }
 						]
@@ -1528,7 +1595,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					},
 					TASKS: {
 						entry: ['markTaskActive'],
-						exit: ['markTaskInactive'],
+						exit: ['suspendTask', 'persistSuspendedTask'],
 						on: {
 							UPDATE_COMBAT_TARGET: [
 								{
@@ -1657,17 +1724,14 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 												actions: [
 													assign({
 														taskData: ({ context }) =>
-															({
-																blockName: requireMiningExecution(context)
+															createMiningTask(
+																requireMiningExecution(context)
 																	.block_name.trim()
 																	.toLowerCase(),
-																count: requireMiningExecution(context).count,
-																targetBlocks: [],
-																targetIndex: 0,
-																collected: 0,
-																navigationAttempts: 0,
-																breakAttempts: 0
-															}) satisfies MiningTaskData
+																requireMiningExecution(context).count,
+																null,
+																requireMiningExecution(context).resource_name
+															)
 													})
 												]
 											},
@@ -1684,6 +1748,9 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											},
 											{ guard: 'isPlaceExecution', target: 'PLACING' },
 											{ guard: 'isFollowExecution', target: 'FOLLOWING' },
+											{ guard: 'isTaskCreateExecution', target: 'TASK_CREATE' },
+											{ guard: 'isTaskStartExecution', target: 'TASK_START' },
+											{ guard: 'isTaskCancelExecution', target: 'TASK_CANCEL' },
 											{
 												target:
 													'#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
@@ -1691,13 +1758,73 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											}
 										]
 									},
+									TASK_CREATE: {
+										entry: ['applyTaskCreate'],
+										always: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT'
+									},
+									TASK_START: {
+										entry: ['applyTaskStart'],
+										always: [
+											{
+												// Adopted (or stored) work that is already
+												// complete skips the dig, straight to sync.
+												guard: 'taskStartComplete',
+												target: 'MINING.TASK_SYNCING'
+											},
+											{
+												guard: 'taskStartReady',
+												target: 'MINING.CHECKING_PRECONDITIONS'
+											},
+											{
+												target: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT'
+											}
+										]
+									},
+									TASK_CANCEL: {
+										entry: ['applyTaskCancel'],
+										always: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT'
+									},
 									MINING: {
 										initial: 'CHECKING_PRECONDITIONS',
-										entry: ['entryMining'],
-										exit: ['exitMining'],
+										entry: [
+											'ensureTaskRecord',
+											'beginMiningInventory',
+											'entryMining',
+											'ownMovementPathfinder'
+										],
+										exit: ['recordCollected', 'exitMining', 'ownMovementNone'],
+										invoke: {
+											src: miningInventory,
+											input: ({ context }) => ({
+												bot: context.bot!,
+												options: {}
+											})
+										},
+										on: {
+											MINING_INVENTORY_CHANGED: [
+												{
+													guard: 'miningInventoryGoalReached',
+													target: '.TASK_SYNCING',
+													actions: ['recordCollected', 'persistProgressTask']
+												},
+												{
+													guard: 'miningInventoryChanged',
+													actions: ['recordCollected', 'persistProgressTask']
+												}
+											]
+										},
 										states: {
 											CHECKING_PRECONDITIONS: {
 												always: [
+													{ guard: 'miningSetupFailed', target: 'TASK_FAILED' },
+													{
+														guard: 'missingTaskRecord',
+														target: 'TASK_FAILED'
+													},
+													{
+														guard: 'maxTotalSearchesReached',
+														target: 'TASK_FAILED'
+													},
 													{
 														guard: 'canAttemptMining',
 														target: 'SEARCHING'
@@ -1711,16 +1838,32 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 												invoke: {
 													src: primitiveSearchBlock,
 													input: ({ context }: { context: MachineContext }) => {
-														const taskData = context.taskData as MiningTaskData
+														const taskData = getMiningTask(context.taskData)
 														return {
 															bot: context.bot!,
 															options: {
-																blockName: taskData.blockName,
-																count: taskData.count,
-																maxDistance: 64,
+																blockName: taskData?.blockName ?? '',
+																blockNames: taskData
+																	? resolveMiningResource(
+																			context.bot!,
+																			taskData.blockName,
+																			taskData.resourceName
+																		).blockNames
+																	: [],
+																excludedPositions: taskData?.blacklist ?? [],
+																count: taskData
+																	? Math.max(
+																			1,
+																			taskData.count - taskData.collected
+																		)
+																	: 1,
+																maxDistance:
+																	context.preferences.miningSearchMaxDistance,
 																mode: 'mining' as const,
-																maxYDiffAbove: 6,
-																maxYDiffBelow: 2,
+																maxYDiffAbove:
+																	context.preferences.miningMaxYAbove,
+																maxYDiffBelow:
+																	context.preferences.miningMaxYBelow,
 																prioritizeSafety: true
 															}
 														}
@@ -1736,7 +1879,18 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 												}
 											},
 											CHECKING_DISTANCE: {
+												entry: 'refreshMiningQueue',
 												always: [
+													{
+														guard: 'miningInventoryGoalReached',
+														target: 'TASK_SYNCING',
+														actions: ['recordCollected', 'persistProgressTask']
+													},
+													{
+														guard: ({ context }) =>
+															!miningGuards.hasMiningTarget({ context }),
+														target: 'CHECKING_PRECONDITIONS'
+													},
 													{
 														guard: 'isBlockNearby',
 														target: 'BREAKING'
@@ -1750,9 +1904,9 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 												invoke: {
 													src: primitiveNavigating,
 													input: ({ context }: { context: MachineContext }) => {
-														const taskData = context.taskData as MiningTaskData
+														const taskData = getMiningTask(context.taskData)
 														const targetBlock =
-															taskData.targetBlocks[taskData.targetIndex]
+															taskData?.targetBlocks[taskData.targetIndex]
 														return {
 															bot: context.bot!,
 															options: {
@@ -1765,14 +1919,15 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 													ARRIVED: {
 														target: 'BREAKING'
 													},
+													MINING_ROUTE_TARGET_CHANGED: 'CHECKING_DISTANCE',
 													NAVIGATION_FAILED: [
 														{
 															guard: 'maxNavigationAttemptsReached',
 															target: 'TASK_FAILED'
 														},
 														{
-															target: 'SEARCHING',
-															actions: ['incrementNavigationAttempts']
+															target: 'CHECKING_GOAL',
+															actions: ['recordNavigationFailure']
 														}
 													],
 													ERROR: 'TASK_FAILED'
@@ -1782,12 +1937,21 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 												invoke: {
 													src: primitiveBreaking,
 													input: ({ context }: { context: MachineContext }) => {
-														const taskData = context.taskData as MiningTaskData
+														const taskData = getMiningTask(context.taskData)
 														return {
 															bot: context.bot!,
 															options: {
 																block:
-																	taskData.targetBlocks[taskData.targetIndex]
+																	taskData?.targetBlocks[
+																		taskData.targetIndex
+																	] ?? null,
+																miningResource: taskData
+																	? resolveMiningResource(
+																			context.bot!,
+																			taskData.blockName,
+																			taskData.resourceName
+																		)
+																	: undefined
 															}
 														}
 													}
@@ -1795,11 +1959,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 												on: {
 													BROKEN: {
 														target: 'CHECKING_GOAL',
-														actions: [
-															'incrementCollected',
-															'resetNavigationAttempts',
-															'resetBreakAttempts'
-														]
+														actions: ['recordCollected', 'persistProgressTask']
 													},
 													BREAKING_FAILED: [
 														{
@@ -1807,10 +1967,12 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 															target: 'TASK_FAILED'
 														},
 														{
-															target: 'SEARCHING',
-															actions: ['incrementBreakAttempts']
+															target: 'CHECKING_GOAL',
+															actions: ['recordBreakFailure']
 														}
 													],
+													MINING_TARGET_CHANGED: { target: 'CHECKING_GOAL' },
+													MINING_TOOL_FAILED: { target: 'TASK_FAILED' },
 													ERROR: 'TASK_FAILED'
 												}
 											},
@@ -1818,7 +1980,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 												always: [
 													{
 														guard: 'isMiningGoalComplete',
-														target: 'TASK_COMPLETED'
+														target: 'TASK_SYNCING'
 													},
 													{
 														guard: 'isInventoryFull',
@@ -1826,17 +1988,42 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 													},
 													{
 														guard: 'hasMoreBlocksToMine',
-														target: 'NAVIGATING',
+														target: 'CHECKING_DISTANCE',
 														actions: ['advanceToNextBlock']
 													},
 													{
-														target: 'SEARCHING'
+														target: 'CHECKING_PRECONDITIONS'
 													}
 												]
+											},
+											TASK_SYNCING: {
+												entry: ['persistCompletedTask'],
+												always: [
+													{
+														guard: 'taskRecordSyncFailed',
+														target: 'TASK_SYNC_FAILED'
+													},
+													{
+														target: 'TASK_COMPLETED'
+													}
+												]
+											},
+											// Dedicated sync-failure outcome: the verdict is FAILED
+											// with the sync reason, and the row is deliberately
+											// left untouched (active, last synced done) so the
+											// task stays resumable instead of turning terminal.
+											TASK_SYNC_FAILED: {
+												entry: [
+													'taskMiningFailed',
+													'recordExecutionFailure',
+													assign({ taskData: () => null })
+												],
+												always: '#MINECRAFT_BOT.MAIN_ACTIVITY.TASKS.DECIDE_NEXT'
 											},
 											TASK_COMPLETED: {
 												entry: [
 													'taskMiningCompleted',
+													'recordMiningCompletion',
 													'recordExecutionSuccess',
 													assign({ taskData: () => null })
 												],
@@ -1844,6 +2031,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 											},
 											TASK_FAILED: {
 												entry: [
+													'persistFailedTask',
 													'taskMiningFailed',
 													'recordExecutionFailure',
 													assign({ taskData: () => null })

@@ -19,6 +19,14 @@ test('action parsing covers every execution category and preserves valid argumen
 		['navigate_to', { position }],
 		['break_block', { position }],
 		['mine_resource', { block_name: 'stone', count: 2 }],
+		[
+			'mine_resource',
+			{ block_name: 'coal_ore', resource_name: 'coal', count: 10 }
+		],
+		[
+			'tasks_create',
+			{ block_name: 'coal_ore', resource_name: 'coal_ore', count: 10 }
+		],
 		['place_block', { block_name: 'stone', position }],
 		['follow_entity', { entity_name: 'Steve' }],
 		['open_window', { position }],
@@ -31,7 +39,10 @@ test('action parsing covers every execution category and preserves valid argumen
 				count: 1
 			}
 		],
-		['close_window', {}]
+		['close_window', {}],
+		['tasks_create', { block_name: 'iron_ore', count: 2 }],
+		['tasks_start', { task_id: 'task-1' }],
+		['tasks_cancel', { task_id: 'task-1' }]
 	] as const
 	for (const [name, args] of actions) {
 		const result = parseExecution(name, args)
@@ -48,6 +59,16 @@ test('invalid action values and unknown fields cannot reach execution', () => {
 		['navigate_to', { position, typo: 2 }],
 		['mine_resource', { block_name: 'stone', count: 1.5 }],
 		['mine_resource', { block_name: 'stone', count: 65 }],
+		['mine_resource', { block_name: 'coal_ore', resource_name: '', count: 10 }],
+		[
+			'mine_resource',
+			{ block_name: 'coal_ore', resource_name: null, count: 10 }
+		],
+		['tasks_create', { block_name: '', count: 2 }],
+		['tasks_create', { block_name: 'stone', count: 0 }],
+		['tasks_start', {}],
+		['tasks_start', { task_id: '' }],
+		['tasks_cancel', { task_id: 7 }],
 		['place_block', { position, block_name: '' }],
 		[
 			'place_block',

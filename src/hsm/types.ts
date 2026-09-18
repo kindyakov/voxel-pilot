@@ -69,6 +69,10 @@ export type UserEvents =
 export type InternalEvents = { type: 'RESUME_PAUSED_GOAL' }
 
 export type PrimitiveEvents =
+	| { type: 'MINING_INVENTORY_CHANGED' }
+	| { type: 'MINING_TARGET_CHANGED' }
+	| { type: 'MINING_ROUTE_TARGET_CHANGED' }
+	| { type: 'MINING_TOOL_FAILED'; reason: string }
 	| { type: 'NOT_FOUND'; reason: string }
 	| { type: 'BLOCKS_FOUND'; blocks: Block[] }
 	| { type: 'ARRIVED' }
@@ -103,12 +107,8 @@ export type MachineGuardParams = {
 	event: MachineEvent
 }
 
-export interface MiningTaskData {
-	blockName: string
-	count: number
-	targetBlocks: Block[]
-	targetIndex: number
-	collected: number
-	navigationAttempts: number
-	breakAttempts: number
-}
+/** Mining progress shape lives in the centralized task store (Q7b/Q8). */
+export type {
+	MiningTask as MiningTaskData,
+	TaskState
+} from '@/hsm/tasks/task.js'

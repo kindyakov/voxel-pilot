@@ -84,6 +84,61 @@ export interface TaskStats {
 	lastCompleted: string
 }
 
+/**
+ * Single source for task statuses: the type, runtime validation and the
+ * pilot-facing schema enum all derive from this tuple. Unknown stored
+ * values degrade to `suspended` on read (see MemoryManager.mapRowToTask).
+ */
+export const TASK_STATUSES = [
+	'suspended',
+	'active',
+	'completed',
+	'failed',
+	'cancelled'
+] as const
+
+export type PersistentTaskStatus = (typeof TASK_STATUSES)[number]
+
+export interface PersistentTaskRecord {
+	id: string
+	kind: 'mining'
+	blockName: string
+	resourceName?: string
+	total: number
+	done: number
+	status: PersistentTaskStatus
+	createdAt: number
+	updatedAt: number
+}
+
+export interface CreatePersistentTaskInput {
+	kind: 'mining'
+	blockName: string
+	resourceName?: string
+	total: number
+}
+
+export interface UpdateTaskProgressOptions {
+	status?: PersistentTaskStatus
+	onlyFrom?: PersistentTaskStatus
+}
+
+/**
+ * Single normalization for task progress, shared by the store and its
+ * callers: non-integer, negative and non-finite counts become 0, then the
+ * total caps the value. Both sides must agree, otherwise a correctly
+ * stored row looks like a mismatch.
+ */
+export const normalizeTaskDone = (done: unknown, total: number): number => {
+	const sane =
+		typeof done === 'number' && Number.isInteger(done) && done >= 0 ? done : 0
+	return Math.min(sane, total)
+}
+
+export interface ListTasksQuery {
+	status?: PersistentTaskStatus
+}
+
 export interface DeathRecord {
 	timestamp: string
 	cause: string

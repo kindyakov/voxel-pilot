@@ -5,6 +5,7 @@ import type { WindowRuntime } from '@/ai/runtime/window.js'
 import type { InlineToolName } from '../contracts/execution.js'
 import { executeInspectTool } from './executors/inspect.js'
 import { executeMemoryTool } from './executors/memory.js'
+import { executeTasksListTool } from './executors/tasks.js'
 import { executeWindowTool } from './executors/window.js'
 
 export interface InlineToolExecutionContext {
@@ -35,5 +36,7 @@ export const executeInlineToolCall = async (
 			return executeInspectTool(name, args, context)
 		case 'inspect_window':
 			return executeWindowTool(args, context)
+		case 'tasks_list':
+			return executeTasksListTool(args, context)
 	}
 }

@@ -1,7 +1,6 @@
+import type { Bot, Entity } from '@/types/index.js'
 import type { BotEvents } from 'mineflayer'
 import { type ActorRefFrom, createActor } from 'xstate'
-
-import type { Bot, Entity } from '@/types/index.js'
 
 import Config from '@/config/config.js'
 import Logger from '@/config/logger.js'
@@ -78,6 +77,16 @@ class BotStateMachine {
 			if (this.profileMemory) {
 				await this.loadStore(this.profileMemory, this.profileLifecycle)
 				if (this.stopped) return false
+			}
+			// Crash recovery (ADR-0004) is mandatory: rows left `active`
+			// become `suspended` with progress kept, otherwise they can never
+			// start again. No autostart — the pilot starts explicitly.
+			// A recovery failure fails initialization like any store failure.
+			const recovered = this.memory.normalizeTasksOnBoot()
+			if (recovered > 0) {
+				Logger.info('[HSM] recovered suspended tasks', {
+					count: recovered
+				})
 			}
 			// Construction reads current vitals; no stale pre-load health events are replayed.
 			this.actor = createActor(machine, {

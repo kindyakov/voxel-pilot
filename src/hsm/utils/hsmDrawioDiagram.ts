@@ -255,11 +255,11 @@ const outputStateLayouts: StateLayout[] = [
 		path: 'MAIN_ACTIVITY.TASKS.EXECUTING',
 		x: 715,
 		y: 575,
-		width: 920,
-		height: 630,
+		width: 960,
+		height: 700,
 		kind: 'compound',
 		summary:
-			'Execution dispatcher. Routes pending tool work into primitive actors or the mining subworkflow.'
+			'Execution dispatcher. Routes pending tool work into primitive actors, the mining subworkflow, or persistent task records.'
 	},
 	{
 		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.RESOLVE',
@@ -274,11 +274,11 @@ const outputStateLayouts: StateLayout[] = [
 		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING',
 		x: 970,
 		y: 635,
-		width: 620,
+		width: 700,
 		height: 300,
 		kind: 'compound',
 		summary:
-			'Specialized mining workflow with search, travel, break retries, completion tracking, and failure exits.'
+			'Specialized mining workflow with search, travel, break retries, terminal sync, completion tracking, and failure exits.'
 	},
 	{
 		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_PRECONDITIONS',
@@ -335,8 +335,17 @@ const outputStateLayouts: StateLayout[] = [
 		summary: 'Checks goal completion, inventory pressure, and next target.'
 	},
 	{
-		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_COMPLETED',
+		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNCING',
 		x: 1165,
+		y: 910,
+		width: 140,
+		height: 70,
+		kind: 'leaf',
+		summary: 'Writes the terminal record; success only after the write lands.'
+	},
+	{
+		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_COMPLETED',
+		x: 1320,
 		y: 910,
 		width: 155,
 		height: 70,
@@ -345,12 +354,21 @@ const outputStateLayouts: StateLayout[] = [
 	},
 	{
 		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_FAILED',
-		x: 1350,
+		x: 1490,
 		y: 910,
 		width: 135,
 		height: 70,
 		kind: 'leaf',
 		summary: 'Records mining failure and returns to decide-next.'
+	},
+	{
+		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNC_FAILED',
+		x: 1165,
+		y: 995,
+		width: 160,
+		height: 70,
+		kind: 'leaf',
+		summary: 'Sync-failure verdict: FAILED with reason, row stays resumable.'
 	},
 	{
 		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.NAVIGATING',
@@ -414,6 +432,33 @@ const outputStateLayouts: StateLayout[] = [
 		height: 80,
 		kind: 'leaf',
 		summary: 'Primitive follow_entity execution.'
+	},
+	{
+		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_CREATE',
+		x: 760,
+		y: 1190,
+		width: 170,
+		height: 70,
+		kind: 'leaf',
+		summary: 'tasks_create execution: stores a suspended record, no movement.'
+	},
+	{
+		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_START',
+		x: 960,
+		y: 1190,
+		width: 170,
+		height: 70,
+		kind: 'leaf',
+		summary: 'tasks_start execution: lifts a suspended record into MINING.'
+	},
+	{
+		path: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_CANCEL',
+		x: 1160,
+		y: 1190,
+		width: 170,
+		height: 70,
+		kind: 'leaf',
+		summary: 'tasks_cancel execution: marks a record cancelled, clears runtime.'
 	},
 	{
 		path: 'MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
@@ -712,7 +757,14 @@ const edgeLayouts: EdgeLayout[] = [
 		id: 'edge-resuming-task',
 		source: 'MAIN_ACTIVITY.RESUMING',
 		target: 'MAIN_ACTIVITY.TASKS.THINKING',
-		label: 'always [current goal] / replan'
+		label: 'always [current goal, no suspended task] / replan'
+	},
+	{
+		id: 'edge-resuming-mining',
+		source: 'MAIN_ACTIVITY.RESUMING',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_PRECONDITIONS',
+		label: 'always [suspended mining task]',
+		strokeColor: '#2563eb'
 	},
 	{
 		id: 'edge-resuming-idle',
@@ -854,6 +906,67 @@ const edgeLayouts: EdgeLayout[] = [
 		strokeColor: '#0ea5e9'
 	},
 	{
+		id: 'edge-resolve-task-create',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.RESOLVE',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_CREATE',
+		label: 'tasks_create',
+		strokeColor: '#0ea5e9'
+	},
+	{
+		id: 'edge-resolve-task-start',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.RESOLVE',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_START',
+		label: 'tasks_start',
+		strokeColor: '#0ea5e9'
+	},
+	{
+		id: 'edge-resolve-task-cancel',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.RESOLVE',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_CANCEL',
+		label: 'tasks_cancel',
+		strokeColor: '#0ea5e9'
+	},
+	{
+		id: 'edge-task-create-decide-next',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_CREATE',
+		target: 'MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+		label: 'record outcome',
+		dashed: true,
+		strokeColor: '#64748b'
+	},
+	{
+		id: 'edge-task-start-mining',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_START',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_PRECONDITIONS',
+		label: 'always [suspended ready / orphaned active adopted]',
+		animated: true,
+		strokeColor: '#2563eb'
+	},
+	{
+		id: 'edge-task-start-syncing',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_START',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNCING',
+		label: 'always [adopted work already complete]',
+		animated: true,
+		strokeColor: '#16a34a'
+	},
+	{
+		id: 'edge-task-start-decide-next',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_START',
+		target: 'MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+		label: 'always [start failed]',
+		dashed: true,
+		strokeColor: '#64748b'
+	},
+	{
+		id: 'edge-task-cancel-decide-next',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.TASK_CANCEL',
+		target: 'MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+		label: 'record outcome',
+		dashed: true,
+		strokeColor: '#64748b'
+	},
+	{
 		id: 'edge-resolve-fallback-decide-next',
 		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.RESOLVE',
 		target: 'MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
@@ -891,6 +1004,34 @@ const edgeLayouts: EdgeLayout[] = [
 		strokeColor: '#2563eb'
 	},
 	{
+		id: 'edge-mining-target-invalidated',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.NAVIGATING',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_DISTANCE',
+		label: 'MINING_ROUTE_TARGET_CHANGED',
+		strokeColor: '#2563eb'
+	},
+	{
+		id: 'edge-mining-queue-exhausted',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_DISTANCE',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_PRECONDITIONS',
+		label: 'always [no valid queued target]',
+		strokeColor: '#2563eb'
+	},
+	{
+		id: 'edge-mining-inventory-complete',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNCING',
+		label: 'MINING_INVENTORY_CHANGED [goal reached]',
+		strokeColor: '#16a34a'
+	},
+	{
+		id: 'edge-mining-inventory-complete-before-approach',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_DISTANCE',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNCING',
+		label: 'always [inventory goal reached]',
+		strokeColor: '#16a34a'
+	},
+	{
 		id: 'edge-mining-checking-distance-navigating',
 		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_DISTANCE',
 		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.NAVIGATING',
@@ -908,8 +1049,8 @@ const edgeLayouts: EdgeLayout[] = [
 	{
 		id: 'edge-mining-navigating-searching',
 		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.NAVIGATING',
-		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.SEARCHING',
-		label: 'NAVIGATION_FAILED [retry]',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_GOAL',
+		label: 'NAVIGATION_FAILED [next target]',
 		strokeColor: '#2563eb'
 	},
 	{
@@ -923,30 +1064,53 @@ const edgeLayouts: EdgeLayout[] = [
 		id: 'edge-mining-breaking-checking-goal',
 		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.BREAKING',
 		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_GOAL',
-		label: 'BROKEN',
+		label: 'BROKEN / MINING_TARGET_CHANGED',
 		animated: true,
 		strokeColor: '#2563eb'
 	},
 	{
 		id: 'edge-mining-breaking-searching',
 		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.BREAKING',
-		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.SEARCHING',
-		label: 'BREAKING_FAILED [retry]',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_GOAL',
+		label: 'BREAKING_FAILED [next target]',
 		strokeColor: '#2563eb'
 	},
 	{
 		id: 'edge-mining-breaking-failed',
 		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.BREAKING',
 		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_FAILED',
-		label: 'BREAKING_FAILED [max]',
+		label: 'BREAKING_FAILED [max] / MINING_TOOL_FAILED',
 		strokeColor: '#64748b'
 	},
 	{
 		id: 'edge-mining-checking-goal-complete',
 		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_GOAL',
-		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_COMPLETED',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNCING',
 		label: 'always [goal complete]',
 		strokeColor: '#16a34a'
+	},
+	{
+		id: 'edge-mining-syncing-completed',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNCING',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_COMPLETED',
+		label: 'always [synced]',
+		animated: true,
+		strokeColor: '#16a34a'
+	},
+	{
+		id: 'edge-mining-syncing-failed',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNCING',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNC_FAILED',
+		label: 'always [sync failed]',
+		strokeColor: '#64748b'
+	},
+	{
+		id: 'edge-mining-sync-failed-decide-next',
+		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.TASK_SYNC_FAILED',
+		target: 'MAIN_ACTIVITY.TASKS.DECIDE_NEXT',
+		label: 'sync verdict FAILED, row stays resumable',
+		dashed: true,
+		strokeColor: '#64748b'
 	},
 	{
 		id: 'edge-mining-checking-goal-failed',
@@ -958,14 +1122,14 @@ const edgeLayouts: EdgeLayout[] = [
 	{
 		id: 'edge-mining-checking-goal-navigating',
 		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_GOAL',
-		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.NAVIGATING',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_DISTANCE',
 		label: 'always [more blocks]',
 		strokeColor: '#2563eb'
 	},
 	{
 		id: 'edge-mining-checking-goal-searching',
 		source: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_GOAL',
-		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.SEARCHING',
+		target: 'MAIN_ACTIVITY.TASKS.EXECUTING.MINING.CHECKING_PRECONDITIONS',
 		label: 'always [search again]',
 		strokeColor: '#2563eb'
 	},

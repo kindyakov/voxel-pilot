@@ -1690,3 +1690,155 @@ test('runAgentTurn assembles layered prompt context before calling the model cli
 	assert.match(conversationSection?.content ?? '', /отвечай по-русски/)
 	assert.ok(capturedRequest.promptAssembly.toolContract)
 })
+
+test('runAgentTurn lists persistent tasks inline then starts one by id', async () => {
+	const responses = [
+		{
+			id: 'resp_1',
+			output: [
+				{
+					type: 'function_call',
+					call_id: 'call_1',
+					name: 'tasks_list',
+					arguments: JSON.stringify({ status: 'suspended' })
+				}
+			]
+		},
+		{
+			id: 'resp_2',
+			output: [
+				{
+					type: 'function_call',
+					call_id: 'call_2',
+					name: 'tasks_start',
+					arguments: JSON.stringify({ task_id: 'task-1' })
+				}
+			]
+		}
+	]
+
+	const client = new OpenAIResponsesClient({
+		client: {
+			responses: {
+				create: async () => responses.shift() as any
+			}
+		},
+		model: 'test-model'
+	})
+
+	const stored = {
+		id: 'task-1',
+		kind: 'mining',
+		blockName: 'iron_ore',
+		total: 4,
+		done: 1,
+		status: 'suspended',
+		createdAt: 0,
+		updatedAt: 0
+	}
+	const memory = {
+		listTasks: (query: { status?: string }) =>
+			query.status
+				? [stored].filter(task => task.status === query.status)
+				: [stored]
+	} as any
+
+	const bot = {
+		memory,
+		health: 20,
+		food: 20,
+		oxygenLevel: 20,
+		entity: { position: createVec3(0, 64, 0) },
+		game: { dimension: 'overworld' },
+		time: { isDay: true, timeOfDay: 1000 },
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		},
+		getEquipmentDestSlot: () => 36,
+		blockAt: () => null,
+		findBlocks: () => [],
+		entities: {},
+		closeWindow: () => {}
+	} as any
+
+	const result = await runAgentTurn({
+		bot,
+		memory,
+		currentGoal: 'Resume stored mining',
+		subGoal: null,
+		lastAction: null,
+		lastResult: null,
+		lastReason: null,
+		errorHistory: [],
+		taskContext: createTaskContext('Resume stored mining', null),
+		client
+	})
+
+	assert.equal(result.kind, 'execute')
+	if (result.kind !== 'execute') throw new Error('Expected an execution')
+	assert.equal(result.execution.toolName, 'tasks_start')
+	assert.deepEqual(result.execution.args, { task_id: 'task-1' })
+	assert.ok(result.transcript.includes('tasks_list'))
+})
+
+test('runAgentTurn rejects an unknown inline status filter for tasks_list', async () => {
+	const client = new OpenAIResponsesClient({
+		client: {
+			responses: {
+				create: async () =>
+					({
+						id: 'resp_1',
+						output: [
+							{
+								type: 'function_call',
+								call_id: 'call_1',
+								name: 'tasks_list',
+								arguments: JSON.stringify({ status: 'nope' })
+							}
+						]
+					}) as any
+			}
+		},
+		model: 'test-model'
+	})
+
+	const memory = { listTasks: () => [] } as any
+	const bot = {
+		memory,
+		health: 20,
+		food: 20,
+		oxygenLevel: 20,
+		entity: { position: createVec3(0, 64, 0) },
+		game: { dimension: 'overworld' },
+		time: { isDay: true, timeOfDay: 1000 },
+		inventory: {
+			slots: Array.from({ length: 46 }, () => null),
+			items: () => []
+		},
+		getEquipmentDestSlot: () => 36,
+		blockAt: () => null,
+		findBlocks: () => [],
+		entities: {},
+		closeWindow: () => {}
+	} as any
+
+	const result = await runAgentTurn({
+		bot,
+		memory,
+		currentGoal: 'List tasks',
+		subGoal: null,
+		lastAction: null,
+		lastResult: null,
+		lastReason: null,
+		errorHistory: [],
+		taskContext: createTaskContext('List tasks', null),
+		client
+	})
+
+	assert.equal(result.kind, 'rejected')
+	if (result.kind !== 'rejected') throw new Error('Expected a rejected turn')
+	assert.match(result.reason, /round limit/i)
+	// The bad filter degraded to ok:false output instead of throwing the turn.
+	assert.ok(result.transcript.includes('tasks_list'))
+})

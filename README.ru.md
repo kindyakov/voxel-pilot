@@ -9,6 +9,7 @@ VoxelPilot - AI-бот для Minecraft на базе Mineflayer и XState. Бо
 - Подключается к Minecraft-серверу и реагирует на чат-команды игроков.
 - Использует AI-loop для выбора между памятью, инспекцией мира, завершением цели и одним исполнительным действием (`IDLE -> THINKING -> EXECUTING -> DECIDE_NEXT`).
 - Выполняет действия через примитивы: `navigate_to`, `break_block`, `mine_resource`, `place_block`, `follow_entity`, `open_window`, `transfer_item`, `close_window`.
+- Ведёт персистентные задачи добычи (`tasks_list`, `tasks_create`, `tasks_start`, `tasks_cancel`): переживают рестарт как приостановленные, выполняются через HSM.
 - Хранит долгосрочную память в SQLite в каталоге `data/`.
 
 ## Быстрый старт

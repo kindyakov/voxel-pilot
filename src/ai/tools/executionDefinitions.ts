@@ -97,19 +97,65 @@ export const executionDefinitions = {
 		},
 		() => 'Break target block'
 	),
-	mine_resource: define<{ block_name: string; count: number }>()(
+	mine_resource: define<{
+		block_name: string
+		resource_name?: string
+		count: number
+	}>()(
 		'mine_resource',
-		'Mine a batch of blocks without repeated model calls.',
+		'Collect count NEW resource_name items by batch mining block_name. Specify the exact output item; clarify ambiguous requests in chat first. Ore drops may use normal and deepslate sources; exact ore blocks require Silk Touch.',
 		{
 			type: 'object',
 			additionalProperties: false,
 			properties: {
 				block_name: nonEmptyString,
+				resource_name: nonEmptyString,
 				count: { type: 'integer', minimum: 1, maximum: 64 }
 			},
 			required: ['block_name', 'count']
 		},
 		args => `Mine ${args.count} ${args.block_name}`
+	),
+	tasks_create: define<{
+		block_name: string
+		resource_name?: string
+		count: number
+	}>()(
+		'tasks_create',
+		'Save a mining task for later without starting it. Returns a task id.',
+		{
+			type: 'object',
+			additionalProperties: false,
+			properties: {
+				block_name: nonEmptyString,
+				resource_name: nonEmptyString,
+				count: { type: 'integer', minimum: 1, maximum: 64 }
+			},
+			required: ['block_name', 'count']
+		},
+		args => `Create task: mine ${args.count} ${args.block_name}`
+	),
+	tasks_start: define<{ task_id: string }>()(
+		'tasks_start',
+		'Start a suspended persistent task by id; also resumes an orphaned active row with no live owner. Only when idle with no active task.',
+		{
+			type: 'object',
+			additionalProperties: false,
+			properties: { task_id: nonEmptyString },
+			required: ['task_id']
+		},
+		() => 'Start stored task'
+	),
+	tasks_cancel: define<{ task_id: string }>()(
+		'tasks_cancel',
+		'Cancel a suspended or active persistent task by id.',
+		{
+			type: 'object',
+			additionalProperties: false,
+			properties: { task_id: nonEmptyString },
+			required: ['task_id']
+		},
+		() => 'Cancel stored task'
 	),
 	place_block: define<{
 		block_name: string

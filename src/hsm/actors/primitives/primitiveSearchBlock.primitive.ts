@@ -4,6 +4,7 @@ import {
 	type BaseServiceState,
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService.js'
+import { positionKey } from '@/hsm/tasks/task.js'
 import {
 	type AnalyzedBlock,
 	type YRangeFilter,
@@ -19,6 +20,8 @@ interface SearchBlockState extends BaseServiceState {
 	count: number
 	mode: 'simple' | 'mining'
 	blockId: number | null
+	blockIds: number[]
+	excludedPositions: string[]
 	searching: boolean
 	yRange?: YRangeFilter
 	prioritizeSafety: boolean
@@ -26,6 +29,8 @@ interface SearchBlockState extends BaseServiceState {
 
 export interface SearchBlockOptions {
 	blockName: string
+	blockNames?: string[]
+	excludedPositions?: string[]
 	maxDistance?: number
 	count?: number
 	mode?: 'simple' | 'mining'
@@ -80,6 +85,8 @@ export const primitiveSearchBlock = createStatefulService<
 		count: DEFAULT_COUNT,
 		mode: DEFAULT_MODE,
 		blockId: null,
+		blockIds: [],
+		excludedPositions: [],
 		searching: false,
 		prioritizeSafety: false
 	},
@@ -112,6 +119,10 @@ export const primitiveSearchBlock = createStatefulService<
 			count,
 			mode,
 			blockId: blockData.id,
+			blockIds: (input.blockNames ?? [blockName]).map(
+				name => bot.registry.blocksByName[name]!.id
+			),
+			excludedPositions: input.excludedPositions ?? [],
 			searching: true,
 			yRange:
 				mode === 'mining'
@@ -141,12 +152,15 @@ export const primitiveSearchBlock = createStatefulService<
 		}
 
 		const positions = bot.findBlocks({
-			matching: blockId,
+			matching: state.blockIds,
 			maxDistance,
 			count: Math.max(count * 10, 100)
 		})
 
 		const analyzedBlocks = positions
+			.filter(
+				position => !state.excludedPositions.includes(positionKey(position))
+			)
 			.map(position => analyzeBlock(position, bot))
 			.filter((block): block is AnalyzedBlock => block !== null)
 

@@ -3,18 +3,24 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
+import { TASK_STATUSES, normalizeTaskDone } from './types.js'
 import type {
 	BotMemoryData,
 	ChestLocation,
+	CreatePersistentTaskInput,
 	CurrentGoal,
 	DeleteEntrySelector,
 	KnownLocations,
+	ListTasksQuery,
 	MemoryEntry,
 	MemoryEntryInput,
 	MemoryManagerOptions,
 	MemoryPosition,
+	PersistentTaskRecord,
+	PersistentTaskStatus,
 	ReadEntriesQuery,
-	TaskStats
+	TaskStats,
+	UpdateTaskProgressOptions
 } from './types.js'
 
 type SqliteDatabase = DatabaseSync
@@ -22,6 +28,41 @@ type SqliteDatabase = DatabaseSync
 const DB_VERSION = '2.0.0'
 
 const RUNTIME_STATE_META_KEY = 'runtime_state_json'
+
+const TASKS_FORMAT_VERSION = 2
+const TASKS_FORMAT_META_KEY = 'tasks_format_version'
+
+const KNOWN_STATUS_LIST = TASK_STATUSES.map(status => `'${status}'`).join(', ')
+
+const toTaskStatus = (value: unknown): PersistentTaskStatus =>
+	typeof value === 'string' &&
+	(TASK_STATUSES as readonly string[]).includes(value)
+		? (value as PersistentTaskStatus)
+		: 'suspended'
+
+const toSafeInteger = (value: unknown): number | null => {
+	if (typeof value === 'number') {
+		return Number.isSafeInteger(value) ? value : null
+	}
+	if (
+		typeof value === 'bigint' &&
+		value >= BigInt(Number.MIN_SAFE_INTEGER) &&
+		value <= BigInt(Number.MAX_SAFE_INTEGER)
+	) {
+		return Number(value)
+	}
+	return null
+}
+
+const toNonNegativeInt = (value: unknown): number | null => {
+	const parsed = toSafeInteger(value)
+	return parsed !== null && parsed >= 0 ? parsed : null
+}
+
+const toPositiveInt = (value: unknown): number | null => {
+	const parsed = toNonNegativeInt(value)
+	return parsed !== null && parsed > 0 ? parsed : null
+}
 
 const distanceBetween = (a: MemoryPosition, b: MemoryPosition): number => {
 	const dx = a.x - b.x
@@ -102,6 +143,18 @@ type EntryRow = {
 
 type MetaRow = {
 	value: string
+}
+
+type TaskRow = {
+	id: string
+	kind: string
+	status: string
+	block_name: string
+	resource_name: string | null
+	total: unknown
+	done: unknown
+	created_at: unknown
+	updated_at: unknown
 }
 
 export class MemoryManager {
@@ -279,6 +332,181 @@ export class MemoryManager {
 		}
 
 		return false
+	}
+
+	/**
+	 * Persistent task records (ADR-0004). Plain CRUD over `bot_tasks`;
+	 * the HSM owns when rows are written, the pilot only reads via tools.
+	 */
+	createTask(input: CreatePersistentTaskInput): PersistentTaskRecord {
+		const db = this.getDb()
+		const now = Date.now()
+		const id = randomUUID()
+		db.prepare(
+			`
+				INSERT INTO bot_tasks (
+					id, kind, status, block_name, resource_name, total, done, created_at, updated_at
+				)
+				VALUES (
+					@id, @kind, @status, @block_name, @resource_name, @total, @done, @created_at, @updated_at
+				)
+			`
+		).run({
+			id,
+			kind: input.kind,
+			status: 'suspended',
+			block_name: input.blockName,
+			resource_name: input.resourceName ?? null,
+			total: input.total,
+			done: 0,
+			created_at: now,
+			updated_at: now
+		})
+
+		return this.getTask(id)!
+	}
+
+	listTasks(query: ListTasksQuery = {}): PersistentTaskRecord[] {
+		// Unknown stored statuses degrade to `suspended` on read, so the
+		// suspended filter must also match rows outside the known set.
+		const rows = (
+			query.status
+				? this.prepareTaskRead(
+						`
+								SELECT id, kind, status, block_name, resource_name, total, done, created_at, updated_at
+								FROM bot_tasks
+								WHERE status = @status
+									OR (
+										@status = 'suspended'
+										AND status NOT IN (${KNOWN_STATUS_LIST})
+									)
+								ORDER BY updated_at DESC
+							`
+					).all({ status: query.status })
+				: this.prepareTaskRead(
+						`
+								SELECT id, kind, status, block_name, resource_name, total, done, created_at, updated_at
+								FROM bot_tasks
+								ORDER BY updated_at DESC
+							`
+					).all()
+		) as TaskRow[]
+
+		return rows
+			.map(row => this.mapRowToTask(row))
+			.filter((record): record is PersistentTaskRecord => record !== null)
+	}
+
+	getTask(id: string): PersistentTaskRecord | null {
+		const row = this.prepareTaskRead(
+			`
+					SELECT id, kind, status, block_name, resource_name, total, done, created_at, updated_at
+					FROM bot_tasks
+					WHERE id = ?
+				`
+		).get(id) as TaskRow | undefined
+
+		return row ? this.mapRowToTask(row) : null
+	}
+
+	updateTaskProgress(
+		id: string,
+		done: number,
+		options: UpdateTaskProgressOptions = {}
+	): PersistentTaskRecord | null {
+		const current = this.getTask(id)
+		if (!current) {
+			return null
+		}
+
+		const clamped = normalizeTaskDone(done, current.total)
+		const updatedAt = Date.now()
+		const onlyFrom = options.onlyFrom ?? null
+		const result =
+			options.status === undefined
+				? this.getDb()
+						.prepare(
+							`
+								UPDATE bot_tasks
+								SET done = @done, updated_at = @updated_at
+								WHERE id = @id
+									AND (@only_from IS NULL OR status = @only_from)
+							`
+						)
+						.run({
+							id,
+							done: clamped,
+							updated_at: updatedAt,
+							only_from: onlyFrom
+						})
+				: this.getDb()
+						.prepare(
+							`
+								UPDATE bot_tasks
+								SET done = @done, status = @status, updated_at = @updated_at
+								WHERE id = @id
+									AND (@only_from IS NULL OR status = @only_from)
+							`
+						)
+						.run({
+							id,
+							done: clamped,
+							status: options.status,
+							updated_at: updatedAt,
+							only_from: onlyFrom
+						})
+
+		if (Number(result.changes) === 0) {
+			return null
+		}
+		return this.getTask(id)
+	}
+
+	setTaskStatus(
+		id: string,
+		status: PersistentTaskStatus
+	): PersistentTaskRecord | null {
+		const current = this.getTask(id)
+		if (!current) {
+			return null
+		}
+
+		this.getDb()
+			.prepare(
+				`
+					UPDATE bot_tasks
+					SET status = @status, updated_at = @updated_at
+					WHERE id = @id
+				`
+			)
+			.run({ id, status, updated_at: Date.now() })
+
+		return this.getTask(id)
+	}
+
+	/**
+	 * Boot recovery (Q13.2a): rows left `active` by a crash — or carrying an
+	 * unknown legacy status — become `suspended` with progress kept.
+	 * No autostart — the pilot or player starts explicitly.
+	 * Safe to call before load(): nothing to normalize without a database.
+	 */
+	normalizeTasksOnBoot(): number {
+		if (!this.db) {
+			return 0
+		}
+
+		const db = this.getDb()
+		const result = db
+			.prepare(
+				`
+					UPDATE bot_tasks
+					SET status = 'suspended', updated_at = @updated_at
+					WHERE status = 'active' OR status NOT IN (${KNOWN_STATUS_LIST})
+				`
+			)
+			.run({ updated_at: Date.now() })
+
+		return Number(result.changes)
 	}
 
 	rememberLocation(
@@ -554,7 +782,26 @@ export class MemoryManager {
 
 			CREATE INDEX IF NOT EXISTS idx_memory_entries_updated_at
 			ON memory_entries(updated_at DESC);
+
+			CREATE TABLE IF NOT EXISTS bot_tasks (
+				id TEXT PRIMARY KEY,
+				kind TEXT NOT NULL,
+				status TEXT NOT NULL,
+				block_name TEXT NOT NULL,
+				total INTEGER NOT NULL,
+				done INTEGER NOT NULL,
+				created_at INTEGER NOT NULL,
+				updated_at INTEGER NOT NULL
+			);
+
+			CREATE INDEX IF NOT EXISTS idx_bot_tasks_status
+			ON bot_tasks(status, updated_at DESC);
 		`)
+		const columns = this.getDb().prepare('PRAGMA table_info(bot_tasks)').all()
+		if (!columns.some(column => column.name === 'resource_name')) {
+			this.getDb().exec('ALTER TABLE bot_tasks ADD COLUMN resource_name TEXT')
+		}
+		this.touchMeta(TASKS_FORMAT_META_KEY, String(TASKS_FORMAT_VERSION))
 	}
 
 	private ensureMeta(): void {
@@ -650,6 +897,48 @@ export class MemoryManager {
 			.get(id) as EntryRow | undefined
 
 		return row ? this.mapRowToEntry(row) : null
+	}
+
+	private prepareTaskRead(sql: string) {
+		const statement = this.getDb().prepare(sql)
+		statement.setReadBigInts(true)
+		return statement
+	}
+
+	/**
+	 * Tolerant reader: legacy or corrupt rows never throw. Unknown status
+	 * degrades to `suspended`, bad `done` to `0`; rows without a usable
+	 * identity (`kind`/`block_name`/`total`) are dropped.
+	 */
+	private mapRowToTask(row: TaskRow): PersistentTaskRecord | null {
+		if (row.kind !== 'mining') {
+			return null
+		}
+
+		const total = toPositiveInt(row.total)
+		if (
+			typeof row.id !== 'string' ||
+			typeof row.block_name !== 'string' ||
+			row.block_name.length === 0 ||
+			(row.resource_name != null &&
+				(typeof row.resource_name !== 'string' ||
+					row.resource_name.length === 0)) ||
+			total === null
+		) {
+			return null
+		}
+
+		return {
+			id: row.id,
+			kind: 'mining',
+			blockName: row.block_name,
+			...(row.resource_name ? { resourceName: row.resource_name } : {}),
+			total,
+			done: normalizeTaskDone(toNonNegativeInt(row.done) ?? 0, total),
+			status: toTaskStatus(row.status),
+			createdAt: toNonNegativeInt(row.created_at) ?? 0,
+			updatedAt: toNonNegativeInt(row.updated_at) ?? 0
+		}
 	}
 
 	private mapRowToEntry(row: EntryRow): MemoryEntry {

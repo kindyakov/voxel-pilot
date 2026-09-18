@@ -1,3 +1,4 @@
+import type { CompletedMiningTask } from '@/ai/contracts/agentTurn.js'
 import type { WindowSession } from '@/ai/runtime/window.js'
 
 const DEFAULT_ERROR_HISTORY_LIMIT = 3
@@ -25,6 +26,8 @@ export type ActiveWindowSessionState = 'open' | 'close_failed' | null
 interface BuildSnapshotInput {
 	bot: SnapshotBot
 	lastAction: string | null
+	lastActionArgs?: Record<string, unknown> | null
+	completedMiningTasks?: readonly CompletedMiningTask[]
 	lastResult: 'SUCCESS' | 'FAILED' | null
 	lastReason: string | null
 	errorHistory: string[]
@@ -85,6 +88,8 @@ export const buildSnapshot = (input: BuildSnapshotInput): string => {
 		'',
 		'FEEDBACK_ERRORS',
 		`last_action: ${input.lastAction ?? '-'}`,
+		`last_action_args: ${input.lastActionArgs ? JSON.stringify(input.lastActionArgs) : '-'}`,
+		`completed_mining_tasks: ${JSON.stringify(input.completedMiningTasks ?? [])}`,
 		`last_result: ${input.lastResult ?? '-'}`,
 		`last_reason: ${input.lastReason ?? '-'}`,
 		`error_history: ${errorLine}`
