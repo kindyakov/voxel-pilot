@@ -5,6 +5,13 @@ import { type ActorRefFrom, createActor } from 'xstate'
 
 import type { MachineContext } from '@/hsm/context.js'
 import type { HarnessDependencies } from '@/hsm/dependencies.js'
+import type { NativeInspectionOptions } from '@/hsm/inspection/index.js'
+import {
+	type CapturedInspectionOptions,
+	type NativeInspectionSource,
+	captureInspectionOptions,
+	createNativeInspectionSource
+} from '@/hsm/inspection/source.js'
 import { createBotMachine } from '@/hsm/machine.js'
 import type { MachineEvent } from '@/hsm/types.js'
 import { AntiLoopGuard } from '@/hsm/utils/antiLoop.js'
@@ -29,6 +36,7 @@ interface StoreLifecycle {
 
 export interface BotStateMachineOptions {
 	pausedGoal?: string | null
+	inspection?: NativeInspectionOptions
 }
 
 export class BotStateMachine {
@@ -44,6 +52,8 @@ export class BotStateMachine {
 	private antiLoopTripped = false
 	private antiLoopCooldown?: NodeJS.Timeout
 	private stopDiagnostics?: () => void
+	private inspection: NativeInspectionSource | null = null
+	private readonly inspectionOptions?: CapturedInspectionOptions
 	private readonly subscriptions: Array<() => void> = []
 	private stopped = false
 	private stopPromise: Promise<void> | null = null
@@ -72,6 +82,7 @@ export class BotStateMachine {
 		options: BotStateMachineOptions = {}
 	) {
 		this.dependencies = Object.freeze({ ...dependencies })
+		this.inspectionOptions = captureInspectionOptions(options.inspection)
 		this.bot = bot
 		this.memory = bot.memory
 		this.profileMemory = bot.profileMemory
@@ -111,7 +122,18 @@ export class BotStateMachine {
 			}
 			if (this.stopped) return false
 			// Construction reads current vitals; no stale pre-load health events are replayed.
+			if (this.inspectionOptions) {
+				this.inspection = createNativeInspectionSource(
+					this.inspectionOptions,
+					this.dependencies.logger
+				)
+			}
+			if (this.stopped) {
+				this.releaseRuntime()
+				return false
+			}
 			this.actor = createActor(createBotMachine(this.dependencies), {
+				...(this.inspection ? { inspect: this.inspection.inspect } : {}),
 				input: {
 					bot: this.bot,
 					pausedGoal,
@@ -363,6 +385,10 @@ export class BotStateMachine {
 	private releaseRuntime(): void {
 		this.isReady = false
 		this.pendingEvents.length = 0
+		// Constructor inspection stays an inactive dispatcher until system release.
+		const inspection = this.inspection
+		this.inspection = null
+		inspection?.dispose()
 		this.cleanup(() => this.stopDiagnostics?.())
 		this.stopDiagnostics = undefined
 		if (this.antiLoopCooldown) clearTimeout(this.antiLoopCooldown)

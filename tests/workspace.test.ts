@@ -126,7 +126,8 @@ syncBuiltinESMExports();
 const { MinecraftBot, createBotRuntime } = await import('@voxel-pilot/core');
 assert.deepEqual(Object.keys(await import('@voxel-pilot/contracts')), []);
 const serviceApi = await import('@voxel-pilot/core/services');
-for (const path of ['paths', 'schematic', 'hsm-diagram', 'agents-sdk-pilot']) await import('@voxel-pilot/core/' + path);
+for (const path of ['paths', 'schematic', 'hsm-diagram', 'agents-sdk-pilot', 'inspection']) await import('@voxel-pilot/core/' + path);
+assert.deepEqual(Object.keys(await import('@voxel-pilot/core/inspection')), []);
 assert.equal(process.env.MINECRAFT_HOST, undefined);
 import * as paths from '@voxel-pilot/core/paths';
 import { join } from 'node:path';
@@ -147,7 +148,7 @@ const runtime = new MinecraftBot(serviceApi.createRuntimeServices({config,logger
 });
 assert.equal(connections,0);
 assert.deepEqual(runtimeArtifacts(), beforeImportArtifacts);
-const facade = createBotRuntime(serviceApi.createRuntimeServices({config,logger:quiet.logger}), {connection:{createBot(){throw new Error('facade construction connected');}}});
+const facade = createBotRuntime(serviceApi.createRuntimeServices({config,logger:quiet.logger}), {inspection:{createObserver(){throw new Error('facade construction allocated observation');}},connection:{createBot(){throw new Error('facade construction connected');}}});
 assert.deepEqual(Object.keys(facade).sort(), ['start','stop','telemetry']);
 assert.equal(facade.telemetry.getSnapshot(), facade.telemetry.getSnapshot());
 assert.equal(facade.telemetry.getSnapshot().health.value, null);

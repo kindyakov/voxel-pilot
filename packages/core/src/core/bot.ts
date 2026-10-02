@@ -17,6 +17,11 @@ import { MemoryManager } from '@/core/memory/index.js'
 import { ProfileMemoryStore } from '@/core/profile/index.js'
 
 import type { HarnessDependencies } from '@/hsm/dependencies.js'
+import type { NativeInspectionOptions } from '@/hsm/inspection/index.js'
+import {
+	type CapturedInspectionOptions,
+	captureInspectionOptions
+} from '@/hsm/inspection/source.js'
 
 import { createAgentTurnRunner } from '@/ai/loop.js'
 import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
@@ -36,6 +41,10 @@ export interface ConnectionDependencies {
 	initConnection: (bot: Bot) => () => void
 }
 
+export interface MinecraftBotOptions {
+	readonly inspection?: NativeInspectionOptions
+}
+
 interface BotSession {
 	bot: Bot
 	hsm: BotStateMachine | null
@@ -51,6 +60,7 @@ interface BotSession {
 class MinecraftBot extends EventEmitter {
 	private readonly dependencies: ConnectionDependencies
 	private readonly harnessDependencies: HarnessDependencies
+	private readonly inspection?: CapturedInspectionOptions
 	private session: BotSession | null = null
 	private closing: Promise<void> | null = null
 	private readonly finalizations = new Set<Promise<FinalizationReport>>()
@@ -78,9 +88,11 @@ class MinecraftBot extends EventEmitter {
 
 	constructor(
 		private readonly services: RuntimeServices,
-		dependencies: Partial<ConnectionDependencies> = {}
+		dependencies: Partial<ConnectionDependencies> = {},
+		options: MinecraftBotOptions = {}
 	) {
 		super()
+		this.inspection = captureInspectionOptions(options.inspection)
 		this.services = Object.freeze({ ...services })
 		const { config, logger } = services
 		this.dependencies = {
@@ -236,7 +248,8 @@ class MinecraftBot extends EventEmitter {
 				dataDir: this.services.config.paths.profileDir
 			})
 			const hsm = new BotStateMachine(bot, this.harnessDependencies, {
-				pausedGoal: this.reconnectPausedGoal
+				pausedGoal: this.reconnectPausedGoal,
+				inspection: this.inspection
 			})
 			session.hsm = hsm
 			bot.hsm = hsm
