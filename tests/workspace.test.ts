@@ -29,7 +29,9 @@ async function linkCoreDependencies(temporary: string) {
 		// Resolve each package first: relative pnpm symlinks must retain their
 		// installed base when the copied workspace lives on another Windows drive.
 		await symlink(
-			await realpath(join(source, 'node_modules', name)),
+			name === '@voxel-pilot/contracts'
+				? join(temporary, 'packages/contracts')
+				: await realpath(join(source, 'node_modules', name)),
 			destination,
 			'junction'
 		)
@@ -39,7 +41,7 @@ async function linkCoreDependencies(temporary: string) {
 test('built core imports are inert and explicit CLI bootstrap preserves root paths and temporary storage', async () => {
 	const temporary = await mkdtemp(join(tmpdir(), 'voxel-pilot-workspace-'))
 	try {
-		for (const folder of ['packages/core', 'apps/cli']) {
+		for (const folder of ['packages/contracts', 'packages/core', 'apps/cli']) {
 			await cp(
 				join(repository, folder, 'dist'),
 				join(temporary, folder, 'dist'),
@@ -65,6 +67,11 @@ test('built core imports are inert and explicit CLI bootstrap preserves root pat
 			await symlink(
 				join(temporary, 'packages/core'),
 				join(temporary, folder, 'core'),
+				'junction'
+			)
+			await symlink(
+				join(temporary, 'packages/contracts'),
+				join(temporary, folder, 'contracts'),
 				'junction'
 			)
 		}
@@ -116,7 +123,8 @@ sqlite.DatabaseSync = new Proxy(DatabaseSync, { construct(target, argumentsList)
  return Reflect.construct(target, argumentsList);
 } });
 syncBuiltinESMExports();
-const { MinecraftBot } = await import('@voxel-pilot/core');
+const { MinecraftBot, createBotRuntime } = await import('@voxel-pilot/core');
+assert.deepEqual(Object.keys(await import('@voxel-pilot/contracts')), []);
 const serviceApi = await import('@voxel-pilot/core/services');
 for (const path of ['paths', 'schematic', 'hsm-diagram', 'agents-sdk-pilot']) await import('@voxel-pilot/core/' + path);
 assert.equal(process.env.MINECRAFT_HOST, undefined);
@@ -138,6 +146,11 @@ const runtime = new MinecraftBot(serviceApi.createRuntimeServices({config,logger
  initConnection() { return () => { disposed++; }; }
 });
 assert.equal(connections,0);
+assert.deepEqual(runtimeArtifacts(), beforeImportArtifacts);
+const facade = createBotRuntime(serviceApi.createRuntimeServices({config,logger:quiet.logger}), {connection:{createBot(){throw new Error('facade construction connected');}}});
+assert.deepEqual(Object.keys(facade).sort(), ['start','stop','telemetry']);
+assert.equal(facade.telemetry.getSnapshot(), facade.telemetry.getSnapshot());
+assert.equal(facade.telemetry.getSnapshot().health.value, null);
 assert.deepEqual(runtimeArtifacts(), beforeImportArtifacts);
 await assert.rejects(import('@voxel-pilot/core/legacy-logger'), {code:'ERR_PACKAGE_PATH_NOT_EXPORTED'});
 fs.createWriteStream = createWriteStream;

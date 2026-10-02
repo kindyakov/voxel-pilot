@@ -5,7 +5,9 @@ Language versions: [English](architecture.md) | [Русский](architecture.ru
 This bot is a Mineflayer runtime wrapped in an XState machine.
 The current design is small and explicit:
 
-- `apps/cli/src/index.ts` loads dotenv and starts the bot.
+- `apps/cli/src/bootstrap.ts` explicitly loads settings and creates the runtime. `application.ts` owns signals and bounded shutdown, including log output.
+- `packages/contracts/` defines portable runtime interfaces and serializable snapshots/results.
+- `packages/core/src/core/runtime.ts` provides the frozen start/stop/telemetry facade. Subscribers immediately receive a cached complete snapshot; unmeasured values are unknown.
 - `packages/core/src/core/bot.ts` handles connect, reconnect, and shutdown.
 - `packages/core/src/core/CommandHandler.ts` converts chat into HSM events.
 - `packages/core/src/core/harness.ts` wires the state machine to the bot runtime with explicit instance dependencies.

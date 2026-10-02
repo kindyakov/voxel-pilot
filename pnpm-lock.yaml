@@ -194,6 +194,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@voxel-pilot/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@voxel-pilot/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -211,11 +214,20 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/contracts:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/core:
     dependencies:
       '@openai/agents':
         specifier: ^0.18.0
         version: 0.18.0(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
+      '@voxel-pilot/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       ajv:
         specifier: ^8.17.1
         version: 8.18.0

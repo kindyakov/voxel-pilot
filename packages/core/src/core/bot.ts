@@ -1,6 +1,11 @@
 import EventEmitter from 'node:events'
 
 import type { Bot } from '@/types/index.js'
+import type {
+	ConnectionSnapshot,
+	StopIssue,
+	StopResult
+} from '@voxel-pilot/contracts'
 import * as mineflayer from 'mineflayer'
 
 import type { MinecraftConfig } from '@/config/runtimeConfig.js'
@@ -20,6 +25,12 @@ import { createConnectionInitializer } from '@/modules/connection/runtimeConnect
 
 import { BotUtils } from '@/utils/minecraft/botUtils.js'
 
+import {
+	type FinalizationReport,
+	freezeReport,
+	stopIssue
+} from './finalization.js'
+
 export interface ConnectionDependencies {
 	createBot: (options: MinecraftConfig) => Bot
 	initConnection: (bot: Bot) => () => void
@@ -34,6 +45,7 @@ interface BotSession {
 	saveTimer?: ReturnType<typeof setInterval>
 	disposed: boolean
 	disposal: Promise<void> | null
+	issues: StopIssue[]
 }
 
 class MinecraftBot extends EventEmitter {
@@ -41,6 +53,22 @@ class MinecraftBot extends EventEmitter {
 	private readonly harnessDependencies: HarnessDependencies
 	private session: BotSession | null = null
 	private closing: Promise<void> | null = null
+	private readonly finalizations = new Set<Promise<FinalizationReport>>()
+	private readonly pendingSessions = new Set<BotSession>()
+	private persistence: FinalizationReport['persistence'] = 'not-required'
+	private readonly issues = new Map<string, StopIssue>()
+	private readonly observers = new Set<(snapshot: ConnectionSnapshot) => void>()
+	private connection: ConnectionSnapshot = Object.freeze({
+		state: 'idle',
+		changedAt: Date.now(),
+		sessionId: null,
+		retryAttempt: 0,
+		retryAt: null,
+		failure: null
+	})
+	private generation = 0
+	private nextSessionId = 0
+	private resetReports = false
 	private running = false
 	private reconnectAttempts = 0
 	private reconnectPausedGoal: string | null = null
@@ -77,21 +105,81 @@ class MinecraftBot extends EventEmitter {
 	}
 
 	start(): void {
-		if (this.session) return
+		if (this.running || this.session) return
 		this.running = true
+		this.generation++
+		this.reconnectAttempts = 0
+		this.resetReports = true
 		this.clearReconnect()
 		this.connect()
 	}
 
+	/** Internal observation seam; public consumers receive the portable facade. */
+	subscribeConnection(
+		listener: (snapshot: ConnectionSnapshot) => void
+	): () => void {
+		this.observers.add(listener)
+		this.notify(listener, this.connection)
+		return () => {
+			this.observers.delete(listener)
+		}
+	}
+
+	private notify(
+		listener: (snapshot: ConnectionSnapshot) => void,
+		value: ConnectionSnapshot
+	): void {
+		try {
+			void Promise.resolve(listener(value)).catch(() => {})
+		} catch {}
+	}
+
+	private publish(update: Partial<ConnectionSnapshot>): void {
+		this.connection = Object.freeze({
+			...this.connection,
+			...update,
+			changedAt: Date.now()
+		})
+		const current = this.connection
+		for (const observer of [...this.observers]) {
+			if (this.connection !== current) break
+			if (this.observers.has(observer)) this.notify(observer, current)
+		}
+	}
+
 	private connect(): void {
 		if (!this.running || this.session) return
-		if (this.closing) {
-			void this.closing.then(() => this.connect())
+		if (this.finalizations.size) {
+			this.publish({ state: 'reconnecting', retryAt: null, failure: null })
+			if (!this.running) return
+			const generation = this.generation
+			void Promise.all([...this.finalizations]).then(() => {
+				if (this.running && this.generation === generation) this.connect()
+			})
 			return
 		}
+		if (this.resetReports) {
+			this.persistence = 'not-required'
+			this.issues.clear()
+			this.resetReports = false
+		}
+		const generation = this.generation
+		this.publish({
+			state: 'connecting',
+			sessionId: ++this.nextSessionId,
+			retryAt: null,
+			retryAttempt: this.reconnectAttempts,
+			failure: null
+		})
+		if (!this.running || this.generation !== generation) return
 		try {
 			this.services.logger.info('Запуск бота...')
+			if (!this.running || this.generation !== generation) return
 			const bot = this.dependencies.createBot(this.services.config.minecraft)
+			if (!this.running || this.generation !== generation) {
+				this.cleanup(() => bot.quit('Запуск отменён'))
+				return
+			}
 			const session: BotSession = {
 				bot,
 				hsm: null,
@@ -99,7 +187,8 @@ class MinecraftBot extends EventEmitter {
 				connectionCleanup: null,
 				listeners: [],
 				disposed: false,
-				disposal: null
+				disposal: null,
+				issues: []
 			}
 			this.session = session
 			const onReady = () => {
@@ -120,7 +209,8 @@ class MinecraftBot extends EventEmitter {
 				() => bot.off('botError', onError)
 			)
 			const cleanup = this.dependencies.initConnection(bot)
-			if (session.disposed) cleanup()
+			if (session.disposed)
+				this.cleanup(cleanup, session.issues, 'connection-cleanup-failed')
 			else session.connectionCleanup = cleanup
 		} catch (error) {
 			this.services.logger.error('Ошибка запуска бота', {
@@ -165,7 +255,10 @@ class MinecraftBot extends EventEmitter {
 				this.harnessDependencies.aiPilotEnabled
 			this.reconnectPausedGoal = null
 			if (shouldResumePausedGoal) hsm.resumePausedGoal()
+			if (this.session !== session || session.disposed || !this.running) return
 			this.reconnectAttempts = 0
+			this.publish({ state: 'ready', retryAttempt: 0, retryAt: null })
+			if (this.session !== session || session.disposed || !this.running) return
 			session.saveTimer = setInterval(
 				() => {
 					void hsm.save()
@@ -185,10 +278,21 @@ class MinecraftBot extends EventEmitter {
 		this.scheduleReconnect()
 	}
 
-	private cleanup(action: () => void): void {
+	private cleanup(
+		action: () => void,
+		issues: StopIssue[] = [],
+		code = 'session-cleanup-failed'
+	): void {
 		try {
 			action()
 		} catch (error) {
+			issues.push(
+				stopIssue(
+					code.startsWith('connection') ? 'connection' : 'cleanup',
+					code,
+					'Session resource cleanup failed.'
+				)
+			)
 			this.services.logger.error('Ошибка очистки сессии', {
 				error: String(error)
 			})
@@ -201,6 +305,7 @@ class MinecraftBot extends EventEmitter {
 		disconnect: boolean
 	): Promise<void> {
 		if (session.disposal) return session.disposal
+		this.pendingSessions.add(session)
 		session.disposed = true
 		if (this.running && session.hsm) {
 			const reconnectGoal = session.hsm.getReconnectGoal()
@@ -208,18 +313,35 @@ class MinecraftBot extends EventEmitter {
 		}
 		if (this.session === session) this.session = null
 		if (session.saveTimer) clearInterval(session.saveTimer)
-		for (const dispose of session.listeners.splice(0)) this.cleanup(dispose)
-		this.cleanup(() => session.commands?.stop())
+		for (const dispose of session.listeners.splice(0))
+			this.cleanup(dispose, session.issues)
+		this.cleanup(() => session.commands?.stop(), session.issues)
 		let stopped: Promise<void> = Promise.resolve()
 		this.cleanup(() => {
 			stopped = session.hsm?.stop() ?? stopped
-		})
+		}, session.issues)
 		// Stop behavior before waiting for persistence or asking the connection to close.
-		if (disconnect) this.cleanup(() => session.bot.quit(reason))
-		this.cleanup(() => session.connectionCleanup?.())
+		if (disconnect)
+			this.cleanup(
+				() => session.bot.quit(reason),
+				session.issues,
+				'connection-quit-failed'
+			)
+		this.cleanup(
+			() => session.connectionCleanup?.(),
+			session.issues,
+			'connection-cleanup-failed'
+		)
 		session.connectionCleanup = null
 		const disposal = stopped
 			.catch(error => {
+				session.issues.push(
+					stopIssue(
+						'cleanup',
+						'harness-stop-failed',
+						'Harness cancellation failed.'
+					)
+				)
 				this.services.logger.error('Ошибка остановки HSM', {
 					error: String(error)
 				})
@@ -229,17 +351,86 @@ class MinecraftBot extends EventEmitter {
 			})
 		this.closing = disposal
 		session.disposal = disposal
+		const finalization = Promise.resolve()
+			.then(() => session.hsm?.finalize())
+			.then(
+				report =>
+					freezeReport(report?.persistence ?? 'not-required', [
+						...session.issues,
+						...(report?.issues ?? [])
+					]),
+				() =>
+					freezeReport('failed', [
+						...session.issues,
+						stopIssue(
+							'cleanup',
+							'harness-finalization-failed',
+							'Harness finalization failed.'
+						)
+					])
+			)
+			.then(report => {
+				if (
+					report.persistence === 'failed' ||
+					(this.persistence !== 'failed' && report.persistence === 'saved')
+				)
+					this.persistence = report.persistence
+				for (const issue of report.issues)
+					this.issues.set(`${issue.stage}:${issue.code}`, issue)
+				this.finalizations.delete(finalization)
+				this.pendingSessions.delete(session)
+				return report
+			})
+		this.finalizations.add(finalization)
 		return session.disposal
 	}
 
 	stop(reason: string = 'Бот остановлен вручную.'): Promise<void> {
 		this.running = false
+		this.generation++
 		this.reconnectPausedGoal = null
 		this.clearReconnect()
 		this.reconnectAttempts = 0
-		return this.session
+		const stopped = this.session
 			? this.disposeSession(this.session, reason, true)
 			: (this.closing ?? Promise.resolve())
+		if (this.connection.state !== 'stopping')
+			this.publish({ state: 'stopping', retryAt: null })
+		return stopped
+	}
+
+	async finalize(): Promise<FinalizationReport> {
+		await Promise.all([...this.finalizations])
+		return freezeReport(this.persistence, [...this.issues.values()])
+	}
+
+	getFinalizationIssues(): readonly StopIssue[] {
+		const issues = new Map(this.issues)
+		for (const session of this.pendingSessions) {
+			for (const issue of [
+				...session.issues,
+				...(session.hsm?.getFinalizationIssues() ?? [])
+			]) {
+				issues.set(`${issue.stage}:${issue.code}`, issue)
+			}
+		}
+		return Object.freeze([...issues.values()])
+	}
+
+	completeStop(result: StopResult): void {
+		if (this.running) return
+		this.publish({
+			state: result.outcome === 'stopped' ? 'stopped' : 'failed',
+			retryAt: null,
+			failure:
+				this.connection.failure ??
+				(result.issues[0]
+					? Object.freeze({
+							code: result.issues[0].code,
+							message: result.issues[0].message
+						})
+					: null)
+		})
 	}
 
 	private clearReconnect(): void {
@@ -250,9 +441,18 @@ class MinecraftBot extends EventEmitter {
 	private scheduleReconnect(): void {
 		if (!this.running || this.reconnectTimer || this.session) return
 		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+			this.running = false
 			this.services.logger.error(
 				'Превышено число попыток реконнекта. Бот больше не подключается.'
 			)
+			this.publish({
+				state: 'failed',
+				retryAt: null,
+				failure: Object.freeze({
+					code: 'connection-retries-exhausted',
+					message: 'Connection failed after the final retry.'
+				})
+			})
 			return
 		}
 		const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts++)
@@ -263,6 +463,11 @@ class MinecraftBot extends EventEmitter {
 			this.reconnectTimer = undefined
 			this.connect()
 		}, delay)
+		this.publish({
+			state: 'reconnecting',
+			retryAttempt: this.reconnectAttempts,
+			retryAt: Date.now() + delay
+		})
 	}
 }
 

@@ -1,6 +1,9 @@
 import { dirname, join, resolve } from 'node:path'
 
-import { type ConnectionDependencies, MinecraftBot } from '@voxel-pilot/core'
+import {
+	type ConnectionDependencies,
+	createBotRuntime
+} from '@voxel-pilot/core'
 import {
 	defaultDataDirectory,
 	defaultLogFile,
@@ -23,6 +26,7 @@ export interface CliBootstrapOptions {
 	readonly paths?: Partial<Omit<RuntimePaths, 'settingsFile'>>
 	readonly output?: Pick<RuntimeLoggerOptions, 'console' | 'files'>
 	readonly connection?: Partial<ConnectionDependencies>
+	readonly stopTimeoutMs?: number
 }
 
 export function selectRuntimePaths(
@@ -48,6 +52,14 @@ export function selectRuntimePaths(
 
 /** Composes app-owned output and an inert core; only the entrypoint calls start. */
 export function createCliRuntime(options: CliBootstrapOptions = {}) {
+	if (
+		options.stopTimeoutMs !== undefined &&
+		(!Number.isSafeInteger(options.stopTimeoutMs) ||
+			options.stopTimeoutMs <= 0 ||
+			options.stopTimeoutMs > 2_147_483_647)
+	) {
+		throw new Error('stopTimeoutMs must be positive and finite')
+	}
 	const loaded = loadSettings(
 		options.environment ?? process.env,
 		options.settingsFile
@@ -81,7 +93,10 @@ export function createCliRuntime(options: CliBootstrapOptions = {}) {
 	return Object.freeze({
 		services,
 		loggerHandle,
-		runtime: new MinecraftBot(services, options.connection)
+		runtime: createBotRuntime(services, {
+			connection: options.connection,
+			stopTimeoutMs: options.stopTimeoutMs
+		})
 	})
 }
 

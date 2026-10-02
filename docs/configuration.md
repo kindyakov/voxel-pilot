@@ -5,6 +5,8 @@ Language versions: [English](configuration.md) | [Русский](configuration.
 The CLI explicitly loads settings in `apps/cli/src/settings.ts`; existing environment values override the selected file. Core validates the supplied snapshot through `packages/core/src/config/env.ts` and `packages/core/src/config/runtimeConfig.ts`. Importing core does not load `.env` or create output.
 The recommended way to set values is `.env` based on `.env.example`.
 
+Runtime composition accepts `stopTimeoutMs` (default 10 seconds). CLI application composition accepts `shutdownTimeoutMs` (default 15 seconds), covering runtime and logger close together. Both require a positive integer in the supported timer range. A deadline produces a nonzero exit and warns that persistence or cleanup may be incomplete; connection retry exhaustion also exits unsuccessfully. The portable runtime keeps measured fields unknown until their observation adapters are implemented.
+
 ## Required Variables
 
 - `MINECRAFT_HOST`

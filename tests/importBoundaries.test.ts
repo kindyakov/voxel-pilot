@@ -21,6 +21,7 @@ test('import checker enforces explicit core settings and public app boundaries',
 	try {
 		for (const path of [
 			'scripts',
+			'packages/contracts/src',
 			'packages/core/src',
 			'apps/cli/src',
 			'node_modules'
@@ -41,6 +42,18 @@ test('import checker enforces explicit core settings and public app boundaries',
 			exports: { '.': './src/index.ts' },
 			dependencies: {}
 		}
+		const contracts = {
+			name: '@voxel-pilot/contracts',
+			exports: { '.': './src/index.ts' }
+		}
+		await writeFile(
+			join(directory, 'packages/contracts/package.json'),
+			JSON.stringify(contracts)
+		)
+		await writeFile(
+			join(directory, 'packages/contracts/src/index.ts'),
+			'export interface Snapshot { readonly value: number | null }'
+		)
 		await writeFile(
 			join(directory, 'packages/core/package.json'),
 			JSON.stringify(core)
@@ -112,6 +125,38 @@ test('import checker enforces explicit core settings and public app boundaries',
 			"import core from '../../../packages/core/src/index.js';"
 		)
 		assert.match(check().stderr, /relative import crosses package boundary/)
+		for (const source of [
+			"import type { Bot } from 'mineflayer';",
+			"import { readFile } from 'node:fs';",
+			"import type { ReactNode } from 'react';",
+			"import * as core from '@voxel-pilot/core';"
+		]) {
+			await writeFile(
+				join(directory, 'packages/contracts/src/index.ts'),
+				source
+			)
+			assert.match(check().stderr, /contracts must use portable local types/)
+		}
+		await writeFile(
+			join(directory, 'packages/contracts/src/index.ts'),
+			'export const portable = true;'
+		)
+		await writeFile(
+			join(directory, 'packages/contracts/package.json'),
+			JSON.stringify({
+				...contracts,
+				dependencies: { '@voxel-pilot/core': 'workspace:*' }
+			})
+		)
+		assert.match(check().stderr, /contracts must be independent/)
+		await writeFile(
+			join(directory, 'packages/contracts/package.json'),
+			JSON.stringify({
+				...contracts,
+				devDependencies: { '@types/node': 'fixture' }
+			})
+		)
+		assert.match(check().stderr, /nonportable contracts dependency/)
 	} finally {
 		assert.equal(dirname(resolve(directory)), resolve(tmpdir()))
 		await rm(directory, { recursive: true, force: true })

@@ -5,7 +5,9 @@
 Бот — это Mineflayer-рантайм, обёрнутый в машину XState.
 Текущий дизайн маленький и явный:
 
-- `apps/cli/src/index.ts` грузит dotenv и стартует бота.
+- `apps/cli/src/bootstrap.ts` явно загружает настройки и создаёт runtime. `application.ts` владеет сигналами и ограниченным завершением, включая вывод логов.
+- `packages/contracts/` задаёт переносимые интерфейсы runtime и сериализуемые снимки/результаты.
+- `packages/core/src/core/runtime.ts` предоставляет замороженный фасад start/stop/telemetry. Подписчик сразу получает полный кешированный снимок; неизмеренные значения неизвестны.
 - `packages/core/src/core/bot.ts` отвечает за connect, reconnect и shutdown.
 - `packages/core/src/core/CommandHandler.ts` превращает чат в события HSM.
 - `packages/core/src/core/harness.ts` связывает стейт-машину с рантаймом бота через явные зависимости экземпляра.

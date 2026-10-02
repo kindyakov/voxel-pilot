@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "pnpm -r run build",
-		"type-check": "pnpm --filter @voxel-pilot/core run build && pnpm -r run type-check && tsc --noEmit",
+		"type-check": "pnpm -r run build && pnpm -r run type-check && tsc --noEmit",
 		"start": "pnpm --filter @voxel-pilot/cli start",
 		"dev": "pnpm --filter @voxel-pilot/cli dev",
 		"inspect-schematic": "pnpm --filter @voxel-pilot/cli inspect-schematic",
