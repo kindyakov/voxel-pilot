@@ -60,6 +60,8 @@ After configuring the same `.env` and running `pnpm run build`, use `pnpm run tu
 
 The status panel shows measured health/maxHealth, food, coordinates, MAIN_ACTIVITY and its elapsed time, current action, independent monitoring and the active or paused goal. Unknown values appear as `—`; real zero stays zero. Stale measurements are marked, including the time since entry into the last known state. A new session clears old measurements until fresh observations arrive; monitoring and log updates do not reset the main-state timer.
 
+Press `d` to show retained DEBUG records. Up/Down and PgUp/PgDn browse records; scrolling up pauses the view while a badge counts new matching events. `End` or scrolling down to the latest record returns to LIVE. Filtering and resizing keep the paused source anchor; eviction shows a loss notice and the earliest retained matching record. Journal eviction and source truncation remain visible, and shortened display text uses an ellipsis.
+
 Use `q` or Ctrl+C to stop and await persistence. Signals and application failures join the same bounded shutdown; a deadline or failed save exits nonzero. The terminal needs interactive input/output and raw input support. Unsupported terminals are rejected before settings/resource allocation; use `pnpm start` for the headless CLI. `pnpm run dev:tui` provides the development watcher.
 
 ## Docker

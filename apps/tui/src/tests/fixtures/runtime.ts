@@ -59,6 +59,10 @@ export function publicRuntime() {
 	const snapshots = new Set<{ listener: (value: BotSnapshot) => void }>()
 	const logs = new Set<{ listener: (value: LogUpdate) => void }>()
 	let accepted = 0
+	const acceptedByLevel = { debug: 0, info: 0, warn: 0, error: 0 }
+	let evictedEntries = 0,
+		evictedBytes = 0,
+		truncatedEntries = 0
 	const historyFor = (entries: readonly LogEntry[]): LogHistory =>
 		Object.freeze({
 			id: 'public-fixture',
@@ -73,15 +77,10 @@ export function publicRuntime() {
 					0
 				),
 				acceptedEntries: accepted,
-				acceptedByLevel: {
-					debug: entries.filter(entry => entry.level === 'debug').length,
-					info: entries.filter(entry => entry.level === 'info').length,
-					warn: entries.filter(entry => entry.level === 'warn').length,
-					error: entries.filter(entry => entry.level === 'error').length
-				},
-				evictedEntries: 0,
-				evictedBytes: 0,
-				truncatedEntries: 0
+				acceptedByLevel: Object.freeze({ ...acceptedByLevel }),
+				evictedEntries,
+				evictedBytes,
+				truncatedEntries
 			}
 		})
 	let history = historyFor([])
@@ -193,21 +192,37 @@ export function publicRuntime() {
 		holdStop(value: Promise<StopResult>) {
 			stopResult = value
 		},
-		append(message: string, level: LogEntry['level'] = 'info') {
+		append(
+			message: string,
+			level: LogEntry['level'] = 'info',
+			truncated = false
+		) {
 			accepted++
+			acceptedByLevel[level]++
+			if (truncated) truncatedEntries++
 			const entry: LogEntry = Object.freeze({
 				id: `log:${accepted}`,
 				timestamp: 1000 + accepted,
 				level,
 				source: 'CORE',
 				message,
-				truncation: null
+				truncation: truncated
+					? Object.freeze({ originalMessageBytes: 99999 })
+					: null
 			})
-			history = historyFor(
-				Object.freeze([...history.entries, entry].slice(-32))
-			)
+			const next = [...history.entries, entry]
+			for (const evicted of next.slice(0, Math.max(0, next.length - 32))) {
+				evictedEntries++
+				evictedBytes += Buffer.byteLength(JSON.stringify(evicted))
+			}
+			history = historyFor(Object.freeze(next.slice(-32)))
 			for (const subscription of [...logs])
 				deliver(subscription.listener, { kind: 'append', entry, history })
+		},
+		publishHistory(value: LogHistory) {
+			history = value
+			for (const subscription of [...logs])
+				deliver(subscription.listener, { kind: 'snapshot', history })
 		},
 		counts() {
 			return {

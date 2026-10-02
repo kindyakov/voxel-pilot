@@ -67,6 +67,26 @@ for (const owner of owners) {
 				)
 		}
 	}
+	if (presentation) {
+		for (const name of Object.keys(owner.manifest.dependencies ?? {})) {
+			if (name !== '@voxel-pilot/contracts')
+				violations.push(
+					`packages/presentation/package.json: presentation depends only on contracts: ${name}`
+				)
+		}
+		for (const name of [
+			'@types/node',
+			'react',
+			'ink',
+			'xstate',
+			'mineflayer'
+		]) {
+			if (declared[name])
+				violations.push(
+					`packages/presentation/package.json: nonportable presentation dependency: ${name}`
+				)
+		}
+	}
 	for await (const filename of files(resolve(owner.directory, 'src'))) {
 		const source = ts.createSourceFile(
 			filename,
@@ -82,6 +102,15 @@ for (const owner of owners) {
 		const check = (specifier, typeOnly) => {
 			if (contracts && !specifier.startsWith('.')) {
 				fail(`contracts must use portable local types: ${specifier}`)
+			}
+			if (
+				presentation &&
+				!specifier.startsWith('.') &&
+				specifier !== '@voxel-pilot/contracts'
+			) {
+				fail(
+					`presentation must remain portable and use only contracts: ${specifier}`
+				)
 			}
 			if (
 				core &&
@@ -160,16 +189,6 @@ for (const owner of owners) {
 				!['bootstrap.ts', 'settings.ts'].includes(local.join('/'))
 			)
 				fail(`CLI application dependency outside composition: ${specifier}`)
-			if (
-				presentation &&
-				[
-					'@voxel-pilot/core',
-					'@voxel-pilot/application',
-					'react',
-					'ink'
-				].includes(packageName)
-			)
-				fail(`presentation must remain portable: ${specifier}`)
 			const workspace = owners.find(
 				candidate => candidate.manifest.name === packageName
 			)
@@ -201,6 +220,15 @@ for (const owner of owners) {
 			}
 		}
 		const visit = node => {
+			if (
+				presentation &&
+				ts.isIdentifier(node) &&
+				['process', 'Buffer', 'require', '__dirname', '__filename'].includes(
+					node.text
+				)
+			) {
+				fail(`presentation uses Node global: ${node.text}`)
+			}
 			if (
 				(productionCore ||
 					(productionTui && local[0] !== 'app' && local[0] !== 'index.ts')) &&

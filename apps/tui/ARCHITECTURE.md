@@ -17,11 +17,12 @@ src/
 ├── terminal/
 │   ├── preflight.ts         # Интерактивный stdin/stdout и raw capability
 │   ├── session.ts           # Native Ink flush/exit, raw/screen/cursor restoration
-│   ├── ExitInput.tsx        # q/raw Ctrl+C → app action port на всех экранах
-│   └── display.ts           # Безопасный single-line текст и форматирование timestamps
+│   ├── ExitInput.tsx        # Exit и log-navigation action ports на всех экранах
+│   ├── logNavigation.ts    # Структурный порт ввода и терминальная ёмкость страницы
+│   └── display.ts           # Безопасный single-line текст и display clock
 ├── features/
 │   ├── connection/index.tsx # Публичное подключение и сохраняемый окончательный отказ
-│   ├── logs/index.tsx       # Строки INFO+ текущей ограниченной core history
+│   ├── logs/                # Публичный hook/view, local external store переносимой модели
 │   └── status/
 │       ├── index.tsx        # Показатели, HSM, мониторинг и цель из публичного снимка
 │       ├── projection.ts    # Чистая семантика unknown/zero/stale и длительности
@@ -37,7 +38,9 @@ src/
 
 Core runtime.stop остаётся единственным владельцем отмены, сохранения и native cleanup. Application присоединяет q, raw Ctrl+C, SIGINT/SIGTERM и fatal к одному Promise, затем закрывает собственный logger и терминал в пределах одного дедлайна. Окончательный отказ подключения остаётся данными на экране до явного выхода; ошибка feature изолируется локальной границей, fatal экрана запускает shutdown. Исключения не выводятся как сырые error/stack.
 
-Bridge хранит только текущие неизменяемые ссылки публичных BotSnapshot/LogHistory, подписывается один раз на каждый канал и освобождается владельцем приложения. Исходная история, удержание, секретная проекция и статистика остаются в core. React-компоненты не конструируют runtime и не накапливают историю. Переносимые алгоритмы навигации/фильтра/LIVE/anchor размещай у владельца presentation при их реализации; терминальные строки/ширины и ввод остаются здесь.
+Bridge хранит только текущие неизменяемые ссылки публичных BotSnapshot/LogHistory, подписывается один раз на каждый канал и освобождается владельцем приложения. Исходная история, удержание, секретная проекция и статистика остаются в core. React-компоненты не конструируют runtime и не накапливают историю. [useLogView](src/features/logs/useLogView.ts) постоянно смонтирован в App и получает history через локальную подписку bridge; [store](src/features/logs/store.ts) связывает переносимую модель `@voxel-pilot/presentation` с React. Подписка на core остаётся одной. Terminal декодирует d/стрелки/PgUp/PgDn/End через структурный action port; строки/ширины и компактная видимая отметка усечения принадлежат display/view.
+
+В PAUSED модель сохраняет opaque-ID якоря и четыре scalar baseline счётчика; полный новый history заменяет текущую ссылку. Пропущенные revision и уже вытесненные arrivals учитываются через acceptedByLevel. Скрытый DEBUG-якорь отображает предыдущую подходящую запись; вытесненный якорь переходит к первой сохранённой подходящей записи с явной потерей и остаётся PAUSED. Фильтр/resize/arrivals не включают LIVE. End или явная прокрутка к последней подходящей записи сбрасывают pause-local факты; накопительная статистика core остаётся. Другой journalId начинает LIVE, сохраняя DEBUG preference.
 
 Status получает текущий BotSnapshot через App и общий bridge. Локальная [проекция](src/features/status/projection.ts) сохраняет различия unknown/zero, отдельную stale-метку каждого измерения, настоящие maxHealth/координаты, действие и none/active/paused цели. Она использует только contracts; terminal/view нормализует текст перед отрисовкой, а независимый Meter получает обычные view props. Общий presentation для статуса появляется при фактическом переиспользовании другим потребителем.
 
@@ -56,6 +59,8 @@ App собирает runtime, terminal, features и UI. Reusable modules не и
 Новую feature начинай с её публичных данных/actions и публичного `index`, затем добавляй view у feature. Общую композицию подключай в App, bridge/state изменяй у их существующих владельцев. Игровое поведение и raw Mineflayer/XState остаются в core; UI получает read-only contracts. Геометрию помещай в terminal/view, независимый примитив — в ui. Для каждой изменённой границы обновляй checker fixtures вместе с картой.
 
 ## Проверки
+
+[logs.test.tsx](src/tests/logs.test.tsx) проверяет модель в полном native app через d/стрелки/PgUp/PgDn/End, matching arrivals, скрытый/вытесненный якорь, resize/tiny/feature failure и joined exit. Переносимые алгоритмы проверяются отдельно через публичный presentation API, терминальное сокращение — здесь.
 
 [application.test.tsx](src/tests/application.test.tsx) проверяет полный app: native ввод/frames, repeated exits, ожидание stop/save, logger, app deadline, поздние исходы, отказ подключения, initial/raw/render failures, resize, feature/fatal и восстановление. [telemetryStore.test.ts](src/tests/telemetryStore.test.ts) проверяет кеш/observer/disposer; [bootstrap.test.ts](src/tests/bootstrap.test.ts) — реальные общие пути, precedence и независимые DEBUG/file/console policies. Root tests защищают browser contracts, import/layer boundaries, безопасные built/development exports, CWD и sequential storage. CLI tests сохраняют его отдельную headless exit policy. Native платформенная визуальная проверка отличается от controlled-stream evidence.
 
