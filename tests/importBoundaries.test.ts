@@ -245,6 +245,14 @@ test('AST checker enforces TUI ownership across static/type/export/dynamic impor
 			'apps/tui/src/features/connection/index.tsx',
 			'export const value=1;'
 		)
+		await write(
+			'apps/tui/src/features/status/index.tsx',
+			"import type {Snapshot} from '@voxel-pilot/contracts'; export interface StatusClock {now():number}"
+		)
+		await write(
+			'apps/tui/src/app/status.ts',
+			"import type {StatusClock} from '../features/status/index.js';"
+		)
 		const check = () =>
 			spawnSync(process.execPath, ['./scripts/check-imports.mjs'], {
 				cwd: directory,
@@ -253,6 +261,16 @@ test('AST checker enforces TUI ownership across static/type/export/dynamic impor
 			})
 		assert.equal(check().status, 0)
 		for (const [file, source, expected] of [
+			[
+				'apps/tui/src/features/status/probe.ts',
+				"import type {DeadlineClock} from '../../app/clock.js';",
+				/reusable module imports composition/
+			],
+			[
+				'apps/tui/src/ui/probe.tsx',
+				"export type {StatusClock} from '../features/status/index.js';",
+				/independent TUI UI/
+			],
 			[
 				'apps/tui/src/ui/probe.tsx',
 				"import type {View} from '../features/logs/index.js';",

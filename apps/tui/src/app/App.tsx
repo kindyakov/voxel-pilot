@@ -3,6 +3,7 @@ import { type ComponentType, useSyncExternalStore } from 'react'
 
 import { ConnectionPanel } from '../features/connection/index.js'
 import { LogPanel } from '../features/logs/index.js'
+import { type StatusClock, StatusPanel } from '../features/status/index.js'
 import type {
 	TelemetryStore,
 	TelemetryView
@@ -18,12 +19,14 @@ export interface DashboardProps {
 	readonly telemetry: TelemetryView
 	readonly application: ApplicationState
 	readonly displayClock: DisplayClock
+	readonly statusClock?: StatusClock
 }
 
 export function Dashboard({
 	telemetry,
 	application,
-	displayClock
+	displayClock,
+	statusClock
 }: DashboardProps) {
 	const { columns, rows } = useWindowSize()
 	const small = columns < 50 || rows < 9
@@ -61,11 +64,16 @@ export function Dashboard({
 						/>
 					</FailureBoundary>
 					<FailureBoundary
+						fallback={<Text color='yellow'>Status view unavailable</Text>}
+					>
+						<StatusPanel snapshot={telemetry.snapshot} clock={statusClock} />
+					</FailureBoundary>
+					<FailureBoundary
 						fallback={<Text color='yellow'>Log view unavailable</Text>}
 					>
 						<LogPanel
 							history={telemetry.history}
-							rows={Math.max(1, rows - 9)}
+							rows={Math.max(2, rows - 22)}
 							clock={displayClock}
 						/>
 					</FailureBoundary>
@@ -80,6 +88,7 @@ export function App({
 	telemetry,
 	application,
 	displayClock,
+	statusClock,
 	onExit,
 	onFatal,
 	view: View = Dashboard
@@ -87,6 +96,7 @@ export function App({
 	readonly telemetry: TelemetryStore
 	readonly application: ApplicationStore
 	readonly displayClock: DisplayClock
+	readonly statusClock?: StatusClock
 	readonly onExit: () => void
 	readonly onFatal: () => void
 	readonly view?: ComponentType<DashboardProps>
@@ -109,6 +119,7 @@ export function App({
 					telemetry={current}
 					application={state}
 					displayClock={displayClock}
+					statusClock={statusClock}
 				/>
 			</FailureBoundary>
 		</>
