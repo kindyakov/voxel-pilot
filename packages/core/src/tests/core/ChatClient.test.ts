@@ -13,11 +13,13 @@ import {
 	isRetryableApiError,
 	isTransportApiError
 } from '../../ai/client/retry.js'
-import { Config } from '../../config/config.js'
+import type { AIConfig } from '../../config/runtimeConfig.js'
+import { createTestClientOptions } from '../ai/fixtures/runtimeServices.js'
 
 test('OpenAICompatibleChatClient maps chat completion tool calls into compact tool calls', async () => {
 	const calls: any[] = []
 	const client = new OpenAICompatibleChatClient({
+		...createTestClientOptions(),
 		apiKey: 'router-key',
 		model: 'z-ai/glm-4.7-flash',
 		timeoutMs: 5000,
@@ -76,6 +78,7 @@ test('OpenAICompatibleChatClient maps chat completion tool calls into compact to
 
 test('OpenAICompatibleChatClient tolerates missing choices without throwing', async () => {
 	const client = new OpenAICompatibleChatClient({
+		...createTestClientOptions(),
 		apiKey: 'router-key',
 		model: 'qwen/qwen3.5-flash-02-23',
 		timeoutMs: 5000,
@@ -103,41 +106,22 @@ test('OpenAICompatibleChatClient tolerates missing choices without throwing', as
 })
 
 test('createAgentClient selects chat completions client for routerai provider', () => {
-	const previousEnv = {
-		AI_PROVIDER: process.env.AI_PROVIDER,
-		AI_BASE_URL: process.env.AI_BASE_URL,
-		AI_API_KEY: process.env.AI_API_KEY,
-		AI_MODEL: process.env.AI_MODEL,
-		AI_TIMEOUT_MS: process.env.AI_TIMEOUT_MS,
-		AI_MAX_TOKENS: process.env.AI_MAX_TOKENS
+	const ai: AIConfig = {
+		provider: 'routerai',
+		baseUrl: 'https://routerai.ru/api/v1',
+		apiKey: 'router-key',
+		model: 'z-ai/glm-4.7-flash',
+		timeout: 15000,
+		maxTokens: 800
 	}
-
-	process.env.AI_PROVIDER = 'routerai'
-	process.env.AI_BASE_URL = 'https://routerai.ru/api/v1'
-	process.env.AI_API_KEY = 'router-key'
-	process.env.AI_MODEL = 'z-ai/glm-4.7-flash'
-	process.env.AI_TIMEOUT_MS = '15000'
-	process.env.AI_MAX_TOKENS = '800'
-
-	try {
-		const config = new Config()
-		const client = createAgentClient(config)
-		assert.equal(client instanceof OpenAICompatibleChatClient, true)
-	} finally {
-		for (const [key, value] of Object.entries(previousEnv)) {
-			if (typeof value === 'undefined') {
-				delete process.env[key]
-			} else {
-				process.env[key] = value
-			}
-		}
-	}
+	const client = createAgentClient(ai, createTestClientOptions())
+	assert.equal(client instanceof OpenAICompatibleChatClient, true)
 })
 
 test('createAgentClient selects a pause-worthy network-free client', async () => {
 	const providers: DisabledAiProvider[] = ['disabled', 'local']
 	for (const provider of providers) {
-		const config: Pick<Config, 'ai'> = {
+		const config: { ai: AIConfig } = {
 			ai: {
 				provider,
 				baseUrl: undefined,
@@ -147,7 +131,7 @@ test('createAgentClient selects a pause-worthy network-free client', async () =>
 				maxTokens: 1
 			}
 		}
-		const client = createAgentClient(config)
+		const client = createAgentClient(config.ai, createTestClientOptions())
 
 		assert.equal(client instanceof NoOpAgentClient, true)
 		await assert.rejects(

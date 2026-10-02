@@ -6,7 +6,11 @@ import {
 	type ParsedToolCall,
 	type ParsedToolResponse
 } from '../../ai/client.js'
-import Logger from '../../config/logger.js'
+import type { RuntimeLogRecord } from '../../config/runtimeLogger.js'
+import {
+	createTestClientOptions,
+	createTestLogger
+} from '../ai/fixtures/runtimeServices.js'
 
 test('OpenAIResponsesClient maps parsed function calls into compact tool calls', async () => {
 	const parsedResponse: ParsedToolResponse = {
@@ -28,6 +32,7 @@ test('OpenAIResponsesClient maps parsed function calls into compact tool calls',
 
 	const calls: any[] = []
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		apiKey: 'test-key',
 		model: 'gpt-5-mini',
 		timeoutMs: 5000,
@@ -62,48 +67,23 @@ test('OpenAIResponsesClient maps parsed function calls into compact tool calls',
 	])
 })
 
-test('OpenAIResponsesClient skips request dumps unless AI_DEBUG_DUMP is enabled', async () => {
-	const previousFlag = process.env.AI_DEBUG_DUMP
-	delete process.env.AI_DEBUG_DUMP
-
-	const captured: string[] = []
-	const original = Logger.info
-	Logger.info = ((message: string) => {
-		captured.push(message)
-	}) as typeof Logger.info
-
-	try {
-		const client = new OpenAIResponsesClient({
-			apiKey: 'test-key',
-			model: 'gpt-5-mini',
-			timeoutMs: 5000,
-			client: {
-				responses: {
-					create: async () => ({
-						id: 'resp_no_dump',
-						output_text: '',
-						output: []
-					})
-				}
-			} as any
-		})
-
-		await client.createResponse({
-			instructions: 'test instructions',
-			input: 'test input',
-			tools: []
-		})
-	} finally {
-		Logger.info = original
-		if (typeof previousFlag === 'undefined') {
-			delete process.env.AI_DEBUG_DUMP
-		} else {
-			process.env.AI_DEBUG_DUMP = previousFlag
+test('OpenAIResponsesClient skips request dumps when its policy is disabled', async () => {
+	const records: RuntimeLogRecord[] = []
+	const client = new OpenAIResponsesClient({
+		...createTestClientOptions({ logger: createTestLogger(records) }),
+		client: {
+			responses: {
+				create: async () => ({ id: 'resp_no_dump', output: [] })
+			}
 		}
-	}
-
+	})
+	await client.createResponse({
+		instructions: 'test instructions',
+		input: 'test input',
+		tools: []
+	})
 	assert.equal(
-		captured.some(log => log.includes('[AI] model_request_dump')),
+		records.some(record => record.message.includes('[AI] model_request_dump')),
 		false
 	)
 })
@@ -134,6 +114,7 @@ test('OpenAIResponsesClient falls back to JSON arguments and drops non-call item
 	}
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		apiKey: 'test-key',
 		model: 'gpt-5-mini',
 		timeoutMs: 5000,

@@ -2,9 +2,15 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { NoOpAgentClient, OpenAIResponsesClient } from '../../ai/client.js'
-import { runAgentTurn } from '../../ai/loop.js'
+import { createAgentTurnRunner } from '../../ai/loop.js'
 import { WindowRuntime, getWindowDescriptor } from '../../ai/runtime/window.js'
 import { createTaskContext } from '../../ai/taskContext.js'
+import {
+	createTestAgentDependencies,
+	createTestClientOptions
+} from './fixtures/runtimeServices.js'
+
+const runAgentTurn = createAgentTurnRunner(createTestAgentDependencies())
 
 const createVec3 = (x: number, y: number, z: number) => ({
 	x,
@@ -55,6 +61,7 @@ test('runAgentTurn resolves inline memory tool calls before selecting one execut
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -131,6 +138,7 @@ test('runAgentTurn resolves inline memory tool calls before selecting one execut
 
 test('runAgentTurn accepts mine_resource without a grounded block position', async () => {
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () =>
@@ -206,6 +214,7 @@ test('runAgentTurn accepts mine_resource without a grounded block position', asy
 test('runAgentTurn rejects mine_resource with non-integer or excessive count', async () => {
 	for (const count of [1.5, 1000000]) {
 		const client = new OpenAIResponsesClient({
+			...createTestClientOptions(),
 			client: {
 				responses: {
 					create: async () =>
@@ -311,6 +320,7 @@ test('runAgentTurn rejects open_window when memory_read returns no grounded entr
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -404,6 +414,7 @@ test('runAgentTurn accepts open_window only from allowed grounding sources', asy
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -508,6 +519,7 @@ test('runAgentTurn rejects open_window when memory_read grounds an incompatible 
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -611,6 +623,7 @@ test('runAgentTurn rejects follow_entity when inspect_entities returns no entiti
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -702,6 +715,7 @@ test('runAgentTurn rejects follow_entity when entity_name and entity_type do not
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -778,6 +792,7 @@ test('runAgentTurn rejects follow_entity when entity_name and entity_type do not
 
 test('runAgentTurn does not treat snapshot window metadata as fresh grounding', async () => {
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () =>
@@ -876,6 +891,7 @@ test('runAgentTurn does not treat snapshot window metadata as fresh grounding', 
 
 test('runAgentTurn rejects navigation to unsupported workstation for crafting goals', async () => {
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () =>
@@ -955,6 +971,7 @@ test('runAgentTurn rejects navigation to unsupported workstation for crafting go
 
 test('runAgentTurn fails on plain text without grounded inspect data', async () => {
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () =>
@@ -1038,6 +1055,7 @@ test('runAgentTurn finishes with plain text after grounded inspect data was gath
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -1444,6 +1462,7 @@ test('runAgentTurn still fails when the model returns no tool call and no plain-
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -1524,6 +1543,7 @@ test('runAgentTurn accepts plain-text finish after a grounded world inspection i
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -1718,6 +1738,7 @@ test('runAgentTurn lists persistent tasks inline then starts one by id', async (
 	]
 
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () => responses.shift() as any
@@ -1784,6 +1805,7 @@ test('runAgentTurn lists persistent tasks inline then starts one by id', async (
 
 test('runAgentTurn rejects an unknown inline status filter for tasks_list', async () => {
 	const client = new OpenAIResponsesClient({
+		...createTestClientOptions(),
 		client: {
 			responses: {
 				create: async () =>

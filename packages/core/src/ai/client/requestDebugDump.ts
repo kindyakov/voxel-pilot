@@ -3,14 +3,14 @@ import path from 'node:path'
 
 import type { AgentPromptAssembly } from '@/ai/prompt.js'
 
-import { defaultRequestDumpDirectory } from '../../runtimePaths.js'
 import type { AgentToolDefinition } from '../contracts/agentClient.js'
 
-const REQUEST_DEBUG_DIR = defaultRequestDumpDirectory
 const MAX_DEBUG_DUMP_FILES = 50
 
-export const shouldWriteRequestDebugDump = (): boolean =>
-	process.env.AI_DEBUG_DUMP === '1'
+export interface RequestDebugDumpOptions {
+	readonly enabled: boolean
+	readonly directory: string
+}
 
 type DebugSection = {
 	title: string
@@ -214,22 +214,24 @@ export const buildChatRequestDebugMarkdown = (payload: {
 export const writeRequestDebugDump = async (params: {
 	filePrefix: 'responses-request' | 'chat-request'
 	markdown: string
+	directory: string
 }): Promise<string> => {
-	await mkdir(REQUEST_DEBUG_DIR, { recursive: true })
+	await mkdir(params.directory, { recursive: true })
 
 	const fileName = `${params.filePrefix}-${new Date()
 		.toISOString()
 		.replace(/[:.]/g, '-')}.md`
-	const filePath = path.join(REQUEST_DEBUG_DIR, fileName)
+	const filePath = path.join(params.directory, fileName)
 	await writeFile(filePath, params.markdown, 'utf8')
-	await pruneRequestDebugDumps(params.filePrefix)
+	await pruneRequestDebugDumps(params.directory, params.filePrefix)
 	return filePath
 }
 
 const pruneRequestDebugDumps = async (
+	directory: string,
 	filePrefix: 'responses-request' | 'chat-request'
 ): Promise<void> => {
-	const entries = await readdir(REQUEST_DEBUG_DIR)
+	const entries = await readdir(directory)
 	const dumps = entries
 		.filter(name => name.startsWith(filePrefix) && name.endsWith('.md'))
 		.sort()
@@ -237,7 +239,5 @@ const pruneRequestDebugDumps = async (
 		0,
 		Math.max(0, dumps.length - MAX_DEBUG_DUMP_FILES)
 	)
-	await Promise.all(
-		excess.map(name => unlink(path.join(REQUEST_DEBUG_DIR, name)))
-	)
+	await Promise.all(excess.map(name => unlink(path.join(directory, name))))
 }
