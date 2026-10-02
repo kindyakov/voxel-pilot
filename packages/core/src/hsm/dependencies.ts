@@ -1,14 +1,8 @@
 import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
-import type {
-	AgentTurnInput,
-	AgentTurnResult
-} from '@/ai/contracts/agentTurn.js'
+import type { AgentTurnRunner } from '@/ai/contracts/agentTurn.js'
 
-// Structurally identical to #24's canonical type; consolidated when branches merge.
-export type AgentTurnRunner = (
-	input: AgentTurnInput
-) => Promise<AgentTurnResult>
+export type { AgentTurnRunner } from '@/ai/contracts/agentTurn.js'
 
 export interface HarnessDependencies {
 	readonly logger: RuntimeLogger
