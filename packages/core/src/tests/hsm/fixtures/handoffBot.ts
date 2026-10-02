@@ -112,6 +112,16 @@ export class HandoffBot extends EventEmitter {
 		// This fixture replaces the Minecraft server, not the HSM or its actors.
 		return this as unknown as Bot
 	}
+
+	/** Real physics without constructing another actor/controller for a runtime fixture. */
+	simulatePhysicsTick() {
+		const world = { getBlock: this.blockAt.bind(this) }
+		this.emit('physicsTick')
+		this.emit('physicTick')
+		this.physics
+			.simulatePlayer(new PlayerState(this, this.controlState), world)
+			.apply(this)
+	}
 	plugins = new Set<(bot: Bot) => void>()
 	loadPlugin(plugin: (bot: Bot) => void) {
 		if (this.plugins.has(plugin)) return

@@ -11,6 +11,7 @@ The current design is small and explicit:
 - `packages/core/src/core/bot.ts` handles connect, reconnect, and shutdown.
 - `packages/core/src/core/CommandHandler.ts` converts chat into HSM events.
 - `packages/core/src/core/harness.ts` wires the state machine to the bot runtime with explicit instance dependencies.
+- Optional native XState inspection is composed through the runtime's `inspection` option and trusted adapter types from `@voxel-pilot/core/inspection`. The harness attaches it before actor construction and releases it before persistence. Closing or failing an observer leaves bot ownership with the application; native events stay separate from portable telemetry and general logs. Its bounded queue reports dropped events and does not establish a complete future inspector trace or viewer.
 - `packages/core/src/ai/loop.ts` runs the agent loop.
 - `packages/core/src/ai/snapshot.ts` builds the model snapshot.
 - `packages/core/src/core/memory/` owns persistent storage.

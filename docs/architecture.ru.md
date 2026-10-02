@@ -11,6 +11,7 @@
 - `packages/core/src/core/bot.ts` отвечает за connect, reconnect и shutdown.
 - `packages/core/src/core/CommandHandler.ts` превращает чат в события HSM.
 - `packages/core/src/core/harness.ts` связывает стейт-машину с рантаймом бота через явные зависимости экземпляра.
+- Опциональное нативное наблюдение XState выбирается inspection-опцией runtime и типами доверенного адаптера из `@voxel-pilot/core/inspection`. Харнес подключает его перед созданием акторов и освобождает до persistence. Закрытие или отказ наблюдателя оставляет управление ботом у приложения; нативные события отделены от переносимой телеметрии и общего журнала. Ограниченная очередь сообщает о потерянных событиях и не доказывает полноту будущей трассы или viewer.
 - `packages/core/src/ai/loop.ts` крутит агентский цикл.
 - `packages/core/src/ai/snapshot.ts` строит снимок для модели.
 - `packages/core/src/core/memory/` владеет постоянным хранилищем.

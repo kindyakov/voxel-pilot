@@ -7,12 +7,15 @@ import type {
 
 import type { RuntimeServices } from '@/config/runtimeServices.js'
 
+import type { NativeInspectionOptions } from '@/hsm/inspection/index.js'
+
 import MinecraftBot, { type ConnectionDependencies } from './bot.js'
 import { stopIssue } from './finalization.js'
 
 export interface BotRuntimeOptions {
 	readonly stopTimeoutMs?: number
 	readonly connection?: Partial<ConnectionDependencies>
+	readonly inspection?: NativeInspectionOptions
 }
 
 const unknown = Object.freeze({ value: null, updatedAt: null, stale: false })
@@ -43,7 +46,9 @@ export function createBotRuntime(
 	) {
 		throw new Error('stopTimeoutMs must be positive and finite')
 	}
-	const owner = new MinecraftBot(services, options.connection)
+	const owner = new MinecraftBot(services, options.connection, {
+		inspection: options.inspection
+	})
 	const listeners = new Set<{ listener: (snapshot: BotSnapshot) => void }>()
 	let snapshot: BotSnapshot
 	let stopping = false
