@@ -6,7 +6,7 @@ This bot is a Mineflayer runtime wrapped in an XState machine.
 The current design is small and explicit:
 
 - `packages/application/` owns the explicit settings/path policy and runtime composition shared by CLI and TUI. Each application owns its renderer, signals and bounded shutdown around the portable runtime stop and caller-owned logger.
-- `apps/tui/` renders the connection and safe bounded log history through React/Ink. TTY validation runs before settings or runtime allocation; resizing keeps the same runtime and subscriptions. `apps/cli/` remains the headless entrypoint.
+- `apps/tui/` renders the connection, safe bounded log history and public measured status through React/Ink. Its separate display clock advances the MAIN_ACTIVITY timer without sending HSM events; unknown, stale and paused facts remain distinct. TTY validation runs before settings or runtime allocation; resizing keeps the same runtime and subscriptions. `apps/cli/` remains the headless entrypoint.
 - `packages/contracts/` defines portable runtime interfaces and serializable snapshots/results.
 - `packages/core/src/core/runtime.ts` provides the frozen start/stop/telemetry facade. Subscribers immediately receive a cached complete snapshot; unmeasured values are unknown.
 - `packages/core/src/core/telemetry/logJournal.ts` owns the bounded safe source history and separate log stream, with stable IDs, byte/count limits and observable losses. Logger live-record observation owns no history; consumers filter the shared source for display. See [configuration](configuration.md#runtime-log-history) for limits and output policies.

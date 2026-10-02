@@ -18,11 +18,16 @@ src/
 │   ├── preflight.ts         # Интерактивный stdin/stdout и raw capability
 │   ├── session.ts           # Native Ink flush/exit, raw/screen/cursor restoration
 │   ├── ExitInput.tsx        # q/raw Ctrl+C → app action port на всех экранах
-│   └── display.ts           # Безопасный single-line текст и display clock
+│   └── display.ts           # Безопасный single-line текст и форматирование timestamps
 ├── features/
 │   ├── connection/index.tsx # Публичное подключение и сохраняемый окончательный отказ
-│   └── logs/index.tsx       # Строки INFO+ текущей ограниченной core history
-├── ui/                      # Независимые Header и FailureBoundary
+│   ├── logs/index.tsx       # Строки INFO+ текущей ограниченной core history
+│   └── status/
+│       ├── index.tsx        # Показатели, HSM, мониторинг и цель из публичного снимка
+│       ├── projection.ts    # Чистая семантика unknown/zero/stale и длительности
+│       ├── clock.ts         # Отдельный display-time порт now/schedule
+│       └── useStatusNow.ts  # Одна отменяемая привязка времени к React
+├── ui/                      # Независимые Header, FailureBoundary и Meter
 └── tests/                   # Полный app на native Ink и portable fake runtime
 ```
 
@@ -33,6 +38,10 @@ src/
 Core runtime.stop остаётся единственным владельцем отмены, сохранения и native cleanup. Application присоединяет q, raw Ctrl+C, SIGINT/SIGTERM и fatal к одному Promise, затем закрывает собственный logger и терминал в пределах одного дедлайна. Окончательный отказ подключения остаётся данными на экране до явного выхода; ошибка feature изолируется локальной границей, fatal экрана запускает shutdown. Исключения не выводятся как сырые error/stack.
 
 Bridge хранит только текущие неизменяемые ссылки публичных BotSnapshot/LogHistory, подписывается один раз на каждый канал и освобождается владельцем приложения. Исходная история, удержание, секретная проекция и статистика остаются в core. React-компоненты не конструируют runtime и не накапливают историю. Переносимые алгоритмы навигации/фильтра/LIVE/anchor размещай у владельца presentation при их реализации; терминальные строки/ширины и ввод остаются здесь.
+
+Status получает текущий BotSnapshot через App и общий bridge. Локальная [проекция](src/features/status/projection.ts) сохраняет различия unknown/zero, отдельную stale-метку каждого измерения, настоящие maxHealth/координаты, действие и none/active/paused цели. Она использует только contracts; terminal/view нормализует текст перед отрисовкой, а независимый Meter получает обычные view props. Общий presentation для статуса появляется при фактическом переиспользовании другим потребителем.
+
+StatusClock принадлежит feature и проходит через optional app injection; timestamp formatter журнала и app deadline остаются отдельными портами. Одна привязка читает now каждую секунду и отменяется при смене clock/unmount. Длительность выводится из harness.enteredAt, не из числа тиков или snapshot revision: мониторинг, vitals, цель и журнал не сбрасывают её. Для stale HSM показывается время от входа в последнее известное состояние с явной меткой; updatedAt и retry changedAt не подменяют вход. Новая сессия с unknown harness убирает старый таймер. Окончательная адаптивная раскладка остаётся у terminal/view.
 
 Terminal session владеет одним renderer. Exit observation регистрируется до user components/effects; cached waitUntilExit используется после teardown, чтобы Ink не зарегистрировал новый beforeExit-listener. Нормальный результат ждёт flush, unmount/exit и callback записи восстановления. При недоступном output дедлайн освобождает raw input и подписки, запрашивает восстановление экрана и возвращает ошибочный результат; подтверждение записанных пикселей невозможно, пока stream не отвечает. Static diagnostic отправляется после teardown, когда stderr доступен.
 
@@ -49,3 +58,5 @@ App собирает runtime, terminal, features и UI. Reusable modules не и
 ## Проверки
 
 [application.test.tsx](src/tests/application.test.tsx) проверяет полный app: native ввод/frames, repeated exits, ожидание stop/save, logger, app deadline, поздние исходы, отказ подключения, initial/raw/render failures, resize, feature/fatal и восстановление. [telemetryStore.test.ts](src/tests/telemetryStore.test.ts) проверяет кеш/observer/disposer; [bootstrap.test.ts](src/tests/bootstrap.test.ts) — реальные общие пути, precedence и независимые DEBUG/file/console policies. Root tests защищают browser contracts, import/layer boundaries, безопасные built/development exports, CWD и sequential storage. CLI tests сохраняют его отдельную headless exit policy. Native платформенная визуальная проверка отличается от controlled-stream evidence.
+
+[statusProjection.test.ts](src/tests/statusProjection.test.ts) проверяет чистые преобразования; [status.test.tsx](src/tests/status.test.tsx) — последние реальные кадры default Dashboard на копируемых публичных фактах и отдельном управляемом StatusClock. После clock/resize нужно дождаться запланированного React commit, затем native app.flush; passive cleanup проверяется после effect barrier. Глобальные таймеры Ink остаются настоящими, app deadline clock независим от display-time fixture.

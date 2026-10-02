@@ -7,6 +7,7 @@ import type {
 	LogEntry,
 	LogHistory,
 	LogUpdate,
+	Measurement,
 	RuntimeProblem,
 	StopResult
 } from '@voxel-pilot/contracts'
@@ -26,6 +27,17 @@ export const saved: StopResult = Object.freeze({
 	issues: []
 })
 const unknown = Object.freeze({ value: null, updatedAt: null, stale: false })
+
+function copyMeasurement<T>(
+	source: Measurement<T>,
+	copy: (value: T) => T
+): Measurement<T> {
+	return Object.freeze({
+		value: source.value === null ? null : copy(source.value),
+		updatedAt: source.updatedAt,
+		stale: source.stale
+	})
+}
 
 export function publicRuntime() {
 	let snapshot: BotSnapshot = Object.freeze({
@@ -147,6 +159,37 @@ export function publicRuntime() {
 		signals: new EventEmitter(),
 		connection,
 		stopStarted,
+		/** Publish only copied public facts; the fake owns no native actor or context. */
+		publish(next: Partial<Omit<BotSnapshot, 'revision'>>) {
+			const current = { ...snapshot, ...next }
+			snapshot = Object.freeze({
+				revision: snapshot.revision + 1,
+				connection: Object.freeze({ ...current.connection }),
+				health: copyMeasurement(current.health, value => value),
+				maxHealth: copyMeasurement(current.maxHealth, value => value),
+				food: copyMeasurement(current.food, value => value),
+				position: copyMeasurement(current.position, value =>
+					Object.freeze({ x: value.x, y: value.y, z: value.z })
+				),
+				harness: copyMeasurement(current.harness, value =>
+					Object.freeze({
+						mainActivity: value.mainActivity,
+						enteredAt: value.enteredAt,
+						action: value.action,
+						monitoring: Object.freeze([...value.monitoring]),
+						goal:
+							value.goal.status === 'none'
+								? Object.freeze({ status: 'none', text: null })
+								: Object.freeze({
+										status: value.goal.status,
+										text: value.goal.text
+									})
+					})
+				)
+			})
+			for (const subscription of [...snapshots])
+				deliver(subscription.listener, snapshot)
+		},
 		holdStop(value: Promise<StopResult>) {
 			stopResult = value
 		},

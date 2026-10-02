@@ -5,6 +5,7 @@ import type {
 } from '@voxel-pilot/contracts'
 import type { ComponentType } from 'react'
 
+import type { StatusClock } from '../features/status/index.js'
 import { createTelemetryStore } from '../runtime/telemetryStore.js'
 import { type DisplayClock, defaultDisplayClock } from '../terminal/display.js'
 import {
@@ -16,6 +17,8 @@ import { App, type DashboardProps } from './App.js'
 import { type TuiRuntimeOptions, createTuiRuntime } from './bootstrap.js'
 import { type DeadlineClock, defaultDeadlineClock } from './clock.js'
 import { createApplicationState } from './state.js'
+
+export type { StatusClock } from '../features/status/index.js'
 
 interface Signals {
 	on(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown
@@ -36,6 +39,7 @@ export interface TuiApplicationOptions {
 	readonly shutdownTimeoutMs?: number
 	readonly clock?: DeadlineClock
 	readonly displayClock?: DisplayClock
+	readonly statusClock?: StatusClock
 	readonly view?: ComponentType<DashboardProps>
 }
 
@@ -223,6 +227,7 @@ export function startTuiApplication(options: TuiApplicationOptions = {}) {
 				telemetry={store}
 				application={state}
 				displayClock={options.displayClock ?? defaultDisplayClock}
+				statusClock={options.statusClock}
 				onExit={() => {
 					void shutdown()
 				}}
