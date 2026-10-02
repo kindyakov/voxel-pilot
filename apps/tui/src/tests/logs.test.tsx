@@ -35,6 +35,7 @@ function fixture(t: test.TestContext, clockThrows = false) {
 		signals: source.signals,
 		clock,
 		statusClock,
+		capabilities: { color: false, unicode: true },
 		shutdownTimeoutMs: 100,
 		displayClock: {
 			formatTimestamp() {

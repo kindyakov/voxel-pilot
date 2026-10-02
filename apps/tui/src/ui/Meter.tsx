@@ -6,7 +6,8 @@ export function Meter({
 	maximum,
 	ratio,
 	staleValue = false,
-	staleMaximum = false
+	staleMaximum = false,
+	color = true
 }: {
 	readonly label: string
 	readonly value: string
@@ -14,6 +15,7 @@ export function Meter({
 	readonly ratio: number | null
 	readonly staleValue?: boolean
 	readonly staleMaximum?: boolean
+	readonly color?: boolean
 }) {
 	const filled =
 		ratio === null || !Number.isFinite(ratio)
@@ -24,12 +26,18 @@ export function Meter({
 			? '[—]'
 			: `[${'#'.repeat(filled)}${'-'.repeat(10 - filled)}]`
 	return (
-		<Text>
+		<Text wrap='truncate-end'>
 			{label}: {value}
 			{staleValue ? ' (устарело)' : ''} / {maximum}
 			{staleMaximum ? ' (устарело)' : ''}{' '}
 			<Text
-				color={staleValue || staleMaximum || filled === null ? 'gray' : 'green'}
+				color={
+					!color
+						? undefined
+						: staleValue || staleMaximum || filled === null
+							? 'gray'
+							: 'green'
+				}
 			>
 				{bar}
 			</Text>

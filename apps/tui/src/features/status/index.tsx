@@ -1,7 +1,8 @@
 import type { BotSnapshot } from '@voxel-pilot/contracts'
 import { Box, Text } from 'ink'
 
-import { safeDisplayText } from '../../terminal/display.js'
+import type { TerminalCapabilities } from '../../terminal/capabilities.js'
+import { compactDisplayText } from '../../terminal/display.js'
 import { Meter } from '../../ui/Meter.js'
 import { type StatusClock, defaultStatusClock } from './clock.js'
 import { toStatusView } from './projection.js'
@@ -11,17 +12,28 @@ export type { StatusClock } from './clock.js'
 
 export function StatusPanel({
 	snapshot,
-	clock = defaultStatusClock
+	clock = defaultStatusClock,
+	columns = 100,
+	capabilities = { color: true, unicode: true }
 }: {
 	readonly snapshot: BotSnapshot
 	readonly clock?: StatusClock
+	readonly columns?: number
+	readonly capabilities?: TerminalCapabilities
 }) {
 	const view = toStatusView(snapshot, useStatusNow(clock))
 	const harness = view.harness
 	const stale = harness.stale ? ' · устарело' : ''
+	const { color, unicode } = capabilities
+	const clip = (text: string, suffix = '') => {
+		return (
+			compactDisplayText(text, Math.max(0, columns - suffix.length), unicode) +
+			(unicode ? suffix : suffix.replace(' · ', ' | '))
+		)
+	}
 	return (
-		<Box flexDirection='column' flexShrink={0}>
-			<Text bold>СТАТУС</Text>
+		<Box flexDirection='column' flexShrink={0} width={columns}>
+			<Text bold={color}>СТАТУС</Text>
 			<Meter
 				label='HP'
 				value={view.health.text}
@@ -29,6 +41,7 @@ export function StatusPanel({
 				ratio={view.healthRatio}
 				staleValue={view.health.stale}
 				staleMaximum={view.maxHealth.stale}
+				color={color}
 			/>
 			<Meter
 				label='Сытость'
@@ -36,45 +49,51 @@ export function StatusPanel({
 				maximum='20'
 				ratio={view.foodRatio}
 				staleValue={view.food.stale}
+				color={color}
 			/>
-			<Text dimColor={view.position.stale}>
-				ПОЗИЦИЯ: {view.position.text}
-				{view.position.stale ? ' · устарело' : ''}
+			<Text dimColor={color && view.position.stale} wrap='truncate-end'>
+				{clip(
+					`ПОЗИЦИЯ: ${view.position.text}`,
+					view.position.stale ? ' · устарело' : ''
+				)}
 			</Text>
-			<Text color={harness.stale ? 'gray' : 'magenta'}>
-				HSM: {safeDisplayText(harness.mainActivity)}
-				{stale}
+			<Text
+				color={color ? (harness.stale ? 'gray' : 'magenta') : undefined}
+				wrap='truncate-end'
+			>
+				{clip(`HSM: ${harness.mainActivity}`, stale)}
 			</Text>
-			<Text dimColor={harness.stale}>
-				{harness.stale ? 'От входа в последнее состояние' : 'Время состояния'}:{' '}
-				{harness.elapsed}
-				{stale}
+			<Text dimColor={color && harness.stale} wrap='truncate-end'>
+				{clip(
+					`${harness.stale ? (columns < 50 ? 'Последний вход' : 'От входа в последнее состояние') : 'Время состояния'}: ${harness.elapsed}`,
+					stale
+				)}
 			</Text>
-			<Text dimColor={harness.stale}>
-				Действие: {safeDisplayText(harness.action)}
-				{stale}
+			<Text dimColor={color && harness.stale} wrap='truncate-end'>
+				{clip(`Действие: ${harness.action}`, stale)}
 			</Text>
-			<Text dimColor={harness.stale}>
-				Мониторинг: {harness.monitoring.map(safeDisplayText).join(', ')}
-				{stale}
+			<Text dimColor={color && harness.stale} wrap='truncate-end'>
+				{clip(`Мониторинг: ${harness.monitoring.join(', ')}`, stale)}
 			</Text>
 			<Text
 				color={
-					harness.stale
-						? 'gray'
-						: harness.goal.status === 'paused'
-							? 'yellow'
-							: harness.goal.status === 'active'
-								? 'green'
-								: undefined
+					!color
+						? undefined
+						: harness.stale
+							? 'gray'
+							: harness.goal.status === 'paused'
+								? 'yellow'
+								: harness.goal.status === 'active'
+									? 'green'
+									: undefined
 				}
+				wrap='truncate-end'
 			>
-				ЦЕЛЬ: {harness.goal.label}
-				{stale}
+				{clip(`ЦЕЛЬ: ${harness.goal.label}`, stale)}
 			</Text>
 			{harness.goal.text !== null && (
-				<Text dimColor={harness.stale} wrap='truncate-end'>
-					{safeDisplayText(harness.goal.text)}
+				<Text dimColor={color && harness.stale} wrap='truncate-end'>
+					{clip(harness.goal.text)}
 				</Text>
 			)}
 		</Box>

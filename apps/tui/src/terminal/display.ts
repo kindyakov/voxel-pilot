@@ -9,11 +9,19 @@ export function safeDisplayText(value: string): string {
 	})
 }
 
+function displayText(value: string, unicode: boolean): string {
+	const text = safeDisplayText(value)
+	return unicode
+		? text
+		: text.replaceAll(' · ', ' | ').replaceAll(' ↵ ', ' \\n ')
+}
+
 /** Display ellipsis and source truncation are separate, visible facts. */
 export function compactLogMessage(
 	message: string,
 	columns: number,
-	sourceTruncated: boolean
+	sourceTruncated: boolean,
+	unicode = true
 ): string {
 	const marker = !sourceTruncated
 		? ''
@@ -26,14 +34,21 @@ export function compactLogMessage(
 					: ''
 	return (
 		cliTruncate(
-			safeDisplayText(message),
-			Math.max(0, columns - marker.length)
+			displayText(message, unicode),
+			Math.max(0, columns - marker.length),
+			{ truncationCharacter: unicode ? '…' : '~' }
 		) + marker
 	)
 }
 
-export function compactDisplayText(value: string, columns: number): string {
-	return cliTruncate(safeDisplayText(value), Math.max(0, columns))
+export function compactDisplayText(
+	value: string,
+	columns: number,
+	unicode = true
+): string {
+	return cliTruncate(displayText(value, unicode), Math.max(0, columns), {
+		truncationCharacter: unicode ? '…' : '~'
+	})
 }
 
 export interface DisplayClock {

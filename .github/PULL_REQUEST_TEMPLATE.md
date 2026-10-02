@@ -8,8 +8,9 @@
 
 ## Verification / Проверка
 
-- [ ] npm run type-check
-- [ ] npm run build
+- [ ] pnpm run type-check
+- [ ] pnpm run build
+- [ ] pnpm run check:imports
 - [ ] Relevant focused tests / Релевантные focused tests
 
 ## Notes / Заметки

@@ -1,28 +1,46 @@
 import type { ConnectionSnapshot, RuntimeProblem } from '@voxel-pilot/contracts'
 import { Box, Text } from 'ink'
 
-import { safeDisplayText } from '../../terminal/display.js'
+import type { TerminalCapabilities } from '../../terminal/capabilities.js'
+import { compactDisplayText } from '../../terminal/display.js'
 
 export function ConnectionPanel({
 	connection,
-	failure
+	failure,
+	columns = 100,
+	capabilities = { color: true, unicode: true }
 }: {
 	readonly connection: ConnectionSnapshot
 	readonly failure: RuntimeProblem | null
+	readonly columns?: number
+	readonly capabilities?: TerminalCapabilities
 }) {
 	return (
-		<Box flexDirection='column'>
+		<Box flexDirection='column' flexShrink={0}>
 			<Text
 				color={
-					connection.state === 'ready' ? 'green' : failure ? 'red' : 'yellow'
+					!capabilities.color
+						? undefined
+						: connection.state === 'ready'
+							? 'green'
+							: failure
+								? 'red'
+								: 'yellow'
 				}
+				wrap='truncate-end'
 			>
-				{safeDisplayText(connection.state.toUpperCase())} · attempt{' '}
-				{connection.retryAttempt}
+				{compactDisplayText(
+					`${connection.state.toUpperCase()} · attempt ${connection.retryAttempt}`,
+					columns,
+					capabilities.unicode
+				)}
 			</Text>
 			{failure && (
-				<Text color='red' wrap='truncate-end'>
-					{safeDisplayText(failure.message)}
+				<Text
+					color={capabilities.color ? 'red' : undefined}
+					wrap='truncate-end'
+				>
+					{compactDisplayText(failure.message, columns, capabilities.unicode)}
 				</Text>
 			)}
 		</Box>

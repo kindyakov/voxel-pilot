@@ -1,17 +1,18 @@
-import { useInput, useWindowSize } from 'ink'
+import { useInput } from 'ink'
 
-import { type LogNavigation, logPageSize } from './logNavigation.js'
+import type { LogNavigation } from './logNavigation.js'
 
 export function ExitInput({
 	onExit,
 	onFailure,
-	logs
+	logs,
+	pageSize = 1
 }: {
 	readonly onExit: () => void
 	readonly onFailure: () => void
 	readonly logs?: LogNavigation
+	readonly pageSize?: number
 }) {
-	const { rows } = useWindowSize()
 	useInput((input, key) => {
 		try {
 			if (input === 'q' || (input === 'c' && key.ctrl)) {
@@ -20,8 +21,8 @@ export function ExitInput({
 				if (input === 'd' && !key.ctrl && !key.meta) logs.toggleDebug()
 				else if (key.upArrow) logs.scroll(-1)
 				else if (key.downArrow) logs.scroll(1)
-				else if (key.pageUp) logs.scroll(-logPageSize(rows))
-				else if (key.pageDown) logs.scroll(logPageSize(rows))
+				else if (key.pageUp) logs.scroll(-pageSize)
+				else if (key.pageDown) logs.scroll(pageSize)
 				else if (key.end) logs.goLive()
 			}
 		} catch {

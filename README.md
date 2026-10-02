@@ -64,6 +64,10 @@ Press `d` to show retained DEBUG records. Up/Down and PgUp/PgDn browse records; 
 
 Use `q` or Ctrl+C to stop and await persistence. Signals and application failures join the same bounded shutdown; a deadline or failed save exits nonzero. The terminal needs interactive input/output and raw input support. Unsupported terminals are rejected before settings/resource allocation; use `pnpm start` for the headless CLI. `pnpm run dev:tui` provides the development watcher.
 
+At 120 columns or more, the journal and status use approximately 65/35 of the content width. Narrower windows stack compact status above the journal; insufficient space shows an enlargement notice while input and the bot keep running. Page keys use the number of displayed records. Resizing preserves the filter, pause anchor and elapsed main-state time. Long text is clipped by terminal cells; `[усечено]` (or `[!]`/`!`) marks source truncation separately from display shortening.
+
+Display styling follows TTY color capabilities and terminal hints. `NO_COLOR` or `FORCE_COLOR=0` disables colors; `TERM=dumb`, `TERM=linux` or an explicitly non-UTF8 locale simplifies decorative symbols to ASCII. Limited displays keep textual levels, unknown/stale values and paused goals; shortened text uses `~`. CLI remains the headless Docker default.
+
 ## Docker
 
 One bot per container. Build once, then run with your `.env` and persistent volumes:
