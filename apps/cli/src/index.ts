@@ -1,18 +1,36 @@
-import { MinecraftBot } from '@voxel-pilot/core'
-import Logger from '@voxel-pilot/core/legacy-logger'
+import { createCliRuntime } from './bootstrap.js'
 
-const minecraftBot = new MinecraftBot()
-minecraftBot.start()
+const { runtime, loggerHandle } = createCliRuntime()
+let closing: Promise<void> | undefined
 
-const shutdown = async (): Promise<void> => {
-	Logger.info('Остановка бота...')
-	await minecraftBot.stop('Выключение сервера')
-	process.exit()
+const shutdown = (): Promise<void> => {
+	if (closing) return closing
+	closing = (async () => {
+		loggerHandle.logger.info('Остановка бота...')
+		try {
+			await runtime.stop('Выключение сервера')
+		} finally {
+			try {
+				await loggerHandle.close()
+			} finally {
+				process.off('SIGINT', onSignal)
+				process.off('SIGTERM', onSignal)
+			}
+		}
+		process.exit()
+	})()
+	return closing
 }
 
-process.on('SIGINT', () => {
-	void shutdown()
-})
-process.on('SIGTERM', () => {
-	void shutdown()
-})
+const onSignal = () => {
+	void shutdown().catch(error => {
+		console.error(
+			'Ошибка остановки приложения',
+			error instanceof Error ? error.message : String(error)
+		)
+		process.exitCode = 1
+	})
+}
+process.on('SIGINT', onSignal)
+process.on('SIGTERM', onSignal)
+runtime.start()

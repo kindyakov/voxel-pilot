@@ -35,6 +35,15 @@ for (const owner of owners) {
 		...owner.manifest.dependencies,
 		...owner.manifest.devDependencies
 	}
+	const core = owner.manifest.name === '@voxel-pilot/core'
+	if (core) {
+		for (const packageName of ['dotenv', 'ink', 'react', 'react-dom']) {
+			if (declared[packageName])
+				violations.push(
+					`packages/core/package.json: app-owned dependency in core: ${packageName}`
+				)
+		}
+	}
 	for await (const filename of files(resolve(owner.directory, 'src'))) {
 		const source = ts.createSourceFile(
 			filename,
@@ -44,7 +53,16 @@ for (const owner of owners) {
 		)
 		const fail = message =>
 			violations.push(`${relative(root, filename)}: ${message}`)
+		const productionCore = core && !filename.includes(`${sep}tests${sep}`)
 		const check = (specifier, typeOnly) => {
+			if (
+				core &&
+				/(?:config\/(?:config|logger)|core\/hsm|ai\/legacyAgentTurn)(?:\.[cm]?[jt]s)?$/.test(
+					specifier
+				)
+			) {
+				fail(`removed singleton entry: ${specifier}`)
+			}
 			if (builtins.has(specifier.replace(/^node:/, ''))) return
 			if (specifier.startsWith('@/')) {
 				if (owner.manifest.name !== '@voxel-pilot/core')
@@ -66,8 +84,10 @@ for (const owner of owners) {
 				candidate => candidate.manifest.name === packageName
 			)
 			if (workspace) {
-				if (owner.manifest.name === '@voxel-pilot/core')
-					fail(`core depends on another runtime package: ${specifier}`)
+				if (core && workspace.manifest.name !== '@voxel-pilot/contracts')
+					fail(
+						`core workspace dependency must be portable contracts: ${specifier}`
+					)
 				const subpath =
 					specifier === packageName
 						? '.'
@@ -86,6 +106,15 @@ for (const owner of owners) {
 			}
 		}
 		const visit = node => {
+			if (
+				productionCore &&
+				ts.isPropertyAccessExpression(node) &&
+				ts.isIdentifier(node.expression) &&
+				node.expression.text === 'process' &&
+				node.name.text === 'env'
+			) {
+				fail('core reads process.env instead of an explicit settings snapshot')
+			}
 			if (
 				(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
 				node.moduleSpecifier &&

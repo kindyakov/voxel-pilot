@@ -1,47 +1,29 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
+import { createRuntimeLogger } from '../../config/runtimeLogger.js'
+
 const ESC = String.fromCharCode(27)
 
-const ENV_KEYS = [
-	'MINECRAFT_HOST',
-	'MINECRAFT_PORT',
-	'MINECRAFT_USERNAME',
-	'MINECRAFT_VERSION',
-	'AI_PROVIDER',
-	'AI_MODEL',
-	'LOG_LEVEL',
-	'LOG_FILE',
-	'NODE_ENV'
-] as const
-
-function saveEnv(): Record<string, string | undefined> {
-	return Object.fromEntries(ENV_KEYS.map(key => [key, process.env[key]]))
-}
-
-function restoreEnv(snapshot: Record<string, string | undefined>): void {
-	for (const [key, value] of Object.entries(snapshot)) {
-		if (typeof value === 'undefined') {
-			delete process.env[key]
-		} else {
-			process.env[key] = value
-		}
-	}
-}
-
 test('console transport emits ANSI colors for every level and caps meta preview', async () => {
-	const previousEnv = saveEnv()
-	process.env.MINECRAFT_HOST = 'localhost'
-	process.env.MINECRAFT_PORT = '25565'
-	process.env.MINECRAFT_USERNAME = 'logger-test-bot'
-	process.env.MINECRAFT_VERSION = '1.20.6'
-	process.env.AI_PROVIDER = 'disabled'
-	process.env.AI_MODEL = 'logger-test-model'
-	process.env.LOG_LEVEL = 'debug'
-	process.env.NODE_ENV = 'development'
-	process.env.LOG_FILE = path.join(os.tmpdir(), 'voxel-pilot-logger-test.log')
+	const directory = await mkdtemp(
+		path.join(os.tmpdir(), 'voxel-logger-console-')
+	)
+	const handle = createRuntimeLogger({
+		aiModel: 'logger-test-model',
+		console: { level: 'debug', colors: true },
+		files: {
+			logFile: path.join(directory, 'voxel-pilot-logger-test.log'),
+			errorLogFile: path.join(directory, 'error.log'),
+			level: 'debug',
+			maxBytes: 100000,
+			maxFiles: 2
+		}
+	})
+	const Logger = handle.logger
 
 	const chunks: Buffer[] = []
 	const origOut = process.stdout.write.bind(process.stdout)
@@ -52,7 +34,6 @@ test('console transport emits ANSI colors for every level and caps meta preview'
 	}
 
 	try {
-		const { default: Logger } = await import('../../config/logger.js')
 		;(process.stdout as unknown as { write: unknown }).write = capture
 		;(process.stderr as unknown as { write: unknown }).write = capture
 
@@ -75,11 +56,12 @@ test('console transport emits ANSI colors for every level and caps meta preview'
 			...wide
 		})
 
-		await new Promise(resolve => setTimeout(resolve, 800))
+		await handle.close()
 	} finally {
 		process.stdout.write = origOut
 		process.stderr.write = origErr
-		restoreEnv(previousEnv)
+		await handle.close()
+		await rm(directory, { recursive: true, force: true })
 	}
 
 	const out = Buffer.concat(chunks).toString('utf8')

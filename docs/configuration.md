@@ -2,7 +2,7 @@
 
 Language versions: [English](configuration.md) | [Русский](configuration.ru.md)
 
-Configuration is validated in `packages/core/src/config/env.ts` with Ajv and consumed in `packages/core/src/config/config.ts`.
+The CLI explicitly loads settings in `apps/cli/src/settings.ts`; existing environment values override the selected file. Core validates the supplied snapshot through `packages/core/src/config/env.ts` and `packages/core/src/config/runtimeConfig.ts`. Importing core does not load `.env` or create output.
 The recommended way to set values is `.env` based on `.env.example`.
 
 ## Required Variables
