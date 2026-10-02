@@ -9,13 +9,16 @@ import type { RuntimeServices } from '@/config/runtimeServices.js'
 
 import MinecraftBot, { type ConnectionDependencies } from './bot.js'
 import { stopIssue } from './finalization.js'
+import {
+	type RuntimeFacts,
+	staleFacts,
+	unknownFacts
+} from './telemetry/facts.js'
 
 export interface BotRuntimeOptions {
 	readonly stopTimeoutMs?: number
 	readonly connection?: Partial<ConnectionDependencies>
 }
-
-const unknown = Object.freeze({ value: null, updatedAt: null, stale: false })
 
 /** Delivers observations without lending subscribers lifecycle authority. */
 function deliver(
@@ -48,15 +51,11 @@ export function createBotRuntime(
 	let snapshot: BotSnapshot
 	let stopping = false
 	let stopPromise: Promise<StopResult> | null = null
-	const observe = (connection: ConnectionSnapshot) => {
+	const publish = (connection: ConnectionSnapshot, facts: RuntimeFacts) => {
 		snapshot = Object.freeze({
+			...facts,
 			revision: snapshot ? snapshot.revision + 1 : 0,
-			connection,
-			health: unknown,
-			maxHealth: unknown,
-			food: unknown,
-			position: unknown,
-			harness: unknown
+			connection
 		})
 		const current = snapshot
 		for (const subscription of [...listeners]) {
@@ -65,7 +64,24 @@ export function createBotRuntime(
 			if (listeners.has(subscription)) deliver(subscription.listener, current)
 		}
 	}
+	const observe = (connection: ConnectionSnapshot) => {
+		const facts =
+			!snapshot || snapshot.connection.sessionId !== connection.sessionId
+				? unknownFacts
+				: ['connecting', 'ready'].includes(connection.state)
+					? snapshot
+					: staleFacts(snapshot)
+		publish(connection, facts)
+	}
 	owner.subscribeConnection(observe)
+	owner.subscribeFacts(({ sessionId, facts }) => {
+		if (
+			snapshot.connection.sessionId !== sessionId ||
+			!['connecting', 'ready'].includes(snapshot.connection.state)
+		)
+			return
+		publish(snapshot.connection, { ...snapshot, ...facts })
+	})
 	const telemetry = Object.freeze({
 		getSnapshot: () => snapshot,
 		subscribe(listener: (snapshot: BotSnapshot) => void) {

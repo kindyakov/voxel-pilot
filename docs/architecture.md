@@ -8,6 +8,7 @@ The current design is small and explicit:
 - `apps/cli/src/bootstrap.ts` explicitly loads settings and creates the runtime. `application.ts` owns signals and bounded shutdown, including log output.
 - `packages/contracts/` defines portable runtime interfaces and serializable snapshots/results.
 - `packages/core/src/core/runtime.ts` provides the frozen start/stop/telemetry facade. Subscribers immediately receive a cached complete snapshot; unmeasured values are unknown.
+- `packages/core/src/core/telemetry/` projects measured health, max health, food and position from the current native session, plus compact facts from its real HSM. Disconnect preserves stale measurements; a new session starts with unknown measurements. The behavior timer follows MAIN_ACTIVITY separately from monitoring; an active or paused goal remains visible during autonomous behavior.
 - `packages/core/src/core/bot.ts` handles connect, reconnect, and shutdown.
 - `packages/core/src/core/CommandHandler.ts` converts chat into HSM events.
 - `packages/core/src/core/harness.ts` wires the state machine to the bot runtime with explicit instance dependencies.

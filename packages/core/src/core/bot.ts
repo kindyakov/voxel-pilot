@@ -30,6 +30,9 @@ import {
 	freezeReport,
 	stopIssue
 } from './finalization.js'
+import { type RuntimeFacts, deliver, measured } from './telemetry/facts.js'
+import { observeNativeFacts } from './telemetry/nativeFacts.js'
+import { createSecretRedactor } from './telemetry/safeText.js'
 
 export interface ConnectionDependencies {
 	createBot: (options: MinecraftConfig) => Bot
@@ -51,6 +54,7 @@ interface BotSession {
 class MinecraftBot extends EventEmitter {
 	private readonly dependencies: ConnectionDependencies
 	private readonly harnessDependencies: HarnessDependencies
+	private readonly redactGoal: (text: string) => string
 	private session: BotSession | null = null
 	private closing: Promise<void> | null = null
 	private readonly finalizations = new Set<Promise<FinalizationReport>>()
@@ -58,6 +62,9 @@ class MinecraftBot extends EventEmitter {
 	private persistence: FinalizationReport['persistence'] = 'not-required'
 	private readonly issues = new Map<string, StopIssue>()
 	private readonly observers = new Set<(snapshot: ConnectionSnapshot) => void>()
+	private readonly factObservers = new Set<
+		(update: { sessionId: number; facts: Partial<RuntimeFacts> }) => void
+	>()
 	private connection: ConnectionSnapshot = Object.freeze({
 		state: 'idle',
 		changedAt: Date.now(),
@@ -83,6 +90,7 @@ class MinecraftBot extends EventEmitter {
 		super()
 		this.services = Object.freeze({ ...services })
 		const { config, logger } = services
+		this.redactGoal = createSecretRedactor(config.ai)
 		this.dependencies = {
 			createBot: options => mineflayer.createBot(options) as Bot,
 			initConnection: createConnectionInitializer(logger),
@@ -132,6 +140,33 @@ class MinecraftBot extends EventEmitter {
 		try {
 			void Promise.resolve(listener(value)).catch(() => {})
 		} catch {}
+	}
+
+	/** Internal session-fenced approved facts; runtime owns the portable cache. */
+	subscribeFacts(
+		listener: (update: {
+			sessionId: number
+			facts: Partial<RuntimeFacts>
+		}) => void
+	): () => void {
+		this.factObservers.add(listener)
+		return () => {
+			this.factObservers.delete(listener)
+		}
+	}
+
+	private publishFacts(
+		session: BotSession,
+		facts: Partial<RuntimeFacts>
+	): void {
+		if (this.session !== session || session.disposed || !this.running) return
+		const sessionId = this.connection.sessionId
+		if (sessionId === null) return
+		const update = { sessionId, facts }
+		for (const listener of [...this.factObservers]) {
+			if (this.session !== session || session.disposed || !this.running) break
+			if (this.factObservers.has(listener)) deliver(listener, update)
+		}
 	}
 
 	private publish(update: Partial<ConnectionSnapshot>): void {
@@ -208,6 +243,9 @@ class MinecraftBot extends EventEmitter {
 				() => bot.off('botDisconnected', onDisconnected),
 				() => bot.off('botError', onError)
 			)
+			session.listeners.push(
+				observeNativeFacts(bot, facts => this.publishFacts(session, facts))
+			)
 			const cleanup = this.dependencies.initConnection(bot)
 			if (session.disposed)
 				this.cleanup(cleanup, session.issues, 'connection-cleanup-failed')
@@ -240,6 +278,20 @@ class MinecraftBot extends EventEmitter {
 			})
 			session.hsm = hsm
 			bot.hsm = hsm
+			session.listeners.push(
+				hsm.subscribeFacts(summary => {
+					const goal =
+						summary.goal.status === 'none'
+							? summary.goal
+							: Object.freeze({
+									status: summary.goal.status,
+									text: this.redactGoal(summary.goal.text).slice(0, 512)
+								})
+					this.publishFacts(session, {
+						harness: measured(Object.freeze({ ...summary, goal }))
+					})
+				})
+			)
 			session.commands = new CommandHandler(bot, hsm, {
 				logger: this.services.logger,
 				aiPilotEnabled: this.harnessDependencies.aiPilotEnabled
