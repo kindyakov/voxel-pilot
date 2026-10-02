@@ -5,12 +5,13 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import BotStateMachine from '@/core/hsm.js'
+import BotStateMachine from '@/core/harness.js'
 import { MemoryManager } from '@/core/memory/index.js'
 import { ProfileMemoryStore } from '@/core/profile/index.js'
 
 import { createHarness } from '../hsm/fixtures/handoffBot.js'
 import { createEntityFixture } from '../hsm/fixtures/handoffBot.js'
+import { testHarnessDependencies } from '../hsm/fixtures/services.js'
 
 const deferred = () => {
 	let resolve!: () => void
@@ -42,7 +43,7 @@ test('HSM starts from the current vitals without issuing low-health attacks', as
 	bot.food = 5
 	bot.foodSaturation = 2
 	bot.oxygenLevel = 12
-	const hsm = new BotStateMachine(bot.asBot())
+	const hsm = new BotStateMachine(bot.asBot(), testHarnessDependencies())
 	t.after(() => hsm.stop())
 	await flush()
 	assert.equal(hsm.getContext().health, 8)
@@ -66,7 +67,7 @@ test('damage during memory loading is reflected before a queued combat command c
 	const { bot, enemy, load } = fixture(t)
 	const loading = deferred()
 	load.mock.mockImplementation(() => loading.promise)
-	const hsm = new BotStateMachine(bot.asBot())
+	const hsm = new BotStateMachine(bot.asBot(), testHarnessDependencies())
 	t.after(() => hsm.stop())
 	hsm.send({ type: 'START_COMBAT', target: enemy })
 	bot.health = 8
@@ -93,7 +94,7 @@ test('stop cancels pending startup immediately and late loading only closes its 
 	const loading = deferred()
 	load.mock.mockImplementation(() => loading.promise)
 	const healthListeners = bot.listenerCount('health')
-	const hsm = new BotStateMachine(bot.asBot())
+	const hsm = new BotStateMachine(bot.asBot(), testHarnessDependencies())
 	t.after(() => hsm.stop())
 	let stopped = false
 	void Promise.resolve(hsm.stop()).then(() => {
@@ -119,7 +120,7 @@ test('stop cancels pending startup immediately and late loading only closes its 
 test('stopping a ready HSM removes its subscriptions and closes each store once', async t => {
 	const { bot, close, profileClose } = fixture(t)
 	const healthListeners = bot.listenerCount('health')
-	const hsm = new BotStateMachine(bot.asBot())
+	const hsm = new BotStateMachine(bot.asBot(), testHarnessDependencies())
 	await flush()
 	await hsm.stop()
 	await hsm.stop()
@@ -132,7 +133,7 @@ test('stop during profile loading closes loaded memory now and the profile when 
 	const { bot, close, profileLoad, profileClose } = fixture(t)
 	const loading = deferred()
 	profileLoad.mock.mockImplementation(() => loading.promise)
-	const hsm = new BotStateMachine(bot.asBot())
+	const hsm = new BotStateMachine(bot.asBot(), testHarnessDependencies())
 	await flush()
 	await hsm.stop()
 	assert.equal(await hsm.ready, false)
@@ -157,7 +158,7 @@ for (const version of ['1.20.1', '1.20.4', '1.20.6'])
 			position: new Vec3(3, 64, 0)
 		})
 		bot.entities = { 1: enemy, 2: other }
-		const hsm = new BotStateMachine(bot.asBot())
+		const hsm = new BotStateMachine(bot.asBot(), testHarnessDependencies())
 		t.after(() => hsm.stop())
 		await hsm.ready
 		t.mock.timers.tick(100)

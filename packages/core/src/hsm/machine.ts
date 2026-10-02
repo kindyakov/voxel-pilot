@@ -13,33 +13,29 @@ import {
 } from 'xstate'
 import type { AnyActorLogic } from 'xstate'
 
-import Logger from '@/config/logger.js'
-
 import { goalActions } from '@/hsm/actions/goal.actions.js'
-import { miningActions } from '@/hsm/actions/mining.actions.js'
+import { createMiningActions } from '@/hsm/actions/mining.actions.js'
 import { safetyActions } from '@/hsm/actions/safety.actions.js'
-import {
-	computeTaskCancel,
-	computeTaskCreate,
-	computeTaskStart,
-	enterTaskRecord,
-	taskRecordActions
-} from '@/hsm/actions/taskRecords.actions.js'
-import combatActors from '@/hsm/actors/combat.actors.js'
-import { idleGaze } from '@/hsm/actors/idleGaze.actors.js'
-import { miningInventory } from '@/hsm/actors/miningInventory.actors.js'
-import monitoringActors from '@/hsm/actors/monitoring.actors.js'
-import { primitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive.js'
-import { primitiveCloseWindow } from '@/hsm/actors/primitives/primitiveCloseWindow.primitive.js'
-import { primitiveFollowing } from '@/hsm/actors/primitives/primitiveFollowing.primitive.js'
-import { primitiveNavigating } from '@/hsm/actors/primitives/primitiveNavigating.primitive.js'
-import { primitiveOpenWindow } from '@/hsm/actors/primitives/primitiveOpenWindow.primitive.js'
-import { primitivePlacing } from '@/hsm/actors/primitives/primitivePlacing.primitive.js'
-import { primitiveSearchBlock } from '@/hsm/actors/primitives/primitiveSearchBlock.primitive.js'
-import { primitiveTransferItem } from '@/hsm/actors/primitives/primitiveTransferItem.primitive.js'
-import survivalActors from '@/hsm/actors/survival.actors.js'
+import { createTaskRecordActions } from '@/hsm/actions/taskRecords.actions.js'
+import { createCombatActors } from '@/hsm/actors/combat.actors.js'
+import { createIdleGaze } from '@/hsm/actors/idleGaze.actors.js'
+import { createMiningInventory } from '@/hsm/actors/miningInventory.actors.js'
+import { createMonitoringActors } from '@/hsm/actors/monitoring.actors.js'
+import { createPrimitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive.js'
+import { createPrimitiveCloseWindow } from '@/hsm/actors/primitives/primitiveCloseWindow.primitive.js'
+import { createPrimitiveFollowing } from '@/hsm/actors/primitives/primitiveFollowing.primitive.js'
+import { createPrimitiveNavigating } from '@/hsm/actors/primitives/primitiveNavigating.primitive.js'
+import { createPrimitiveOpenWindow } from '@/hsm/actors/primitives/primitiveOpenWindow.primitive.js'
+import { createPrimitivePlacing } from '@/hsm/actors/primitives/primitivePlacing.primitive.js'
+import { createPrimitiveSearchBlock } from '@/hsm/actors/primitives/primitiveSearchBlock.primitive.js'
+import { createPrimitiveTransferItem } from '@/hsm/actors/primitives/primitiveTransferItem.primitive.js'
+import { createSurvivalActors } from '@/hsm/actors/survival.actors.js'
 import { worldObservation } from '@/hsm/actors/worldObservation.actors.js'
 import { type MachineContext, context } from '@/hsm/context.js'
+import type {
+	AgentTurnRunner,
+	HarnessDependencies
+} from '@/hsm/dependencies.js'
 import combatGuards, {
 	eventCanAutoEnterCombat,
 	eventCanSkirmishRanged,
@@ -70,7 +66,6 @@ import {
 	createGoalExecution,
 	getGoalStopReason
 } from '@/ai/goalExecution.js'
-import { runAgentTurn } from '@/ai/loop.js'
 import { type WindowRuntime, getWindowRuntime } from '@/ai/runtime/window.js'
 import { createTaskContext } from '@/ai/taskContext.js'
 import { parseExecution } from '@/ai/tools/executionDefinitions.js'
@@ -87,7 +82,10 @@ import {
 } from '@/utils/combat/selfDefense.js'
 import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
-const createThinkingActor = (client?: AgentModelClient) =>
+const createThinkingActor = (
+	runAgentTurn: AgentTurnRunner,
+	client?: AgentModelClient
+) =>
 	fromPromise<
 		AgentTurnResult,
 		{
@@ -256,7 +254,7 @@ const resolveExecutionInput = (
 	}
 }
 
-interface MachineFactoryOptions {
+export interface MachineFactoryOptions {
 	agentClient?: AgentModelClient
 	preferences?: Partial<MachineContext['preferences']>
 	thinkingActor?: AnyActorLogic
@@ -267,7 +265,32 @@ type ThinkingDoneEvent = {
 	output?: AgentTurnResult
 }
 
-export const createBotMachine = (options?: MachineFactoryOptions) => {
+export const createBotMachine = (
+	dependencies: HarnessDependencies,
+	options?: MachineFactoryOptions
+) => {
+	const { logger, runAgentTurn, aiPilotEnabled } = dependencies
+	const combatActors = createCombatActors(logger)
+	const survivalActors = createSurvivalActors(logger)
+	const monitoringActors = createMonitoringActors(logger)
+	const miningActions = createMiningActions(logger)
+	const {
+		computeTaskCancel,
+		computeTaskCreate,
+		computeTaskStart,
+		enterTaskRecord,
+		actions: taskRecordActions
+	} = createTaskRecordActions(logger)
+	const idleGaze = createIdleGaze(logger)
+	const miningInventory = createMiningInventory(logger)
+	const primitiveBreaking = createPrimitiveBreaking(logger)
+	const primitiveNavigating = createPrimitiveNavigating(logger)
+	const primitiveFollowing = createPrimitiveFollowing(logger)
+	const primitivePlacing = createPrimitivePlacing(logger)
+	const primitiveSearchBlock = createPrimitiveSearchBlock(logger)
+	const primitiveOpenWindow = createPrimitiveOpenWindow(logger)
+	const primitiveCloseWindow = createPrimitiveCloseWindow(logger)
+	const primitiveTransferItem = createPrimitiveTransferItem(logger)
 	const actorOverrides = options?.actors ?? {}
 	const preferences = { ...context.preferences, ...options?.preferences }
 	for (const [name, value] of Object.entries(preferences)) {
@@ -329,7 +352,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			agentThinking:
 				actorOverrides.agentThinkingTurn ??
 				options?.thinkingActor ??
-				createThinkingActor(options?.agentClient),
+				createThinkingActor(runAgentTurn, options?.agentClient),
 			emergencyEating:
 				actorOverrides.serviceEmergencyEating ??
 				survivalActors.serviceEmergencyEating,
@@ -399,7 +422,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					params && typeof params === 'object' && 'state' in params
 						? String(params.state)
 						: 'unknown'
-				Logger.debug(`[HSM] enter ${state}`, {
+				logger.debug(`[HSM] enter ${state}`, {
 					event: event.type,
 					targetId: context.combatTarget.entity?.id ?? null,
 					distance: Number.isFinite(context.combatTarget.distance)
@@ -412,7 +435,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					params && typeof params === 'object' && 'state' in params
 						? String(params.state)
 						: 'unknown'
-				Logger.debug(`[HSM] exit ${state}`, {
+				logger.debug(`[HSM] exit ${state}`, {
 					event: event.type,
 					targetId: context.combatTarget.entity?.id ?? null,
 					distance: Number.isFinite(context.combatTarget.distance)
@@ -426,7 +449,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					targetId === undefined
 						? undefined
 						: context.approachAttempts[targetId]
-				Logger.info('[COMBAT] waiting', {
+				logger.info('[COMBAT] waiting', {
 					targetId: targetId ?? null,
 					reason: attempt?.blocked
 						? `${attempt.blockedReason}_blocked`
@@ -436,7 +459,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 				})
 			},
 			logThinkingStart: ({ context }) => {
-				Logger.debug('[AI] thinking_start', {
+				logger.debug('[AI] thinking_start', {
 					goal: context.currentGoal,
 					subGoal: context.subGoal,
 					lastAction: context.lastAction,
@@ -449,7 +472,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					return
 				}
 
-				Logger.debug('[AI] thinking_done', {
+				logger.debug('[AI] thinking_done', {
 					kind: output.kind,
 					toolName: output.execution.toolName,
 					args: output.execution.args,
@@ -462,7 +485,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					return
 				}
 
-				Logger.debug('[AI] thinking_done', {
+				logger.debug('[AI] thinking_done', {
 					kind: output.kind,
 					message: output.message
 				})
@@ -473,7 +496,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					return
 				}
 
-				Logger.info('[AI] thinking_done', {
+				logger.info('[AI] thinking_done', {
 					kind: output.kind,
 					reason: output.reason,
 					transcript: output.transcript
@@ -481,7 +504,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			},
 			logThinkingError: ({ event }) => {
 				const error = getActorError(event)
-				Logger.error('[AI] thinking_error', {
+				logger.error('[AI] thinking_error', {
 					error: error instanceof Error ? error.message : String(error)
 				})
 			},
@@ -507,7 +530,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					}
 
 					if (context.health !== event.health)
-						Logger.debug(`[HSM] health ${context.health} -> ${event.health}`, {
+						logger.debug(`[HSM] health ${context.health} -> ${event.health}`, {
 							event: event.type
 						})
 
@@ -527,7 +550,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 					}
 
 					if (context.food !== event.food)
-						Logger.debug(`[HSM] food ${context.food} -> ${event.food}`, {
+						logger.debug(`[HSM] food ${context.food} -> ${event.food}`, {
 							event: event.type
 						})
 
@@ -1036,7 +1059,7 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 			aggressionByEntity: {},
 			windows: getWindowRuntime(input.bot),
 			pausedGoal: input.pausedGoal ?? null,
-			aiPilotEnabled: input.aiPilotEnabled ?? true,
+			aiPilotEnabled: input.aiPilotEnabled ?? aiPilotEnabled,
 			goalExecution: createGoalExecution()
 		}),
 		invoke: [
@@ -2275,5 +2298,3 @@ export const createBotMachine = (options?: MachineFactoryOptions) => {
 		}
 	})
 }
-
-export const machine = createBotMachine()

@@ -6,6 +6,7 @@ import pathfinderPackage from 'mineflayer-pathfinder'
 import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
 
+import type { HarnessDependencies } from '@/hsm/dependencies.js'
 import { createBotMachine } from '@/hsm/machine.js'
 
 import { loadMovement } from '@/modules/plugins/movement.js'
@@ -14,6 +15,7 @@ import { loadPvp } from '@/modules/plugins/pvp.js'
 import { BotUtils } from '@/utils/minecraft/botUtils.js'
 
 import { publishEntities } from './publishEntities.js'
+import { testHarnessDependencies } from './services.js'
 
 const require = createRequire(import.meta.url)
 export const registry = require('minecraft-data')('1.20.4')
@@ -209,7 +211,8 @@ export class HandoffBot extends EventEmitter {
 
 export const createHarness = (
 	backgroundTracking = false,
-	version = '1.20.4'
+	version = '1.20.4',
+	dependencies: HarnessDependencies = testHarnessDependencies()
 ) => {
 	const bot = new HandoffBot(version)
 	const VersionItem = require('prismarine-item')(version)
@@ -223,7 +226,7 @@ export const createHarness = (
 	bot.pvp.movements = bot.movements
 	bot.pathfinder.setMovements(bot.movements)
 	const actor = createActor(
-		createBotMachine({
+		createBotMachine(dependencies, {
 			actors: backgroundTracking
 				? {}
 				: { serviceEntitiesTracking: fromPromise(async () => {}) }

@@ -2,8 +2,6 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import Logger from '@/config/logger.js'
-
 import combatGuards from '@/hsm/guards/combat.guards.js'
 import {
 	hasFreshThreatObservation,
@@ -13,6 +11,7 @@ import {
 import { loadAutoEat } from '@/modules/plugins/autoEat.js'
 
 import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
+import { fixtureLogger as Logger } from './fixtures/services.js'
 
 test('invalid observation interrupts ranged combat into a stopped observation wait', t => {
 	const { bot, actor, enemy } = createHarness()

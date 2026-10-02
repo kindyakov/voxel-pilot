@@ -3,10 +3,8 @@ import test from 'node:test'
 
 import { Vec3 } from 'vec3'
 
-import {
-	canAttackEnemy,
-	cleanupPathfindCache
-} from '../../utils/combat/enemyVisibility.js'
+import { canAttackEnemy } from '../../utils/combat/enemyVisibility.js'
+import { fixtureLogger as Logger } from '../hsm/fixtures/services.js'
 
 const createOpaqueBlock = () => ({
 	boundingBox: 'block',
@@ -16,8 +14,6 @@ const createOpaqueBlock = () => ({
 })
 
 test('canAttackEnemy skips expensive pathfinding checks during active tasks when target is not visible', async () => {
-	cleanupPathfindCache()
-
 	let getPathFromToCalls = 0
 	const bot = {
 		entity: {
@@ -58,7 +54,8 @@ test('canAttackEnemy skips expensive pathfinding checks during active tasks when
 		20,
 		40,
 		100,
-		true
+		true,
+		Logger
 	)
 
 	assert.equal(canAttack, false)

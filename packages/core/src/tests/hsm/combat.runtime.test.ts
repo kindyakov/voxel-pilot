@@ -3,14 +3,13 @@ import { EventEmitter } from 'node:events'
 import test from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
 
+import type { Item } from '@/types/index.js'
 import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
 
-import type { Item } from '@/types/index.js'
-
-import { createBotMachine } from '../../hsm/machine.js'
 import { ItemFactory, registry } from './fixtures/handoffBot.js'
 import { publishEntities } from './fixtures/publishEntities.js'
+import { createBotMachine } from './fixtures/services.js'
 
 const hangingActor = fromPromise(async () => {
 	return await new Promise<never>(() => {})

@@ -23,7 +23,6 @@ import {
 } from '@/core/memory/types.js'
 
 import type { MachineContext } from '@/hsm/context.js'
-import { createBotMachine } from '@/hsm/machine.js'
 import { getMiningTask } from '@/hsm/tasks/task.js'
 
 import { NoOpAgentClient } from '@/ai/client.js'
@@ -40,6 +39,7 @@ import {
 	registry
 } from './fixtures/handoffBot.js'
 import { publishEntities } from './fixtures/publishEntities.js'
+import { createBotMachine } from './fixtures/services.js'
 
 const miningOre = (position: { x: number; y: number; z: number }) => {
 	const block = BlockFactory.fromStateId(

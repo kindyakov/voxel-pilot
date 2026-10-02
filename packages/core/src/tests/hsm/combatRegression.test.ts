@@ -7,10 +7,13 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { Vec3 } from 'vec3'
 import { createActor } from 'xstate'
 
-import combatActors from '../../hsm/actors/combat.actors.js'
+import { createCombatActors } from '../../hsm/actors/combat.actors.js'
 import { context as defaultContext } from '../../hsm/context.js'
 import { canAttackEnemy } from '../../utils/combat/enemyVisibility.js'
 import { BotUtils } from '../../utils/minecraft/botUtils.js'
+import { fixtureLogger as Logger } from './fixtures/services.js'
+
+const combatActors = createCombatActors(Logger)
 
 const require = createRequire(import.meta.url)
 const minecraftData = require('minecraft-data')
@@ -252,7 +255,8 @@ test('control: canAttackEnemy can use pathfinding when task is inactive', async 
 		20,
 		40,
 		100,
-		false
+		false,
+		Logger
 	)
 
 	assert.equal(canAttack, true)
@@ -269,7 +273,8 @@ test('regression: canAttackEnemy should not pathfind non-visible enemies during 
 		20,
 		40,
 		100,
-		true
+		true,
+		Logger
 	)
 
 	assert.equal(canAttack, false)

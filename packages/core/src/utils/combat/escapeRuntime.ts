@@ -1,10 +1,9 @@
+import type { Bot } from '@/types/index.js'
 import { Movements } from 'mineflayer-pathfinder'
 import type { PartiallyComputedPath } from 'mineflayer-pathfinder'
 import { Vec3 } from 'vec3'
 
-import type { Bot } from '@/types/index.js'
-
-import Logger from '@/config/logger.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import type { MachineContext, ThreatObservation } from '@/hsm/context.js'
 
@@ -49,7 +48,8 @@ export class EscapeRuntime {
 
 	constructor(
 		private readonly bot: Bot,
-		private readonly preferences: MachineContext['preferences']
+		private readonly preferences: MachineContext['preferences'],
+		private readonly logger: RuntimeLogger
 	) {
 		this.movements = new Movements(bot)
 		this.movements.canDig = false
@@ -96,7 +96,7 @@ export class EscapeRuntime {
 
 	routeFailed(reason = 'pathfinder_failure') {
 		if (!this.goal || this.search) return
-		Logger.warn('[SURVIVAL] route_failed', {
+		this.logger.warn('[SURVIVAL] route_failed', {
 			reason,
 			goal: { x: this.goal.x, z: this.goal.z },
 			remainingCandidates: this.candidates.length
@@ -186,7 +186,7 @@ export class EscapeRuntime {
 				this.routePath?.length &&
 				!safety.allowsPath(position, this.routePath, this.routeComplete, 0)
 			) {
-				Logger.info('[SURVIVAL] route_replanned', {
+				this.logger.info('[SURVIVAL] route_replanned', {
 					reason: 'remaining_route_unsafe',
 					threatId: threat?.entityId ?? null
 				})
@@ -220,7 +220,7 @@ export class EscapeRuntime {
 			hasMovementController(this.bot)
 		) {
 			if (this.mode !== 'MOVEMENT') {
-				Logger.info('[SURVIVAL] micro_flee_started', {
+				this.logger.info('[SURVIVAL] micro_flee_started', {
 					threatId: threat.entityId,
 					distance: Number(threat.distance.toFixed(2))
 				})
@@ -235,7 +235,7 @@ export class EscapeRuntime {
 				return this.mode
 			}
 			this.microFailed = true
-			Logger.warn('[SURVIVAL] movement_stalled', {
+			this.logger.warn('[SURVIVAL] movement_stalled', {
 				controller: 'MOVEMENT',
 				noProgressMs: this.preferences.escapeNoProgressMs,
 				threatId: threat.entityId
@@ -282,7 +282,7 @@ export class EscapeRuntime {
 		if (!this.search) {
 			this.goal = this.candidates.shift() ?? null
 			if (!this.goal) {
-				Logger.warn('[SURVIVAL] routes_exhausted', {
+				this.logger.warn('[SURVIVAL] routes_exhausted', {
 					attempts: this.preferences.escapeRouteAttempts,
 					threatId: threat?.entityId ?? null,
 					position: { x: position.x, y: position.y, z: position.z }
@@ -305,7 +305,7 @@ export class EscapeRuntime {
 					searchRadius: this.preferences.fleeTargetDistance * 2
 				}
 			)
-			Logger.info('[SURVIVAL] route_search_started', {
+			this.logger.info('[SURVIVAL] route_search_started', {
 				goal: { x: this.goal.x, z: this.goal.z },
 				timeoutMs: this.preferences.escapeRouteTimeoutMs,
 				remainingCandidates: this.candidates.length
@@ -313,7 +313,7 @@ export class EscapeRuntime {
 		}
 		const next = this.search.next()
 		if (next.done || next.value.result.status !== 'partial') {
-			Logger.info('[SURVIVAL] route_search_finished', {
+			this.logger.info('[SURVIVAL] route_search_finished', {
 				status: next.done ? 'empty_result' : next.value.result.status,
 				pathLength: next.done ? 0 : next.value.result.path.length,
 				goal: this.goal ? { x: this.goal.x, z: this.goal.z } : null

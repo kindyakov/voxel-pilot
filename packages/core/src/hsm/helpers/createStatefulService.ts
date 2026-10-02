@@ -1,8 +1,7 @@
+import type { Bot } from '@/types/index.js'
 import { fromCallback } from 'xstate'
 
-import type { Bot } from '@/types/index.js'
-
-import Logger from '@/config/logger.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import type { MachineContext } from '@/hsm/context.js'
 import type { MachineEvent } from '@/hsm/types.js'
@@ -32,6 +31,7 @@ interface StatefulServiceConfig<
 	TState extends BaseServiceState,
 	TOptions = {}
 > {
+	readonly logger: RuntimeLogger
 	name: string
 	tickInterval?: number
 	asyncTickInterval?: number
@@ -57,6 +57,7 @@ export function createStatefulService<
 	TState extends BaseServiceState = BaseServiceState,
 	TOptions = {}
 >(config: StatefulServiceConfig<TState, TOptions>) {
+	const logger = config.logger
 	return fromCallback<MachineEvent, { bot: Bot; options: TOptions }>(
 		({ sendBack, input, receive }) => {
 			const { bot, options } = input
@@ -74,7 +75,7 @@ export function createStatefulService<
 				failed = true
 				abortController.abort()
 				const message = error instanceof Error ? error.message : String(error)
-				Logger.error(`[${config.name}] service failed`, { error: message })
+				logger.error(`[${config.name}] service failed`, { error: message })
 				sendBack(
 					config.errorEvent?.(message) ?? { type: 'ERROR', error: message }
 				)
@@ -186,12 +187,12 @@ export function createStatefulService<
 					const result = config.onCleanup?.(api)
 					if (result instanceof Promise)
 						void result.catch(error =>
-							Logger.error(`[${config.name}] cleanup failed`, {
+							logger.error(`[${config.name}] cleanup failed`, {
 								error: String(error)
 							})
 						)
 				} catch (error) {
-					Logger.error(`[${config.name}] cleanup failed`, {
+					logger.error(`[${config.name}] cleanup failed`, {
 						error: String(error)
 					})
 				}
