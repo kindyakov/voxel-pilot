@@ -1,0 +1,38 @@
+{
+	"name": "@voxel-pilot/tui",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/app/application.d.ts",
+			"development": "./src/app/application.tsx",
+			"import": "./dist/app/application.js"
+		},
+		"./bootstrap": {
+			"types": "./dist/app/bootstrap.d.ts",
+			"development": "./src/app/bootstrap.ts",
+			"import": "./dist/app/bootstrap.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"type-check": "tsc --noEmit",
+		"test": "tsx --import ../../packages/core/src/tests/setupEnv.mjs --test --test-concurrency=1 --test-timeout=10000 src/tests/*.test.tsx src/tests/*.test.ts",
+		"start": "node dist/index.js",
+		"dev": "tsx watch --tsconfig tsconfig.dev.json --include \"../../packages/{core,application}/src/**/*.ts\" --conditions=development src/index.ts",
+		"clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+	},
+	"dependencies": {
+		"@voxel-pilot/application": "workspace:*",
+		"@voxel-pilot/contracts": "workspace:*",
+		"ink": "7.1.1",
+		"react": "19.3.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.12.0",
+		"@types/react": "19.3.0",
+		"tsx": "^4.20.6",
+		"typescript": "^5.9.3"
+	}
+}

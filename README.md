@@ -54,6 +54,12 @@ VoxelPilot is an autonomous Minecraft bot harness with an optional AI pilot. Bui
    pnpm start
    ```
 
+## Terminal dashboard
+
+After configuring the same `.env` and running `pnpm run build`, use `pnpm run tui` in an interactive terminal. The dashboard starts one bot, shows connection state and an INFO+ journal, and keeps a final connection failure visible until exit. DEBUG is collected from startup; console logging is disabled while file logging keeps its own configured level. CLI and TUI use the same repository data and log paths when run sequentially.
+
+Use `q` or Ctrl+C to stop and await persistence. Signals and application failures join the same bounded shutdown; a deadline or failed save exits nonzero. The terminal needs interactive input/output and raw input support. Unsupported terminals are rejected before settings/resource allocation; use `pnpm start` for the headless CLI. `pnpm run dev:tui` provides the development watcher.
+
 ## Docker
 
 One bot per container. Build once, then run with your `.env` and persistent volumes:
@@ -69,26 +75,26 @@ docker compose up -d --build
 
 Required variables:
 
-| Variable | Purpose |
-| --- | --- |
-| `MINECRAFT_HOST` | Minecraft server host |
-| `MINECRAFT_PORT` | Minecraft server port |
-| `MINECRAFT_USERNAME` | Bot username |
-| `MINECRAFT_VERSION` | Minecraft protocol version |
-| `AI_PROVIDER` | Provider name: `openai`, `routerai`, `openrouter`, `openai_compatible`, `local`, or `disabled` |
-| `AI_MODEL` | Model name used by the selected provider |
+| Variable             | Purpose                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------- |
+| `MINECRAFT_HOST`     | Minecraft server host                                                                          |
+| `MINECRAFT_PORT`     | Minecraft server port                                                                          |
+| `MINECRAFT_USERNAME` | Bot username                                                                                   |
+| `MINECRAFT_VERSION`  | Minecraft protocol version                                                                     |
+| `AI_PROVIDER`        | Provider name: `openai`, `routerai`, `openrouter`, `openai_compatible`, `local`, or `disabled` |
+| `AI_MODEL`           | Model name used by the selected provider                                                       |
 
 Common optional variables:
 
-| Variable | Purpose |
-| --- | --- |
-| `AI_BASE_URL` | Base URL for OpenAI-compatible providers |
-| `AI_API_KEY` | API key for the selected provider |
-| `AI_TIMEOUT_MS` | Request timeout in milliseconds |
-| `AI_MAX_TOKENS` | Maximum completion tokens |
-| `LOG_LEVEL` | Logging level, defaults to `info` |
-| `LOG_FILE` | Log file path, defaults to `logs/bot.log` |
-| `MINECRAFT_VIEWER_PORT` | Port for the optional viewer plugin |
+| Variable                       | Purpose                                    |
+| ------------------------------ | ------------------------------------------ |
+| `AI_BASE_URL`                  | Base URL for OpenAI-compatible providers   |
+| `AI_API_KEY`                   | API key for the selected provider          |
+| `AI_TIMEOUT_MS`                | Request timeout in milliseconds            |
+| `AI_MAX_TOKENS`                | Maximum completion tokens                  |
+| `LOG_LEVEL`                    | Logging level, defaults to `info`          |
+| `LOG_FILE`                     | Log file path, defaults to `logs/bot.log`  |
+| `MINECRAFT_VIEWER_PORT`        | Port for the optional viewer plugin        |
 | `MINECRAFT_WEB_INVENTORY_PORT` | Port for the optional web inventory plugin |
 
 ## Architecture
