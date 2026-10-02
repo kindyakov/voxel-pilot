@@ -40,6 +40,7 @@ interface DiagnosticsConfig {
 	webInventoryPort: number
 }
 
+/** @deprecated Temporary environment-backed compatibility until the #26 bootstrap migration. */
 export class Config {
 	private readonly _minecraft: MinecraftConfig
 	private readonly _ai: AIConfig
@@ -105,4 +106,5 @@ export class Config {
 	}
 }
 
+// Compatibility singleton only: explicit runtimeConfig.ts never imports this module.
 export default new Config()

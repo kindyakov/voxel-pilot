@@ -14,6 +14,11 @@
 			"development": "./src/config/logger.ts",
 			"import": "./dist/config/logger.js"
 		},
+		"./services": {
+			"types": "./dist/config/services.d.ts",
+			"development": "./src/config/services.ts",
+			"import": "./dist/config/services.js"
+		},
 		"./paths": {
 			"types": "./dist/runtimePaths.d.ts",
 			"development": "./src/runtimePaths.ts",
