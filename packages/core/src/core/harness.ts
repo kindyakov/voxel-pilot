@@ -1,5 +1,5 @@
 import type { Bot, Entity } from '@/types/index.js'
-import type { StopIssue } from '@voxel-pilot/contracts'
+import type { HarnessSummary, StopIssue } from '@voxel-pilot/contracts'
 import type { BotEvents } from 'mineflayer'
 import { type ActorRefFrom, createActor } from 'xstate'
 
@@ -27,6 +27,8 @@ import {
 	freezeReport,
 	stopIssue
 } from './finalization.js'
+import { deliver } from './telemetry/facts.js'
+import { createHarnessProjection } from './telemetry/harnessFacts.js'
 
 interface StoreLifecycle {
 	started: boolean
@@ -55,6 +57,8 @@ export class BotStateMachine {
 	private inspection: NativeInspectionSource | null = null
 	private readonly inspectionOptions?: CapturedInspectionOptions
 	private readonly subscriptions: Array<() => void> = []
+	private readonly factObservers = new Set<(summary: HarnessSummary) => void>()
+	private summary: HarnessSummary | null = null
 	private stopped = false
 	private stopPromise: Promise<void> | null = null
 	private saving: Promise<void> | null = null
@@ -145,6 +149,18 @@ export class BotStateMachine {
 				return false
 			}
 			this.bot.hsm = this
+			const project = createHarnessProjection()
+			const facts = this.actor.subscribe(snapshot => {
+				if (this.stopped) return
+				const summary = project(snapshot.value, snapshot.context)
+				if (this.summary === summary) return
+				this.summary = summary
+				for (const listener of [...this.factObservers]) {
+					if (this.stopped || this.summary !== summary) break
+					if (this.factObservers.has(listener)) deliver(listener, summary)
+				}
+			})
+			this.subscriptions.push(() => facts.unsubscribe())
 			if (this.dependencies.diagnosticsEnabled) {
 				this.stopDiagnostics = attachHsmDiagnostics(
 					this.actor,
@@ -249,6 +265,16 @@ export class BotStateMachine {
 	getContext(): MachineContext {
 		if (!this.actor) throw new Error('HSM is not initialized')
 		return this.actor.getSnapshot().context
+	}
+
+	/** Internal compact projection; the native owner redacts goal text before publication. */
+	subscribeFacts(listener: (summary: HarnessSummary) => void): () => void {
+		if (this.stopped) return () => {}
+		this.factObservers.add(listener)
+		if (this.summary) deliver(listener, this.summary)
+		return () => {
+			this.factObservers.delete(listener)
+		}
 	}
 
 	getReconnectGoal(): string | null {
@@ -384,6 +410,7 @@ export class BotStateMachine {
 
 	private releaseRuntime(): void {
 		this.isReady = false
+		this.factObservers.clear()
 		this.pendingEvents.length = 0
 		// Constructor inspection stays an inactive dispatcher until system release.
 		const inspection = this.inspection

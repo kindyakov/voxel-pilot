@@ -136,7 +136,7 @@ assert.equal(paths.repositoryRoot.replace(/[\\\\/]$/, ''), ${JSON.stringify(temp
 assert.equal(paths.defaultDataDirectory, join(paths.repositoryRoot, 'data'));
 assert.equal(paths.defaultLogFile, join(paths.repositoryRoot, 'logs', 'bot.log'));
 let options, disposed = 0, quits = 0, connections = 0;
-const bot = Object.assign(new EventEmitter(), { quit() { quits++; } });
+const bot = Object.assign(new EventEmitter(), { _client: new EventEmitter(), quit() { quits++; } });
 const config = serviceApi.createRuntimeConfigFromEnvironment({ MINECRAFT_HOST:'localhost', MINECRAFT_PORT:'25565', MINECRAFT_USERNAME:'explicit-fixture', MINECRAFT_VERSION:'1.20.4', AI_PROVIDER:'disabled', AI_MODEL:'fixture' }, {
  settingsFile:null, memoryDir:paths.defaultDataDirectory, profileDir:paths.defaultDataDirectory,
  logFile:paths.defaultLogFile, errorLogFile:join(paths.repositoryRoot,'logs/error.log'), aiRequestDumpDir:paths.defaultRequestDumpDirectory

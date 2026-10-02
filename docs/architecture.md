@@ -9,6 +9,7 @@ The current design is small and explicit:
 - `packages/contracts/` defines portable runtime interfaces and serializable snapshots/results.
 - `packages/core/src/core/runtime.ts` provides the frozen start/stop/telemetry facade. Subscribers immediately receive a cached complete snapshot; unmeasured values are unknown.
 - `packages/core/src/core/telemetry/logJournal.ts` owns the bounded safe source history and separate log stream, with stable IDs, byte/count limits and observable losses. Logger live-record observation owns no history; consumers filter the shared source for display. See [configuration](configuration.md#runtime-log-history) for limits and output policies.
+- `packages/core/src/core/telemetry/` projects measured health, max health, food and position from the current native session, plus compact facts from its real HSM. Disconnect preserves stale measurements; a new session starts with unknown measurements. The behavior timer follows MAIN_ACTIVITY separately from monitoring; an active or paused goal remains visible during autonomous behavior.
 - `packages/core/src/core/bot.ts` handles connect, reconnect, and shutdown.
 - `packages/core/src/core/CommandHandler.ts` converts chat into HSM events.
 - `packages/core/src/core/harness.ts` wires the state machine to the bot runtime with explicit instance dependencies.
