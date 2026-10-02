@@ -6,11 +6,14 @@ import type { Item } from '@/types/index.js'
 import { Vec3 } from 'vec3'
 import { createActor, setup } from 'xstate'
 
-import { primitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive.js'
+import { createPrimitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive.js'
 import { resolveMiningResource } from '@/hsm/tasks/miningResource.js'
 import type { MachineEvent } from '@/hsm/types.js'
 
 import { ItemFactory, createHarness } from './fixtures/handoffBot.js'
+import { fixtureLogger as Logger } from './fixtures/services.js'
+
+const primitiveBreaking = createPrimitiveBreaking(Logger)
 
 const keyOf = (position: Vec3): string => {
 	const floored = position.floored()

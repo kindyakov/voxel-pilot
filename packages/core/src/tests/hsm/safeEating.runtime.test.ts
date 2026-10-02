@@ -4,11 +4,10 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import { createBotMachine } from '@/hsm/machine.js'
-
 import { loadAutoEat } from '@/modules/plugins/autoEat.js'
 
 import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
+import { createBotMachine } from './fixtures/services.js'
 
 test('recovery cannot eat without fresh observer evidence', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })

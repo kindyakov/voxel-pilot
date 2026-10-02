@@ -1,6 +1,6 @@
 import { assign } from 'xstate'
 
-import Logger from '@/config/logger.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import type { MachineContext } from '@/hsm/context.js'
 import { resolveMiningResource } from '@/hsm/tasks/miningResource.js'
@@ -32,7 +32,7 @@ const eventReason = (event: MachineEvent): string | null => {
 	return null
 }
 
-export const miningActions = {
+export const createMiningActions = (logger: RuntimeLogger) => ({
 	// Called only after the terminal persistence gate, before taskData is cleared.
 	recordMiningCompletion: assign<
 		MachineContext,
@@ -106,13 +106,13 @@ export const miningActions = {
 	}),
 	entryMining: ({ context }: { context: MachineContext }) => {
 		const data = getMiningTask(context.taskData)
-		Logger.debug(
+		logger.debug(
 			`[MINING] Starting mining task: ${data?.blockName ?? 'unknown'} x${data?.count ?? 0}`
 		)
 	},
 
 	exitMining: () => {
-		Logger.debug('[MINING] Exiting mining state')
+		logger.debug('[MINING] Exiting mining state')
 	},
 
 	storeFoundBlocks: assign<
@@ -225,7 +225,7 @@ export const miningActions = {
 			return
 		}
 
-		Logger.debug(
+		logger.debug(
 			`[MINING] Task completed: collected ${data.collected}/${data.count} ${data.blockName}`
 		)
 		context.bot?.chat(
@@ -248,11 +248,11 @@ export const miningActions = {
 
 		const reason =
 			eventReason(event) ?? data.lastFailure ?? 'неизвестная причина'
-		Logger.debug(
+		logger.debug(
 			`[MINING] Task failed: collected ${data.collected}/${data.count} ${data.blockName}. Reason: ${reason}`
 		)
 		context.bot?.chat(
 			`Не удалось завершить добычу ${data.blockName}. Собрано: ${data.collected}/${data.count}. Причина: ${reason}`
 		)
 	}
-}
+})

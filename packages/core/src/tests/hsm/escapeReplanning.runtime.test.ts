@@ -10,6 +10,7 @@ import { EscapeRuntime } from '@/utils/combat/escapeRuntime.js'
 import { EscapeSafety } from '@/utils/combat/escapeSafety.js'
 
 import { createEntityFixture, createHarness } from './fixtures/handoffBot.js'
+import { fixtureLogger as Logger } from './fixtures/services.js'
 
 const threat = (entityId: number, x: number, z: number): ThreatObservation => ({
 	entityId,
@@ -59,7 +60,7 @@ test('real escape keeps moving on its route while distant mobs move', async t =>
 test('an active safe route survives distant threat movement, arrival and removal', t => {
 	const { bot, actor } = createHarness(false, '1.20.6')
 	const preferences = actor.getSnapshot().context.preferences
-	const escape = new EscapeRuntime(bot.asBot(), preferences)
+	const escape = new EscapeRuntime(bot.asBot(), preferences, Logger)
 	t.after(() => {
 		escape.stop()
 		actor.stop()

@@ -1,4 +1,4 @@
-import Logger from '@/config/logger.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 interface AntiLoopGuardConfig {
 	maxTransitionsPerSecond: number
@@ -26,7 +26,10 @@ export class AntiLoopGuard {
 	private loopDetected: boolean = false
 	private lastSignature: string | null = null
 
-	constructor(options: AntiLoopGuardConfig) {
+	constructor(
+		options: AntiLoopGuardConfig,
+		private readonly logger: RuntimeLogger
+	) {
 		this.maxUpdatesPerSecond = options.maxTransitionsPerSecond
 		this.windowMs = options.windowMs
 	}
@@ -67,7 +70,7 @@ export class AntiLoopGuard {
 
 	reportLoop(reason: string): void {
 		this.loopDetected = true
-		Logger.error('🔁 LOOP DETECTED - AntiLoopGuard', {
+		this.logger.error('🔁 LOOP DETECTED - AntiLoopGuard', {
 			reason,
 			totalUpdates: this.totalUpdates,
 			recentUpdates: this.updateHistory.slice(-20).map((update, index) => ({

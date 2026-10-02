@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { machine } from '../../hsm/machine.js'
 import { buildHsmDrawioDiagram } from '../../hsm/utils/hsmDrawioDiagram.js'
+import { createBotMachine } from './fixtures/services.js'
+
+const machine = createBotMachine()
 
 const collectStatePaths = (
 	states: Record<string, any> | undefined,
@@ -14,7 +16,10 @@ const collectStatePaths = (
 
 	return Object.entries(states).flatMap(([name, config]) => {
 		const currentPath = [...path, name]
-		return [currentPath.join('.'), ...collectStatePaths(config.states, currentPath)]
+		return [
+			currentPath.join('.'),
+			...collectStatePaths(config.states, currentPath)
+		]
 	})
 }
 

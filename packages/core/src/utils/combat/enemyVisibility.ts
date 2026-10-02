@@ -1,8 +1,7 @@
+import type { Bot, Entity } from '@/types/index.js'
 import pathFinderPkg from 'mineflayer-pathfinder'
 
-import type { Bot, Entity } from '@/types/index.js'
-
-import Logger from '@/config/logger.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import { GoalNear } from '@/modules/plugins/goals.js'
 
@@ -10,12 +9,21 @@ const { Movements } = pathFinderPkg
 
 /**
  * Кеш результатов pathfinder для оптимизации
- * Ключ: `entityId`, Значение: { reachable: boolean, pathLength: number, timestamp: number }
+ * Для каждого бота отдельный кеш по `entityId`.
  */
-const pathfindCache = new Map<
+type PathfindCache = Map<
 	number,
 	{ reachable: boolean; pathLength: number; timestamp: number }
->()
+>
+const pathfindCaches = new WeakMap<Bot, PathfindCache>()
+const cacheOf = (bot: Bot): PathfindCache => {
+	let cache = pathfindCaches.get(bot)
+	if (!cache) {
+		cache = new Map()
+		pathfindCaches.set(bot, cache)
+	}
+	return cache
+}
 
 /**
  * УРОВЕНЬ 1: Проверка прямой видимости через raycast (БЫСТРО ~1ms)
@@ -92,6 +100,7 @@ async function isEnemyReachable(
 	bot: Bot,
 	enemy: Entity,
 	maxPathLength: number,
+	logger: RuntimeLogger,
 	timeout: number = 1000,
 	cacheDuration: number = 3000
 ): Promise<boolean> {
@@ -99,6 +108,7 @@ async function isEnemyReachable(
 		return false
 	}
 
+	const pathfindCache = cacheOf(bot)
 	const now = Date.now()
 	const cached = pathfindCache.get(enemy.id)
 
@@ -190,7 +200,7 @@ async function isEnemyReachable(
 		const pathLength = path.path?.length || 0
 
 		if (pathLength === 0) {
-			Logger.debug('❌ [isEnemyReachable] Враг недостижим: путь пустой', {
+			logger.debug('❌ [isEnemyReachable] Враг недостижим: путь пустой', {
 				enemy: enemy.name || 'враг'
 			})
 			pathfindCache.set(enemy.id, {
@@ -202,11 +212,14 @@ async function isEnemyReachable(
 		}
 
 		if (pathLength > maxPathLength) {
-			Logger.debug('⚠️ [isEnemyReachable] Враг недостижим: путь слишком длинный', {
-				enemy: enemy.name || 'враг',
-				pathLength,
-				maxPathLength
-			})
+			logger.debug(
+				'⚠️ [isEnemyReachable] Враг недостижим: путь слишком длинный',
+				{
+					enemy: enemy.name || 'враг',
+					pathLength,
+					maxPathLength
+				}
+			)
 			pathfindCache.set(enemy.id, {
 				reachable: false,
 				pathLength,
@@ -215,7 +228,7 @@ async function isEnemyReachable(
 			return false
 		}
 
-		Logger.debug('✅ [isEnemyReachable] Враг достижим', {
+		logger.debug('✅ [isEnemyReachable] Враг достижим', {
 			enemy: enemy.name || 'враг',
 			pathLength
 		})
@@ -226,7 +239,7 @@ async function isEnemyReachable(
 		})
 		return true
 	} catch (error) {
-		Logger.warn('⚠️ [isEnemyReachable] Ошибка проверки пути', {
+		logger.warn('⚠️ [isEnemyReachable] Ошибка проверки пути', {
 			enemy: enemy.name || 'враг',
 			error: error instanceof Error ? error.message : String(error),
 			stack: error instanceof Error ? error.stack : undefined
@@ -256,7 +269,8 @@ export async function canAttackEnemy(
 	maxDistance: number,
 	maxPathLength: number,
 	pathfindTimeout: number,
-	isActiveTask: boolean
+	isActiveTask: boolean,
+	logger: RuntimeLogger
 ): Promise<boolean> {
 	if (!enemy || !enemy.isValid || !enemy.position || !bot.entity.position) {
 		return false
@@ -278,22 +292,32 @@ export async function canAttackEnemy(
 	}
 
 	// УРОВЕНЬ 3: Pathfinder - есть ли путь обхода? (медленно, с кешем)
-	return await isEnemyReachable(bot, enemy, maxPathLength, pathfindTimeout)
+	return await isEnemyReachable(
+		bot,
+		enemy,
+		maxPathLength,
+		logger,
+		pathfindTimeout
+	)
 }
 
 /**
  * Очистка кеша pathfinder (вызывать периодически или при изменении мира)
  */
-function clearPathfindCache(): void {
-	pathfindCache.clear()
-	Logger.debug('🧹 [clearPathfindCache] Кеш pathfinder очищен')
+export function clearPathfindCache(bot: Bot): void {
+	pathfindCaches.delete(bot)
 }
 
 /**
  * Очистка устаревших записей из кеша
  * @param maxAge - Максимальный возраст записи в мс
  */
-export function cleanupPathfindCache(maxAge: number = 5000): void {
+export function cleanupPathfindCache(
+	bot: Bot,
+	logger: RuntimeLogger,
+	maxAge: number = 5000
+): void {
+	const pathfindCache = cacheOf(bot)
 	const now = Date.now()
 	let cleaned = 0
 
@@ -305,7 +329,7 @@ export function cleanupPathfindCache(maxAge: number = 5000): void {
 	}
 
 	if (cleaned > 0) {
-		Logger.debug('🧹 [cleanupPathfindCache] Удалены устаревшие записи', {
+		logger.debug('🧹 [cleanupPathfindCache] Удалены устаревшие записи', {
 			cleaned
 		})
 	}

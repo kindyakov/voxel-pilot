@@ -4,11 +4,10 @@ import { setImmediate as flush } from 'node:timers/promises'
 
 import { Vec3 } from 'vec3'
 
-import Logger from '@/config/logger.js'
-
 import { attachHsmDiagnostics } from '@/hsm/utils/runtimeDiagnostics.js'
 
 import { createHarness } from './fixtures/handoffBot.js'
+import { fixtureLogger as Logger } from './fixtures/services.js'
 
 test('diagnostics expose nested recovery, bounded heartbeat and stop without leaking command text', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
@@ -22,7 +21,7 @@ test('diagnostics expose nested recovery, bounded heartbeat and stop without lea
 	)
 	const { actor, observe } = createHarness()
 	t.after(() => actor.stop())
-	const detach = attachHsmDiagnostics(actor, '1.20.1')
+	const detach = attachHsmDiagnostics(actor, Logger, '1.20.1')
 	t.after(detach)
 	const runtime = logs.find(log => log.message === '[HSM] runtime')
 	assert.equal(

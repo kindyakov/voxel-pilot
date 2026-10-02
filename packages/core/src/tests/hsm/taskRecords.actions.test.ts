@@ -6,21 +6,13 @@ import test from 'node:test'
 
 import type { Bot } from '@/types/index.js'
 
-import Logger from '@/config/logger.js'
-
 import { MemoryManager } from '@/core/memory/index.js'
 import type {
 	CreatePersistentTaskInput,
 	PersistentTaskRecord
 } from '@/core/memory/types.js'
 
-import {
-	computeTaskCancel,
-	computeTaskStart,
-	enterTaskRecord,
-	syncTerminalRecord,
-	taskRecordActions
-} from '@/hsm/actions/taskRecords.actions.js'
+import { createTaskRecordActions } from '@/hsm/actions/taskRecords.actions.js'
 import { context as initialContext } from '@/hsm/context.js'
 import type { MachineContext } from '@/hsm/context.js'
 import { createMiningTask } from '@/hsm/tasks/task.js'
@@ -29,6 +21,15 @@ import { createGoalExecution } from '@/ai/goalExecution.js'
 import { parseExecution } from '@/ai/tools/executionDefinitions.js'
 
 import { HandoffBot } from './fixtures/handoffBot.js'
+import { fixtureLogger as Logger } from './fixtures/services.js'
+
+const {
+	computeTaskCancel,
+	computeTaskStart,
+	enterTaskRecord,
+	syncTerminalRecord,
+	actions: taskRecordActions
+} = createTaskRecordActions(Logger)
 
 const createTaskMemory = async (): Promise<{
 	memory: MemoryManager

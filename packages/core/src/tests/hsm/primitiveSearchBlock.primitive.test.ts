@@ -5,7 +5,10 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { Vec3 } from 'vec3'
 import { createActor, createMachine } from 'xstate'
 
-import { primitiveSearchBlock } from '../../hsm/actors/primitives/primitiveSearchBlock.primitive.js'
+import { createPrimitiveSearchBlock } from '../../hsm/actors/primitives/primitiveSearchBlock.primitive.js'
+import { fixtureLogger as Logger } from './fixtures/services.js'
+
+const primitiveSearchBlock = createPrimitiveSearchBlock(Logger)
 
 type SearchBlockOptions = {
 	blockName: string
