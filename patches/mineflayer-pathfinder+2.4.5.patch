@@ -1,7 +1,7 @@
-diff --git a/node_modules/mineflayer-pathfinder/index.js b/node_modules/mineflayer-pathfinder/index.js
+diff --git a/index.js b/index.js
 index b38bd30..21e6f45 100644
---- a/node_modules/mineflayer-pathfinder/index.js
-+++ b/node_modules/mineflayer-pathfinder/index.js
+--- a/index.js
++++ b/index.js
 @@ -35,7 +35,17 @@
    const lockUseBlock = new Lock()
  

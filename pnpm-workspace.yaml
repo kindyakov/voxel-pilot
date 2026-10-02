@@ -1,0 +1,11 @@
+patchedDependencies:
+  mineflayer@4.39.0: patches/mineflayer+4.39.0.patch
+  mineflayer-pathfinder@2.4.5: patches/mineflayer-pathfinder+2.4.5.patch
+  mineflayer-pvp@1.3.2: patches/mineflayer-pvp+1.3.2.patch
+  mineflayer-auto-eat@5.0.3: patches/mineflayer-auto-eat+5.0.3.patch
+  minecrafthawkeye@1.3.9: patches/minecrafthawkeye+1.3.9.patch
+
+allowBuilds:
+  esbuild: true
+  fsevents: true
+  mineflayer-web-inventory: true

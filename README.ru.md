@@ -14,10 +14,10 @@ VoxelPilot - AI-бот для Minecraft на базе Mineflayer и XState. Бо
 
 ## Быстрый старт
 
-1. Установите зависимости.
+1. Используйте Node.js 24+ и pnpm версии из `package.json` (`packageManager`); установите зависимости командой `pnpm install --frozen-lockfile`.
 2. Скопируйте `.env.example` в `.env`.
 3. Заполните `MINECRAFT_*` и `AI_*`.
-4. Запустите `npm run dev`.
+4. Запустите `pnpm run dev`.
 
 ## Docker
 
@@ -41,11 +41,12 @@ VoxelPilot - AI-бот для Minecraft на базе Mineflayer и XState. Бо
 
 Полезные команды:
 
-- `npm run dev`
-- `npm run build`
-- `npm run type-check`
-- `npm run format`
-- `npm run clean`
+- `pnpm run dev`
+- `pnpm run build`
+- `pnpm run type-check`
+- `pnpm test` — все изолированные тесты с искусственным окружением без чтения локального `.env`.
+- `pnpm run format`
+- `pnpm run clean`
 
 ## Безопасность
 

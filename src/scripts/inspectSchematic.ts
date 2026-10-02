@@ -10,7 +10,7 @@ const main = async () => {
 
 	if (paths.length === 0) {
 		Logger.error(
-			'Usage: npm run inspect-schematic -- <path-to-file.schem> [more-files...]'
+			'Usage: pnpm run inspect-schematic <path-to-file.schem> [more-files...]'
 		)
 		process.exitCode = 1
 		return

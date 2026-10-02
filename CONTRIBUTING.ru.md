@@ -7,8 +7,8 @@
 ## Перед открытием PR
 
 1. Прочитайте релевантные docs в `docs/`.
-2. Запустите `npm run type-check`.
-3. Запустите `npm run build`.
+2. Запустите `pnpm run type-check`.
+3. Запустите `pnpm run build`.
 4. Запустите focused tests для затронутой подсистемы.
 
 ## Ожидания
