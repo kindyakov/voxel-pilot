@@ -341,6 +341,37 @@ test('logger close reports file transport failure instead of hanging or claiming
 	}
 })
 
+test(
+	'logger close reports the native stream error with one blocked output',
+	{ timeout: 2000 },
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'voxel-logger-open-error-'))
+		const logFile = join(directory, 'blocked.log')
+		await mkdir(logFile)
+		const handle = createRuntimeLogger({
+			aiModel: 'fixture',
+			console: false,
+			files: {
+				logFile,
+				errorLogFile: join(directory, 'error.log'),
+				level: 'info',
+				maxBytes: 10000,
+				maxFiles: 2
+			}
+		})
+		try {
+			handle.logger.info('cannot persist to a directory')
+			const close = handle.close()
+			assert.equal(handle.close(), close)
+			await assert.rejects(close, {
+				code: 'EISDIR'
+			})
+		} finally {
+			await rm(directory, { recursive: true, force: true })
+		}
+	}
+)
+
 test('new service imports and silent construction work without required environment or file artifacts', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'voxel-import-'))
 	try {

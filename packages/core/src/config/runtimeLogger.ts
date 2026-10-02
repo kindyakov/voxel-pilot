@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { isAbsolute } from 'node:path'
 import util from 'node:util'
 
@@ -149,6 +150,62 @@ function baseFormat() {
 	)
 }
 
+/** Winston File does not forward every destination error, including failed opens. */
+function observedFileSystem(report: (error: Error) => void) {
+	const observe =
+		<Result extends unknown[]>(
+			callback: (error: NodeJS.ErrnoException | null, ...result: Result) => void
+		) =>
+		(error: NodeJS.ErrnoException | null, ...result: Result) => {
+			callback(error, ...result)
+			if (error) report(error)
+		}
+	return {
+		open(
+			path: fs.PathLike,
+			flags: string | number,
+			mode: fs.Mode,
+			callback: (error: NodeJS.ErrnoException | null, fd: number) => void
+		) {
+			fs.open(path, flags, mode, observe(callback))
+		},
+		write(
+			fd: number,
+			buffer: Buffer,
+			offset: number,
+			length: number,
+			position: number | null,
+			callback: (
+				error: NodeJS.ErrnoException | null,
+				bytes: number,
+				buffer: Buffer
+			) => void
+		) {
+			fs.write(fd, buffer, offset, length, position, observe(callback))
+		},
+		writev(
+			fd: number,
+			buffers: readonly NodeJS.ArrayBufferView[],
+			position: number | null,
+			callback: (
+				error: NodeJS.ErrnoException | null,
+				bytes: number,
+				buffers: readonly NodeJS.ArrayBufferView[]
+			) => void
+		) {
+			fs.writev(fd, buffers, position, observe(callback))
+		},
+		close(fd: number, callback: (error: NodeJS.ErrnoException | null) => void) {
+			fs.close(fd, observe(callback))
+		}
+	} satisfies NonNullable<
+		Exclude<
+			Parameters<typeof fs.createWriteStream>[1],
+			string | undefined
+		>['fs']
+	>
+}
+
 /** Importing this module allocates no logger; every selected resource belongs to the handle. */
 export function createRuntimeLogger(
 	options: RuntimeLoggerOptions
@@ -160,6 +217,12 @@ export function createRuntimeLogger(
 		console: options.console && { ...options.console },
 		files: options.files && { ...options.files },
 		sink: options.sink && { ...options.sink }
+	}
+	let failure: Error | undefined
+	let onClosingError: ((error: Error) => void) | undefined
+	const reportFailure = (error: Error) => {
+		failure ??= error
+		onClosingError?.(failure)
 	}
 	const transports: winston.transport[] = []
 	if (options.console) {
@@ -191,7 +254,8 @@ export function createRuntimeLogger(
 					level,
 					format: fileFormat,
 					maxsize: options.files.maxBytes,
-					maxFiles: options.files.maxFiles
+					maxFiles: options.files.maxFiles,
+					options: { flags: 'a', fs: observedFileSystem(reportFailure) }
 				})
 			)
 		}
@@ -202,10 +266,7 @@ export function createRuntimeLogger(
 		silent: transports.length === 0,
 		exitOnError: false
 	})
-	let failure: Error | undefined
-	backend.on('error', error => {
-		failure = error
-	})
+	backend.on('error', reportFailure)
 	let correlationId: CorrelationId = null
 	let closed = false
 	let closing: Promise<void> | undefined
@@ -296,14 +357,14 @@ export function createRuntimeLogger(
 			closing = new Promise<void>((resolve, reject) => {
 				const finish = () => settle(failure)
 				const settle = (error?: Error) => {
+					onClosingError = undefined
 					backend.removeListener('finish', finish)
-					backend.removeListener('error', settle)
 					backend.close()
 					if (error) reject(error)
 					else resolve()
 				}
+				onClosingError = settle
 				backend.once('finish', finish)
-				backend.once('error', settle)
 				if (failure) {
 					settle(failure)
 					return
