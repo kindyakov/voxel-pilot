@@ -1,8 +1,5 @@
-import 'dotenv/config'
-
-import Logger from '@/config/logger.js'
-
-import MinecraftBot from '@/core/bot.js'
+import { MinecraftBot } from '@voxel-pilot/core'
+import Logger from '@voxel-pilot/core/legacy-logger'
 
 const minecraftBot = new MinecraftBot()
 minecraftBot.start()

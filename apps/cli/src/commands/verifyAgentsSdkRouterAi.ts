@@ -1,14 +1,19 @@
 import { performance } from 'node:perf_hooks'
 
-import 'dotenv/config'
-
 import {
 	type AgentSdkEvent,
 	type AgentSdkPilot,
 	AgentSdkPilotError,
 	type AgentSdkTool,
 	createAgentsSdkPilot
-} from '@/ai/agentSdkPilot.js'
+} from '@voxel-pilot/core/agents-sdk-pilot'
+import { defaultSettingsFile } from '@voxel-pilot/core/paths'
+import dotenv from 'dotenv'
+
+dotenv.config({
+	path: process.env.DOTENV_CONFIG_PATH ?? defaultSettingsFile,
+	quiet: true
+})
 
 interface StreamMetrics {
 	eventCount: number

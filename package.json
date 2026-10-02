@@ -1,81 +1,52 @@
 {
-  "name": "voxel-pilot",
-  "version": "0.0.1",
-  "description": "VoxelPilot is an AI-assisted Minecraft bot built with mineflayer and XState.",
-  "main": "dist/index.js",
-  "type": "module",
-  "scripts": {
-    "build": "tsc && tsc-alias",
-    "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts",
-    "inspect-schematic": "node --import tsx src/scripts/inspectSchematic.ts",
-    "verify:agents-sdk:routerai": "tsx src/scripts/verifyAgentsSdkRouterAi.ts",
-    "type-check": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.{ts,js}\"",
-    "knip": "knip",
-    "clean": "rm -rf dist",
-    "test": "tsx --import ./src/tests/setupEnv.mjs --test --test-concurrency=4 \"src/tests/**/*.test.ts\""
-  },
-  "engines": {
-    "node": ">=24.0.0"
-  },
-  "keywords": [
-    "minecraft",
-    "mineflayer",
-    "xstate",
-    "ai",
-    "bot",
-    "typescript",
-    "openai"
-  ],
-  "author": "kindyakov <kindyakov_2016@mail.ru>",
-  "license": "ISC",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/kindyakov/voxel-pilot.git"
-  },
-  "bugs": {
-    "url": "https://github.com/kindyakov/voxel-pilot/issues"
-  },
-  "homepage": "https://github.com/kindyakov/voxel-pilot#readme",
-  "dependencies": {
-    "@openai/agents": "^0.18.0",
-    "ajv": "^8.17.1",
-    "chalk": "^4.1.2",
-    "dotenv": "^17.2.1",
-    "minecrafthawkeye": "1.3.9",
-    "mineflayer": "4.39.0",
-    "mineflayer-armor-manager": "^2.0.1",
-    "mineflayer-auto-eat": "5.0.3",
-    "mineflayer-movement": "^0.4.4",
-    "mineflayer-pathfinder": "2.4.5",
-    "mineflayer-pvp": "1.3.2",
-    "mineflayer-tool": "^1.2.0",
-    "mineflayer-web-inventory": "^1.8.5",
-    "openai": "^7.19.0",
-    "prismarine-nbt": "^2.8.0",
-    "prismarine-viewer": "^1.33.0",
-    "winston": "^3.17.0",
-    "xstate": "^5.22.0",
-    "zod": "^4.6.5",
-    "vec3": "^0.1.10"
-  },
-  "devDependencies": {
-    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
-    "@types/node": "^24.12.0",
-    "knip": "^6.0.0",
-    "prettier": "^3.6.2",
-    "prismarine-block": "^1.22.0",
-    "prismarine-entity": "^2.5.0",
-    "prismarine-item": "^1.14.0",
-    "prismarine-recipe": "^1.3.1",
-    "prismarine-registry": "1.12.0",
-    "prismarine-world": "3.7.0",
-    "tsc-alias": "^1.8.10",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3",
-    "minecraft-data": "3.116.0",
-    "prismarine-physics": "1.11.1"
-  },
-  "packageManager": "pnpm@12.6.0"
+	"name": "voxel-pilot",
+	"version": "0.0.1",
+	"description": "VoxelPilot is an AI-assisted Minecraft bot built with mineflayer and XState.",
+	"type": "module",
+	"scripts": {
+		"build": "pnpm -r run build",
+		"type-check": "pnpm --filter @voxel-pilot/core run build && pnpm -r run type-check && tsc --noEmit",
+		"start": "pnpm --filter @voxel-pilot/cli start",
+		"dev": "pnpm --filter @voxel-pilot/cli dev",
+		"inspect-schematic": "pnpm --filter @voxel-pilot/cli inspect-schematic",
+		"verify:agents-sdk:routerai": "pnpm --filter @voxel-pilot/cli verify:agents-sdk:routerai",
+		"generate:hsm": "pnpm --filter @voxel-pilot/cli generate:hsm",
+		"test": "pnpm --filter @voxel-pilot/core test && tsx --test tests/*.test.ts",
+		"format": "prettier --write \"packages/*/src/**/*.{ts,js}\" \"apps/*/src/**/*.{ts,js}\"",
+		"knip": "knip",
+		"check:imports": "node scripts/check-imports.mjs",
+		"clean": "pnpm -r run clean"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"keywords": [
+		"minecraft",
+		"mineflayer",
+		"xstate",
+		"ai",
+		"bot",
+		"typescript",
+		"openai"
+	],
+	"author": "kindyakov <kindyakov_2016@mail.ru>",
+	"license": "ISC",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kindyakov/voxel-pilot.git"
+	},
+	"bugs": {
+		"url": "https://github.com/kindyakov/voxel-pilot/issues"
+	},
+	"homepage": "https://github.com/kindyakov/voxel-pilot#readme",
+	"devDependencies": {
+		"@trivago/prettier-plugin-sort-imports": "^6.0.2",
+		"knip": "^6.0.0",
+		"prettier": "^3.6.2",
+		"tsx": "^4.20.6",
+		"typescript": "^5.9.3",
+		"@types/node": "^24.12.0"
+	},
+	"packageManager": "pnpm@12.6.0",
+	"private": true
 }

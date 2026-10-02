@@ -32,7 +32,7 @@ During movement, the remaining route is checked against current threats. Distant
 
 ## Current tuning
 
-Implementation choices live in `src/hsm/context.ts`, not Minecraft constants:
+Implementation choices live in `packages/core/src/hsm/context.ts`, not Minecraft constants:
 
 | Setting | Default |
 | --- | --- |
@@ -117,4 +117,4 @@ Use disposable worlds on the configured Java version (repeat the compatibility s
 18. While the bow is drawn, change the selected hostile and confirm a normal full-strength shot; then interrupt with critical health or a close creeper and confirm no weak arrow is released by cancellation. Move the creeper repeatedly around 12 blocks: retreat should continue until the outer boundary is reached. Repeat after server slot/durability updates. Server plugins may veto slot changes used to cancel a draw, so verify this on the actual server.
 19. Keep the only food stack outside the hotbar, interrupt its equip, and retry eating: food must remain in slots, not stranded on the cursor. Break the held sword while another sword is available: no fist hits while the replacement is equipping.
 
-Automated counterparts use the public HSM, real Mineflayer plugins and Prismarine physics with a simulated server/world in `src/tests/hsm/*runtime.test.ts`. Protocol-adapter tests cover unknown/malformed versioned signals. These checks do not replace the live scenarios above.
+Automated counterparts use the public HSM, real Mineflayer plugins and Prismarine physics with a simulated server/world in `packages/core/src/tests/hsm/*runtime.test.ts`. Protocol-adapter tests cover unknown/malformed versioned signals. These checks do not replace the live scenarios above.

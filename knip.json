@@ -1,54 +1,35 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": [
-    "src/tests/**/*.test.ts",
-    "src/modules/plugins/viewer.ts",
-    "src/modules/plugins/webInventory.ts"
-  ],
-  "project": [
-    "src/**/*.ts"
-  ],
-  "ignore": [],
-  "paths": {
-    "@/*": [
-      "src/*"
-    ],
-    "@/types": [
-      "src/types/index.ts"
-    ],
-    "@/hsm/*": [
-      "src/hsm/*"
-    ],
-    "@/config/*": [
-      "src/config/*"
-    ],
-    "@/utils/*": [
-      "src/utils/*"
-    ],
-    "@/modules/*": [
-      "src/modules/*"
-    ],
-    "@/core/*": [
-      "src/core/*"
-    ],
-    "@/ai/*": [
-      "src/ai/*"
-    ],
-    "@/building/*": [
-      "src/building/*"
-    ]
-  },
-  "ignoreDependencies": [],
-  "rules": {
-    "files": "error",
-    "dependencies": "error",
-    "unlisted": "error",
-    "binaries": "error",
-    "unresolved": "error",
-    "exports": "warn",
-    "types": "warn",
-    "nsExports": "warn",
-    "nsTypes": "warn",
-    "enumMembers": "warn"
-  }
+	"$schema": "https://unpkg.com/knip@5/schema.json",
+	"ignore": [],
+	"ignoreDependencies": [],
+	"rules": {
+		"files": "error",
+		"dependencies": "error",
+		"unlisted": "error",
+		"binaries": "error",
+		"unresolved": "error",
+		"exports": "warn",
+		"types": "warn",
+		"nsExports": "warn",
+		"nsTypes": "warn",
+		"enumMembers": "warn"
+	},
+	"workspaces": {
+		"packages/core": {
+			"entry": [
+				"src/index.ts",
+				"src/tests/**/*.test.ts",
+				"src/modules/plugins/viewer.ts",
+				"src/modules/plugins/webInventory.ts"
+			],
+			"project": ["src/**/*.ts"],
+			"paths": {
+				"@/*": ["src/*"]
+			}
+		},
+		"apps/cli": {
+			"entry": ["src/index.ts", "src/commands/*.ts"],
+			"project": ["src/**/*.ts"]
+		}
+	}
 }

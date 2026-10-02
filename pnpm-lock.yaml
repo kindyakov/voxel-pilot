@@ -172,6 +172,46 @@ patchedDependencies:
 importers:
 
   .:
+    devDependencies:
+      '@trivago/prettier-plugin-sort-imports':
+        specifier: ^6.0.2
+        version: 6.0.2(prettier@3.8.1)(supports-color@7.2.0)
+      '@types/node':
+        specifier: ^24.12.0
+        version: 24.12.2
+      knip:
+        specifier: ^6.0.0
+        version: 6.3.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
+      prettier:
+        specifier: ^3.6.2
+        version: 3.8.1
+      tsx:
+        specifier: ^4.20.6
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  apps/cli:
+    dependencies:
+      '@voxel-pilot/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      dotenv:
+        specifier: ^17.2.1
+        version: 17.4.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.12.0
+        version: 24.12.2
+      tsx:
+        specifier: ^4.20.6
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/core:
     dependencies:
       '@openai/agents':
         specifier: ^0.18.0
@@ -234,21 +274,12 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
-      '@trivago/prettier-plugin-sort-imports':
-        specifier: ^6.0.2
-        version: 6.0.2(prettier@3.8.1)(supports-color@7.2.0)
       '@types/node':
         specifier: ^24.12.0
         version: 24.12.2
-      knip:
-        specifier: ^6.0.0
-        version: 6.3.0(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
       minecraft-data:
         specifier: 3.116.0
         version: 3.116.0
-      prettier:
-        specifier: ^3.6.2
-        version: 3.8.1
       prismarine-block:
         specifier: ^1.22.0
         version: 1.23.0(supports-color@7.2.0)

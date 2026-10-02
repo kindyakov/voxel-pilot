@@ -1,45 +1,7 @@
 {
+	"extends": "./tsconfig.base.json",
 	"compilerOptions": {
-		"target": "ES2022",
-		"module": "ESNext",
-		"moduleResolution": "node",
-		"lib": ["ES2022"],
-		"outDir": "./dist",
-		"rootDir": "./src",
-
-		"baseUrl": ".",
-		"paths": {
-			"@/*": ["src/*"],
-			"@/types": ["src/types/index.ts"],
-			"@/hsm/*": ["src/hsm/*"],
-			"@/config/*": ["src/config/*"],
-			"@/utils/*": ["src/utils/*"],
-			"@/modules/*": ["src/modules/*"],
-			"@/core/*": ["src/core/*"],
-			"@/ai/*": ["src/ai/*"],
-			"@/building/*": ["src/building/*"]
-		},
-
-		// Строгость
-		"strict": true,
-		"noUncheckedIndexedAccess": true,
-		"noImplicitReturns": true,
-		"noFallthroughCasesInSwitch": true,
-
-		// ES Modules
-		"esModuleInterop": true,
-		"allowSyntheticDefaultImports": true,
-		"resolveJsonModule": true,
-		"isolatedModules": true,
-
-		// Производительность
-		"skipLibCheck": true,
-		"forceConsistentCasingInFileNames": true,
-
-		// Декораторы
-		"experimentalDecorators": true,
-		"emitDecoratorMetadata": false
+		"noEmit": true
 	},
-	"include": ["src/**/*"],
-	"exclude": ["node_modules", "dist", "logs"]
+	"include": ["tests/**/*.ts"]
 }

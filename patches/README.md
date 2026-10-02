@@ -16,9 +16,9 @@
 
 1. Проверь исправления upstream и повтори тесты отмены на новой версии. Удаляй патч только после подтверждения его контракта тестами без патча.
 2. Если исправление всё ещё нужно, выполни `rtk pnpm patch <package>@<version>`, перенеси исправление в выданный каталог и сохрани его через `rtk pnpm patch-commit <directory>`. Сохраняй `patchedDependencies` для точной версии пакета. Изменения только в `node_modules` не являются завершённым результатом.
-3. Проверь применение патчей на чистой установке, затем выполни `rtk pnpm exec tsx --import ./src/tests/setupEnv.mjs --test src/tests/hsm/controlHandoff.runtime.test.ts`, `rtk pnpm test`, type-check и build. Сохраняй обновлённые версии, lockfile и патчи вместе.
+3. Проверь применение патчей на чистой установке, затем выполни `rtk pnpm --filter @voxel-pilot/core exec tsx --import ./src/tests/setupEnv.mjs --test src/tests/hsm/controlHandoff.runtime.test.ts`, `rtk pnpm test`, type-check и build. Сохраняй обновлённые версии, lockfile и патчи вместе.
 
-Основной интеграционный seam — `src/tests/hsm/controlHandoff.runtime.test.ts`: настоящие HSM, акторы и плагины; подменена граница Minecraft, перемещение считается настоящей физикой. Проверки отмены должны сопровождаться успешным новым запуском, чтобы полная поломка плагина не выглядела исправлением.
+Основной интеграционный seam — `packages/core/src/tests/hsm/controlHandoff.runtime.test.ts`: настоящие HSM, акторы и плагины; подменена граница Minecraft, перемещение считается настоящей физикой. Проверки отмены должны сопровождаться успешным новым запуском, чтобы полная поломка плагина не выглядела исправлением.
 
 Native-контракты отдельно покрыты `nativeEquip.runtime.test.ts`, `eatingDeadline.runtime.test.ts` и `rangedInventory.runtime.test.ts`: сохранность предметов после отмены, новая попытка еды, полное натяжение при retarget и отсутствие release-пакета при отмене. Серверный плагин может запретить смену слота; это требует живой проверки в конкретном окружении.
 

@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
+import { defaultDataDirectory } from '../../runtimePaths.js'
 import { TASK_STATUSES, normalizeTaskDone } from './types.js'
 import type {
 	BotMemoryData,
@@ -166,7 +167,7 @@ export class MemoryManager {
 
 	constructor(options: MemoryManagerOptions) {
 		this.botName = options.botName
-		this.dataDir = options.dataDir ?? path.resolve('data')
+		this.dataDir = options.dataDir ?? defaultDataDirectory
 		this.dbPath = path.join(this.dataDir, `bot_memory_${this.botName}.db`)
 		this.memoryState = this.createDefaultState()
 	}

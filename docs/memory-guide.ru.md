@@ -9,7 +9,7 @@
 data/bot_memory_<botName>.db
 ```
 
-`MemoryManager` живёт в `src/core/memory/`.
+`MemoryManager` живёт в `packages/core/src/core/memory/`.
 
 ## Что хранит память
 
