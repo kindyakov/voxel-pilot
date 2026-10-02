@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { performance } from 'node:perf_hooks'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
+import type { PartiallyComputedPath } from 'mineflayer-pathfinder'
 import { Vec3 } from 'vec3'
 
 import type { ThreatObservation } from '@/hsm/context.js'
@@ -57,53 +59,100 @@ test('real escape keeps moving on its route while distant mobs move', async t =>
 	assert.equal(bot.attacks.length, 0)
 })
 
-test('an active safe route survives distant threat movement, arrival and removal', t => {
-	const { bot, actor } = createHarness(false, '1.20.6')
-	const preferences = actor.getSnapshot().context.preferences
-	const escape = new EscapeRuntime(bot.asBot(), preferences, Logger)
-	t.after(() => {
-		escape.stop()
-		actor.stop()
-	})
-	const origin = bot.entity.position.clone()
-	const nearby = threat(1, 18, 0)
-	const paths: Array<Array<{ x: number; y: number; z: number }>> = []
-	const getPath = bot.pathfinder.getPathFromTo.bind(bot.pathfinder)
-	t.mock.method(
-		bot.pathfinder,
-		'getPathFromTo',
-		function* (...args: Parameters<typeof getPath>) {
-			for (const value of getPath(...args)) {
-				if (value.result.status === 'success') paths.push(value.result.path)
-				yield value
+for (const initialPartial of [false, true]) {
+	test(`an active safe route survives distant threat movement, arrival and removal${initialPartial ? ' after a native partial result' : ''}`, t => {
+		const { bot, actor } = createHarness(false, '1.20.6')
+		const preferences = actor.getSnapshot().context.preferences
+		const escape = new EscapeRuntime(bot.asBot(), preferences, Logger)
+		t.after(() => {
+			escape.stop()
+			actor.stop()
+		})
+		const origin = bot.entity.position.clone()
+		const nearby = threat(1, 18, 0)
+		const paths: Array<Array<{ x: number; y: number; z: number }>> = []
+		const statuses: PartiallyComputedPath['status'][] = []
+		const contexts: unknown[] = []
+		const getPath = bot.pathfinder.getPathFromTo.bind(bot.pathfinder)
+		const now = performance.now.bind(performance)
+		let slices = 0
+		const search = t.mock.method(
+			bot.pathfinder,
+			'getPathFromTo',
+			function* (...args: Parameters<typeof getPath>) {
+				const generator = getPath(...args)
+				while (true) {
+					let next: ReturnType<typeof generator.next>
+					if (initialPartial) {
+						const first = slices++ === 0
+						const base = now()
+						let calls = 0
+						const elapsed = preferences.escapeSearchSliceMs + 1
+						// Exercise native AStar's slice boundary, not a fabricated partial result.
+						// Carry that elapsed slice into later native calls without changing app clocks.
+						const clock = t.mock.method(performance, 'now', () =>
+							first ? base + (++calls <= 2 ? 0 : elapsed) : now() + elapsed
+						)
+						try {
+							next = generator.next()
+						} finally {
+							clock.mock.restore()
+						}
+					} else next = generator.next()
+					if (next.done) return next.value
+					const result: PartiallyComputedPath = next.value.result
+					statuses.push(result.status)
+					contexts.push(next.value.astarContext)
+					if (result.status === 'success') paths.push(result.path)
+					yield next.value
+				}
 			}
+		)
+		const setGoal = t.mock.method(bot.pathfinder, 'setGoal')
+		escape.move(nearby, [nearby, threat(2, 0, 45)], null)
+		if (initialPartial) {
+			assert.deepEqual(statuses, ['partial'])
+			assert.equal(paths.length, 0)
+			assert.equal(bot.pathfinder.goal, null)
+			assert.equal(setGoal.mock.callCount(), 0)
 		}
-	)
-	const setGoal = t.mock.method(bot.pathfinder, 'setGoal')
-	escape.move(nearby, [nearby, threat(2, 0, 45)], null)
-	assert.equal(paths.length, 1)
-	const path = paths[0]
-	assert.ok(path)
-	const goal = bot.pathfinder.goal
-	for (const threats of [
-		[nearby, threat(2, 0, 48)],
-		[nearby],
-		[nearby, threat(3, 0, 49)]
-	]) {
-		assert.ok(
-			new EscapeSafety(origin, threats, preferences).allowsPath(
-				origin,
-				path,
-				true
+		// move advances one native slice. Its configured route deadline bounds completion.
+		while (statuses.at(-1) === 'partial') {
+			const before = statuses.length
+			escape.move(nearby, [nearby, threat(2, 0, 45)], null)
+			assert.equal(statuses.length, before + 1, 'pending search must advance')
+			assert.equal(
+				search.mock.callCount(),
+				1,
+				'continue the same native search'
 			)
-		)
-		setGoal.mock.resetCalls()
-		escape.move(nearby, threats, null)
-		assert.equal(
-			setGoal.mock.callCount(),
-			0,
-			'safe route must not be stopped or replaced'
-		)
-		assert.equal(bot.pathfinder.goal, goal)
-	}
-})
+		}
+		assert.equal(paths.length, 1)
+		assert.ok(contexts.every(context => context === contexts[0]))
+		const path = paths[0]
+		assert.ok(path)
+		const goal = bot.pathfinder.goal
+		assert.ok(goal, 'successful safe search must activate the route')
+		for (const threats of [
+			[nearby, threat(2, 0, 48)],
+			[nearby],
+			[nearby, threat(3, 0, 49)]
+		]) {
+			assert.ok(
+				new EscapeSafety(origin, threats, preferences).allowsPath(
+					origin,
+					path,
+					true
+				)
+			)
+			setGoal.mock.resetCalls()
+			escape.move(nearby, threats, null)
+			assert.equal(
+				setGoal.mock.callCount(),
+				0,
+				'safe route must not be stopped or replaced'
+			)
+			assert.equal(bot.pathfinder.goal, goal)
+		}
+	})
+}
