@@ -7,19 +7,23 @@ import { setImmediate as flush } from 'node:timers/promises'
 import type { PartiallyComputedPath } from 'mineflayer-pathfinder'
 import { Vec3 } from 'vec3'
 
+import { EscapeSafety } from '@/utils/combat/escapeSafety.js'
+
 import { createHarness } from './fixtures/handoffBot.js'
 
 /** Delay actual AStar slices, preserving its context, deadline and native result. */
 const deferNativeSearch = (
 	t: TestContext,
 	bot: ReturnType<typeof createHarness>['bot'],
-	stage: 'candidate' | 'movement'
+	stage: 'candidate' | 'movement' | 'candidate-timeout'
 ) => {
 	const getPath = bot.pathfinder.getPathFromTo.bind(bot.pathfinder)
 	const now = performance.now.bind(performance)
-	// These real partial slices leave the old 20-frame setup short of two blocks.
-	const partialSlices = stage === 'candidate' ? 6 : 11
+	// Partial variants exercise setup readiness; timeout expires the first candidate.
+	const partialSlices =
+		stage === 'candidate-timeout' ? 1 : stage === 'candidate' ? 6 : 11
 	const statuses: string[] = []
+	const subsequentCandidateStatuses: string[] = []
 	const activeGoals: boolean[] = []
 	let starts = 0
 	t.mock.method(
@@ -27,11 +31,23 @@ const deferNativeSearch = (
 		'getPathFromTo',
 		function* (...args: Parameters<typeof getPath>) {
 			const candidate = args[3]?.tickTimeout !== undefined
-			const selected = candidate === (stage === 'candidate')
+			const selected = candidate === (stage !== 'movement')
 			const delay = selected && starts++ === 0
 			const generator = getPath(...args)
-			if (!delay) return yield* generator
-			const elapsed = (args[3]?.tickTimeout ?? bot.pathfinder.tickTimeout) + 1
+			if (!delay) {
+				if (stage === 'candidate-timeout' && candidate) {
+					for (const value of generator) {
+						subsequentCandidateStatuses.push(value.result.status)
+						yield value
+					}
+					return
+				}
+				return yield* generator
+			}
+			const elapsed =
+				(stage === 'candidate-timeout'
+					? (args[3]?.timeout ?? bot.pathfinder.thinkTimeout)
+					: (args[3]?.tickTimeout ?? bot.pathfinder.tickTimeout)) + 1
 			let slices = 0
 			const compute = <T>(run: () => T, initial = false): T => {
 				const base = now() + Math.min(slices, partialSlices) * elapsed
@@ -68,6 +84,7 @@ const deferNativeSearch = (
 	return {
 		partialSlices,
 		statuses,
+		subsequentCandidateStatuses,
 		activeGoals,
 		get starts() {
 			return starts
@@ -76,16 +93,32 @@ const deferNativeSearch = (
 }
 
 for (const distance of [2, 6]) {
-	for (const delayedStage of [null, 'candidate', 'movement'] as const) {
-		test(`an active escape route is replaced when a threat moves ${distance} blocks behind the bot${delayedStage ? ` after native ${delayedStage} partials` : ''}`, async t => {
+	for (const delayedStage of [
+		null,
+		'candidate',
+		'movement',
+		'candidate-timeout'
+	] as const) {
+		test(`an active escape route is replaced when a threat moves ${distance} blocks behind the bot${delayedStage === 'candidate-timeout' ? ' after native candidate timeout' : delayedStage ? ` after native ${delayedStage} partials` : ''}`, async t => {
 			t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 			const { bot, actor, enemy, observe, step } = createHarness()
+			// Even a native diagonal fallback approaches on -X before this opening.
+			// The original -X threat placement must intersect the remaining route.
+			bot.solidAt = p =>
+				p.y < 64 || (p.y < 69 && p.x > -10 && (p.z >= 1 || p.z < -1))
 			let readyPath = false
+			let remainingRoute: PartiallyComputedPath['path'] = []
+			let threatMoved = false
+			let canceledOldRoute = false
 			const resetPath = () => {
 				readyPath = false
+				remainingRoute = []
+				if (threatMoved && bot.pathfinder.goal === null) canceledOldRoute = true
 			}
 			const observePath = (result: PartiallyComputedPath) => {
 				readyPath = result.status === 'success' && result.path.length > 0
+				// Borrow the actual array: native pathfinder consumes passed nodes.
+				remainingRoute = result.path
 			}
 			bot.on('goal_updated', resetPath)
 			bot.on('path_update', observePath)
@@ -130,13 +163,19 @@ for (const distance of [2, 6]) {
 			}
 			const turnAt = bot.entity.position.x
 			if (deferred) {
-				assert.equal(deferred.starts, 1, 'continue the same native search')
-				assert.deepEqual(
-					deferred.statuses.slice(0, deferred.partialSlices),
-					Array(deferred.partialSlices).fill('partial')
-				)
-				assert.equal(deferred.statuses.at(-1), 'success')
-				if (delayedStage === 'candidate')
+				if (delayedStage === 'candidate-timeout') {
+					assert.ok(deferred.starts >= 2, 'try another actual native candidate')
+					assert.deepEqual(deferred.statuses, ['partial', 'timeout'])
+					assert.equal(deferred.subsequentCandidateStatuses.at(-1), 'success')
+				} else {
+					assert.equal(deferred.starts, 1, 'continue the same native search')
+					assert.deepEqual(
+						deferred.statuses.slice(0, deferred.partialSlices),
+						Array(deferred.partialSlices).fill('partial')
+					)
+					assert.equal(deferred.statuses.at(-1), 'success')
+				}
+				if (delayedStage !== 'movement')
 					assert.ok(deferred.activeGoals.every(value => !value))
 				else assert.ok(deferred.activeGoals.every(value => value))
 			}
@@ -145,13 +184,32 @@ for (const distance of [2, 6]) {
 				turnAt < movementStart - 2,
 				'actual displacement during the original 20 physics frames'
 			)
+			assert.ok(
+				remainingRoute.length > 0,
+				'native route still has future nodes'
+			)
+			threatMoved = true
 			enemy.position = bot.entity.position.offset(-distance, 0, 0)
 			observe()
+			const context = actor.getSnapshot().context
+			assert.equal(
+				new EscapeSafety(
+					bot.entity.position,
+					context.threats,
+					context.preferences
+				).allowsPath(bot.entity.position, remainingRoute, false, 0),
+				false,
+				'new danger must intersect the actual remaining native route'
+			)
 			for (let i = 0; i < 30; i++) {
 				t.mock.timers.tick(50)
 				await flush()
 				step()
 			}
+			assert.ok(
+				canceledOldRoute,
+				'native old goal must be canceled after relocation'
+			)
 			assert.ok(
 				bot.entity.position.x > turnAt + 2,
 				'must stop following the old route toward the new danger'
