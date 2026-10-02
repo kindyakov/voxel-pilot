@@ -5,6 +5,7 @@ import {
 	mkdir,
 	mkdtemp,
 	readFile,
+	realpath,
 	rm,
 	stat,
 	symlink,
@@ -16,6 +17,24 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 const repository = fileURLToPath(new URL('../', import.meta.url))
+
+async function linkCoreDependencies(temporary: string) {
+	const source = join(repository, 'packages/core')
+	const manifest: { dependencies: Record<string, string> } = JSON.parse(
+		await readFile(join(source, 'package.json'), 'utf8')
+	)
+	for (const name of Object.keys(manifest.dependencies)) {
+		const destination = join(temporary, 'packages/core/node_modules', name)
+		await mkdir(dirname(destination), { recursive: true })
+		// Resolve each package first: relative pnpm symlinks must retain their
+		// installed base when the copied workspace lives on another Windows drive.
+		await symlink(
+			await realpath(join(source, 'node_modules', name)),
+			destination,
+			'junction'
+		)
+	}
+}
 
 test('built public core and legacy paths work from root and CLI with temporary data', async () => {
 	const temporary = await mkdtemp(join(tmpdir(), 'voxel-pilot-workspace-'))
@@ -31,24 +50,13 @@ test('built public core and legacy paths work from root and CLI with temporary d
 				join(temporary, folder, 'package.json')
 			)
 		}
+		await linkCoreDependencies(temporary)
+		await mkdir(join(temporary, 'apps/cli/node_modules'), { recursive: true })
 		await symlink(
-			join(repository, 'packages/core/node_modules'),
-			join(temporary, 'packages/core/node_modules'),
-			'junction'
-		)
-		await symlink(
-			join(repository, 'apps/cli/node_modules/dotenv'),
+			await realpath(join(repository, 'apps/cli/node_modules/dotenv')),
 			join(temporary, 'apps/cli/node_modules/dotenv'),
 			'junction'
-		).catch(async error => {
-			if (error.code !== 'ENOENT') throw error
-			await mkdir(join(temporary, 'apps/cli/node_modules'), { recursive: true })
-			await symlink(
-				join(repository, 'apps/cli/node_modules/dotenv'),
-				join(temporary, 'apps/cli/node_modules/dotenv'),
-				'junction'
-			)
-		})
+		)
 		for (const folder of [
 			'node_modules/@voxel-pilot',
 			'apps/cli/node_modules/@voxel-pilot'
@@ -219,11 +227,7 @@ test('development exports and watcher restart on core source changes without sta
 			'packages/core/package.json'
 		])
 			await cp(join(repository, filename), join(temporary, filename))
-		await symlink(
-			join(repository, 'packages/core/node_modules'),
-			join(temporary, 'packages/core/node_modules'),
-			'junction'
-		)
+		await linkCoreDependencies(temporary)
 		await mkdir(join(temporary, 'apps/cli/node_modules/@voxel-pilot'), {
 			recursive: true
 		})
