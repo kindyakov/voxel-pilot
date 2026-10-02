@@ -10,13 +10,13 @@
 
 ## Установка и обновление
 
-`patches/` должен присутствовать рядом с `package.json` до установки. Выполняй обычный `npm ci` с lifecycle scripts: `postinstall` применяет патчи и завершает установку ошибкой, если применить их нельзя. При установке с `--ignore-scripts` отдельно выполни `rtk npm run postinstall` до тестов, сборки или запуска. `patch-package` намеренно находится в runtime dependencies, чтобы работать и при `--omit=dev`.
+`patches/` и `pnpm-workspace.yaml` должны присутствовать до установки. Используй закреплённый в `package.json` pnpm и `rtk pnpm install --frozen-lockfile`: встроенный механизм `patchedDependencies` применяет исправления во время установки, включая `--prod`, и проверяет их по lockfile. Отдельного `postinstall` нет. Устанавливай зависимости с обычной политикой scripts из `pnpm-workspace.yaml`; патчи не зависят от lifecycle scripts.
 
 Версии исправленных пакетов закреплены точно. При обновлении любого из них:
 
 1. Проверь исправления upstream и повтори тесты отмены на новой версии. Удаляй патч только после подтверждения его контракта тестами без патча.
-2. Если исправление всё ещё нужно, перенеси его в новую версию зависимости и пересоздай файл через `rtk npx patch-package <package>`. Изменения только в `node_modules` не являются завершённым результатом.
-3. Проверь применение патчей на исходных файлах пакетов, затем выполни `rtk npx tsx --test src/tests/hsm/controlHandoff.runtime.test.ts`, все тесты проекта, type-check и build. Сохраняй обновлённые версии, lockfile и патчи вместе.
+2. Если исправление всё ещё нужно, выполни `rtk pnpm patch <package>@<version>`, перенеси исправление в выданный каталог и сохрани его через `rtk pnpm patch-commit <directory>`. Сохраняй `patchedDependencies` для точной версии пакета. Изменения только в `node_modules` не являются завершённым результатом.
+3. Проверь применение патчей на чистой установке, затем выполни `rtk pnpm exec tsx --import ./src/tests/setupEnv.mjs --test src/tests/hsm/controlHandoff.runtime.test.ts`, `rtk pnpm test`, type-check и build. Сохраняй обновлённые версии, lockfile и патчи вместе.
 
 Основной интеграционный seam — `src/tests/hsm/controlHandoff.runtime.test.ts`: настоящие HSM, акторы и плагины; подменена граница Minecraft, перемещение считается настоящей физикой. Проверки отмены должны сопровождаться успешным новым запуском, чтобы полная поломка плагина не выглядела исправлением.
 

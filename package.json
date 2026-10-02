@@ -5,7 +5,6 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "postinstall": "patch-package --error-on-fail",
     "build": "tsc && tsc-alias",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
@@ -14,7 +13,8 @@
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,js}\"",
     "knip": "knip",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "tsx --import ./src/tests/setupEnv.mjs --test --test-concurrency=4 \"src/tests/**/*.test.ts\""
   },
   "engines": {
     "node": ">=24.0.0"
@@ -53,12 +53,12 @@
     "mineflayer-tool": "^1.2.0",
     "mineflayer-web-inventory": "^1.8.5",
     "openai": "^7.19.0",
-    "patch-package": "8.0.1",
     "prismarine-nbt": "^2.8.0",
     "prismarine-viewer": "^1.33.0",
     "winston": "^3.17.0",
     "xstate": "^5.22.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "vec3": "^0.1.10"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
@@ -69,9 +69,13 @@
     "prismarine-entity": "^2.5.0",
     "prismarine-item": "^1.14.0",
     "prismarine-recipe": "^1.3.1",
+    "prismarine-registry": "1.12.0",
+    "prismarine-world": "3.7.0",
     "tsc-alias": "^1.8.10",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vec3": "^0.1.10"
-  }
+    "minecraft-data": "3.116.0",
+    "prismarine-physics": "1.11.1"
+  },
+  "packageManager": "pnpm@12.6.0"
 }

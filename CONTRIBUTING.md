@@ -7,8 +7,8 @@ This repository is public, but it is not a dumping ground for ad hoc changes. Ke
 ## Before You Open a PR
 
 1. Read the relevant docs under `docs/` for the subsystem you are touching.
-2. Run `npm run type-check`.
-3. Run `npm run build`.
+2. Run `pnpm run type-check`.
+3. Run `pnpm run build`.
 4. Run the focused tests for the subsystem you changed.
 
 ## Expectations

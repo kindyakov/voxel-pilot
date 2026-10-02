@@ -15,6 +15,7 @@ VoxelPilot is an autonomous Minecraft bot harness with an optional AI pilot. Bui
 
 ## Requirements
 
+- pnpm at the version pinned in `package.json` (`packageManager`).
 - Node.js 24 or newer (built-in `node:sqlite` storage, no native build tools required).
 - A Minecraft server you control or are explicitly allowed to use.
 - An AI provider and model if `AI_PROVIDER` is not `local` or `disabled`.
@@ -24,7 +25,7 @@ VoxelPilot is an autonomous Minecraft bot harness with an optional AI pilot. Bui
 1. Install dependencies.
 
    ```bash
-   npm install
+   pnpm install --frozen-lockfile
    ```
 
 2. Create your environment file.
@@ -43,14 +44,14 @@ VoxelPilot is an autonomous Minecraft bot harness with an optional AI pilot. Bui
 4. Start the bot in development mode.
 
    ```bash
-   npm run dev
+   pnpm run dev
    ```
 
 5. Build for production if needed.
 
    ```bash
-   npm run build
-   npm start
+   pnpm run build
+   pnpm start
    ```
 
 ## Docker
@@ -120,11 +121,12 @@ If a doc conflicts with code or tests, the code wins.
 Useful commands:
 
 ```bash
-npm run dev
-npm run build
-npm run type-check
-npm run format
-npm run clean
+pnpm run dev
+pnpm run build
+pnpm run type-check
+pnpm test
+pnpm run format
+pnpm run clean
 ```
 
 ## Safety Notes
@@ -137,8 +139,8 @@ npm run clean
 
 Before opening a pull request:
 
-1. Run `npm run type-check`.
-2. Run `npm run build`.
+1. Run `pnpm run type-check`.
+2. Run `pnpm run build`.
 3. Run the relevant focused tests under `src/tests/`.
 4. Keep changes aligned with the existing architecture and naming conventions.
 

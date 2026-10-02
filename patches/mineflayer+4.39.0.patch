@@ -1,7 +1,7 @@
-diff --git a/node_modules/mineflayer/index.d.ts b/node_modules/mineflayer/index.d.ts
+diff --git a/index.d.ts b/index.d.ts
 index f650743..0927561 100644
---- a/node_modules/mineflayer/index.d.ts
-+++ b/node_modules/mineflayer/index.d.ts
+--- a/index.d.ts
++++ b/index.d.ts
 @@ -303,7 +303,8 @@ export interface Bot extends TypedEmitter<BotEvents> {
  
    equip: (
@@ -54,10 +54,10 @@ index f650743..0927561 100644
  export interface simpleClick {
    leftMouse: (slot: number) => Promise<void>
    rightMouse: (slot: number) => Promise<void>
-diff --git a/node_modules/mineflayer/lib/plugins/generic_place.js b/node_modules/mineflayer/lib/plugins/generic_place.js
+diff --git a/lib/plugins/generic_place.js b/lib/plugins/generic_place.js
 index 448dfc0..d8a9ab5 100644
---- a/node_modules/mineflayer/lib/plugins/generic_place.js
-+++ b/node_modules/mineflayer/lib/plugins/generic_place.js
+--- a/lib/plugins/generic_place.js
++++ b/lib/plugins/generic_place.js
 @@ -7,9 +7,10 @@ function inject (bot) {
     *
     * @param {import('prismarine-block').Block} referenceBlock
@@ -78,10 +78,10 @@ index 448dfc0..d8a9ab5 100644
      // TODO: tell the server that we are sneaking while doing this
      const pos = referenceBlock.position
  
-diff --git a/node_modules/mineflayer/lib/plugins/inventory.js b/node_modules/mineflayer/lib/plugins/inventory.js
+diff --git a/lib/plugins/inventory.js b/lib/plugins/inventory.js
 index bab0eef..525c693 100644
---- a/node_modules/mineflayer/lib/plugins/inventory.js
-+++ b/node_modules/mineflayer/lib/plugins/inventory.js
+--- a/lib/plugins/inventory.js
++++ b/lib/plugins/inventory.js
 @@ -1,6 +1,6 @@
  const assert = require('assert')
  const { Vec3 } = require('vec3')
@@ -205,10 +205,10 @@ index bab0eef..525c693 100644
    }
  
    async function putAway (slot) {
-diff --git a/node_modules/mineflayer/lib/plugins/place_block.js b/node_modules/mineflayer/lib/plugins/place_block.js
+diff --git a/lib/plugins/place_block.js b/lib/plugins/place_block.js
 index dc86e1e..6415925 100644
---- a/node_modules/mineflayer/lib/plugins/place_block.js
-+++ b/node_modules/mineflayer/lib/plugins/place_block.js
+--- a/lib/plugins/place_block.js
++++ b/lib/plugins/place_block.js
 @@ -13,6 +13,7 @@ function inject (bot) {
      const oldBlock = bot.blockAt(dest)
  
@@ -237,10 +237,10 @@ index dc86e1e..6415925 100644
      if (!newBlock) return
      if (newBlock.type === oldBlock.type) {
        throw new Error(`Server refused to place ${bot.heldItem?.name ?? 'block'} at ${dest}: the block is still ${newBlock.name}`)
-diff --git a/node_modules/mineflayer/lib/plugins/simple_inventory.js b/node_modules/mineflayer/lib/plugins/simple_inventory.js
+diff --git a/lib/plugins/simple_inventory.js b/lib/plugins/simple_inventory.js
 index 6fff5b2..f426932 100644
---- a/node_modules/mineflayer/lib/plugins/simple_inventory.js
-+++ b/node_modules/mineflayer/lib/plugins/simple_inventory.js
+--- a/lib/plugins/simple_inventory.js
++++ b/lib/plugins/simple_inventory.js
 @@ -53,6 +53,7 @@ function inject (bot) {
      assert.ok(slot < 9)
      if (bot.quickBarSlot === slot) return
@@ -309,10 +309,10 @@ index 6fff5b2..f426932 100644
    }
  
    function getDestSlot (destination) {
-diff --git a/node_modules/mineflayer/lib/promise_utils.js b/node_modules/mineflayer/lib/promise_utils.js
+diff --git a/lib/promise_utils.js b/lib/promise_utils.js
 index a609111..277d1a4 100644
---- a/node_modules/mineflayer/lib/promise_utils.js
-+++ b/node_modules/mineflayer/lib/promise_utils.js
+--- a/lib/promise_utils.js
++++ b/lib/promise_utils.js
 @@ -81,17 +81,19 @@ function onceWithCleanup (emitter, event, { timeout = 0, checkCondition = undefi
      }
    }

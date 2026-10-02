@@ -1,6 +1,6 @@
 # Проверка HSM после исправлений
 
-Автоматические проверки: `npx tsx --test src/tests/hsm/*.test.ts`.
+Автоматические проверки: `pnpm exec tsx --import ./src/tests/setupEnv.mjs --test "src/tests/hsm/*.test.ts"`.
 Тест направления убегания использует настоящие `mineflayer-movement` и `prismarine-physics` на плоском мире Minecraft 1.20.4, с угрозой по четырём сторонам, с movement-контроллером и без него. Это не заменяет проверку серверной физики и сложного рельефа.
 
 ## Ручной боевой сценарий

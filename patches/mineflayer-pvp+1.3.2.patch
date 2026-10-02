@@ -1,7 +1,7 @@
-diff --git a/node_modules/mineflayer-pvp/lib/PVP.js b/node_modules/mineflayer-pvp/lib/PVP.js
+diff --git a/lib/PVP.js b/lib/PVP.js
 index 758c2b3..6a0ae60 100644
---- a/node_modules/mineflayer-pvp/lib/PVP.js
-+++ b/node_modules/mineflayer-pvp/lib/PVP.js
+--- a/lib/PVP.js
++++ b/lib/PVP.js
 @@ -26,6 +26,10 @@ class PVP {
          this.timeToNextAttack = 0;
          this.wasInRange = false;

@@ -1,7 +1,7 @@
-diff --git a/node_modules/minecrafthawkeye/dist/hawkEye.js b/node_modules/minecrafthawkeye/dist/hawkEye.js
+diff --git a/dist/hawkEye.js b/dist/hawkEye.js
 index c7dc930..d2e105d 100644
---- a/node_modules/minecrafthawkeye/dist/hawkEye.js
-+++ b/node_modules/minecrafthawkeye/dist/hawkEye.js
+--- a/dist/hawkEye.js
++++ b/dist/hawkEye.js
 @@ -18,10 +18,25 @@ let oneShot;
  let chargingArrow;
  let weapon = _types.Weapons.bow;
