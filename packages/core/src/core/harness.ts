@@ -1,4 +1,5 @@
 import type { Bot, Entity } from '@/types/index.js'
+import type { StopIssue } from '@voxel-pilot/contracts'
 import type { BotEvents } from 'mineflayer'
 import { type ActorRefFrom, createActor } from 'xstate'
 
@@ -13,6 +14,12 @@ import {
 	cleanupPathfindCache,
 	clearPathfindCache
 } from '@/utils/combat/enemyVisibility.js'
+
+import {
+	type FinalizationReport,
+	freezeReport,
+	stopIssue
+} from './finalization.js'
 
 interface StoreLifecycle {
 	started: boolean
@@ -41,6 +48,11 @@ export class BotStateMachine {
 	private stopped = false
 	private stopPromise: Promise<void> | null = null
 	private saving: Promise<void> | null = null
+	private saveFailed = false
+	private readonly initialization: Promise<boolean>
+	private finalization: Promise<FinalizationReport> | null = null
+	private readonly issues: StopIssue[] = []
+	private persistence: FinalizationReport['persistence'] = 'not-required'
 	private cancelReady!: (ready: false) => void
 	private readonly memoryLifecycle: StoreLifecycle = {
 		started: false,
@@ -75,7 +87,8 @@ export class BotStateMachine {
 		const cancelled = new Promise<false>(resolve => {
 			this.cancelReady = resolve
 		})
-		this.ready = Promise.race([this.init(options.pausedGoal), cancelled])
+		this.initialization = this.init(options.pausedGoal)
+		this.ready = Promise.race([this.initialization, cancelled])
 	}
 
 	private async init(pausedGoal: string | null | undefined): Promise<boolean> {
@@ -96,6 +109,7 @@ export class BotStateMachine {
 					count: recovered
 				})
 			}
+			if (this.stopped) return false
 			// Construction reads current vitals; no stale pre-load health events are replayed.
 			this.actor = createActor(createBotMachine(this.dependencies), {
 				input: {
@@ -104,6 +118,10 @@ export class BotStateMachine {
 					aiPilotEnabled: this.dependencies.aiPilotEnabled
 				}
 			})
+			if (this.stopped) {
+				this.releaseRuntime()
+				return false
+			}
 			this.bot.hsm = this
 			if (this.dependencies.diagnosticsEnabled) {
 				this.stopDiagnostics = attachHsmDiagnostics(
@@ -112,16 +130,29 @@ export class BotStateMachine {
 					this.dependencies.minecraftVersion
 				)
 			}
+			if (this.stopped) {
+				this.releaseRuntime()
+				return false
+			}
 			this.setupBotEvents()
 			this.actor.start()
+			if (this.stopped) return false
 			this.isReady = true
 			this.flushPendingEvents()
+			if (this.stopped) return false
 			this.setupAntiLoopObserver()
 			this.pathfindCacheCleanupInterval = setInterval(() => {
 				cleanupPathfindCache(this.bot, this.dependencies.logger, 10000)
 			}, 15000)
 			return true
 		} catch (error) {
+			this.issues.push(
+				stopIssue(
+					'cleanup',
+					'harness-initialization-failed',
+					'Harness initialization failed.'
+				)
+			)
 			this.dependencies.logger.error('[HSM] initialization failed', {
 				error: String(error)
 			})
@@ -288,9 +319,24 @@ export class BotStateMachine {
 
 	private saveMemory(): Promise<void> {
 		if (this.saving) return this.saving
+		this.saveFailed = false
 		this.saving = Promise.resolve()
 			.then(() => this.memory.save())
+			.then(() => {
+				if (this.stopped) this.persistence = 'saved'
+			})
 			.catch(error => {
+				this.saveFailed = true
+				if (this.stopped) {
+					this.persistence = 'failed'
+					this.issues.push(
+						stopIssue(
+							'save',
+							'memory-save-failed',
+							'Required memory save failed.'
+						)
+					)
+				}
 				this.dependencies.logger.error('[HSM] memory save failed', {
 					error: String(error)
 				})
@@ -301,10 +347,13 @@ export class BotStateMachine {
 		return this.saving
 	}
 
-	private cleanup(action: () => void): void {
+	private cleanup(action: () => void, code = 'harness-cleanup-failed'): void {
 		try {
 			action()
 		} catch (error) {
+			this.issues.push(
+				stopIssue('cleanup', code, 'Harness resource cleanup failed.')
+			)
 			this.dependencies.logger.error('[HSM] cleanup failed', {
 				error: String(error)
 			})
@@ -332,7 +381,12 @@ export class BotStateMachine {
 	): void {
 		if (!lifecycle.started || lifecycle.loading || lifecycle.closed) return
 		lifecycle.closed = true
-		this.cleanup(() => store.close())
+		this.cleanup(
+			() => store.close(),
+			lifecycle === this.memoryLifecycle
+				? 'memory-close-failed'
+				: 'profile-close-failed'
+		)
 	}
 
 	private closeStores(): void {
@@ -351,9 +405,37 @@ export class BotStateMachine {
 			this.closeStores()
 			this.stopPromise = Promise.resolve()
 		} else {
+			this.persistence = this.saving && this.saveFailed ? 'failed' : 'saved'
+			if (
+				this.persistence === 'failed' &&
+				!this.issues.some(issue => issue.code === 'memory-save-failed')
+			) {
+				this.issues.push(
+					stopIssue(
+						'save',
+						'memory-save-failed',
+						'Required memory save failed.'
+					)
+				)
+			}
 			this.stopPromise = this.saveMemory().finally(() => this.closeStores())
 		}
 		return this.stopPromise
+	}
+
+	/** Already observed errors, even while a load or save is still pending. */
+	getFinalizationIssues(): readonly StopIssue[] {
+		return Object.freeze([...this.issues])
+	}
+
+	/** Low-level cancellation stays immediate; this joins all late store finalization. */
+	finalize(): Promise<FinalizationReport> {
+		if (this.finalization) return this.finalization
+		const stopped = this.stop()
+		this.finalization = Promise.all([stopped, this.initialization]).then(() =>
+			freezeReport(this.persistence, this.issues)
+		)
+		return this.finalization
 	}
 }
 

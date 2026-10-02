@@ -36,6 +36,26 @@ for (const owner of owners) {
 		...owner.manifest.devDependencies
 	}
 	const core = owner.manifest.name === '@voxel-pilot/core'
+	const contracts = owner.manifest.name === '@voxel-pilot/contracts'
+	if (contracts) {
+		for (const name of Object.keys(owner.manifest.dependencies ?? {})) {
+			violations.push(
+				`packages/contracts/package.json: contracts must be independent: ${name}`
+			)
+		}
+		for (const name of [
+			'@types/node',
+			'react',
+			'ink',
+			'xstate',
+			'mineflayer'
+		]) {
+			if (declared[name])
+				violations.push(
+					`packages/contracts/package.json: nonportable contracts dependency: ${name}`
+				)
+		}
+	}
 	if (core) {
 		for (const packageName of ['dotenv', 'ink', 'react', 'react-dom']) {
 			if (declared[packageName])
@@ -55,6 +75,9 @@ for (const owner of owners) {
 			violations.push(`${relative(root, filename)}: ${message}`)
 		const productionCore = core && !filename.includes(`${sep}tests${sep}`)
 		const check = (specifier, typeOnly) => {
+			if (contracts && !specifier.startsWith('.')) {
+				fail(`contracts must use portable local types: ${specifier}`)
+			}
 			if (
 				core &&
 				/(?:config\/(?:config|logger)|core\/hsm|ai\/legacyAgentTurn)(?:\.[cm]?[jt]s)?$/.test(
