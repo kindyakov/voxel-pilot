@@ -58,6 +58,8 @@ VoxelPilot is an autonomous Minecraft bot harness with an optional AI pilot. Bui
 
 After configuring the same `.env` and running `pnpm run build`, use `pnpm run tui` in an interactive terminal. The dashboard starts one bot, shows connection state and an INFO+ journal, and keeps a final connection failure visible until exit. DEBUG is collected from startup; console logging is disabled while file logging keeps its own configured level. CLI and TUI use the same repository data and log paths when run sequentially.
 
+Press `d` to show retained DEBUG records. Up/Down and PgUp/PgDn browse records; scrolling up pauses the view while a badge counts new matching events. `End` or scrolling down to the latest record returns to LIVE. Filtering and resizing keep the paused source anchor; eviction shows a loss notice and the earliest retained matching record. Journal eviction and source truncation remain visible, and shortened display text uses an ellipsis.
+
 Use `q` or Ctrl+C to stop and await persistence. Signals and application failures join the same bounded shutdown; a deadline or failed save exits nonzero. The terminal needs interactive input/output and raw input support. Unsupported terminals are rejected before settings/resource allocation; use `pnpm start` for the headless CLI. `pnpm run dev:tui` provides the development watcher.
 
 ## Docker

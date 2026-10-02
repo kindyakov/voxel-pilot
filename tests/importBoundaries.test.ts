@@ -183,9 +183,7 @@ test('AST checker enforces TUI ownership across static/type/export/dynamic impor
 			name: '@voxel-pilot/presentation',
 			exports: { '.': './src/index.ts' },
 			dependencies: {
-				'@voxel-pilot/contracts': 'workspace:*',
-				'@voxel-pilot/core': 'workspace:*',
-				react: 'fixture'
+				'@voxel-pilot/contracts': 'workspace:*'
 			}
 		},
 		'apps/cli': {
@@ -324,6 +322,26 @@ test('AST checker enforces TUI ownership across static/type/export/dynamic impor
 				/presentation must remain portable/
 			],
 			[
+				'packages/presentation/src/probe.ts',
+				"const fs=import('node:fs');",
+				/presentation must remain portable/
+			],
+			[
+				'packages/presentation/src/probe.ts',
+				"import type {Stats} from 'fs';",
+				/presentation must remain portable/
+			],
+			[
+				'packages/presentation/src/probe.ts',
+				"export const bytes = Buffer.from('source');",
+				/presentation uses Node global/
+			],
+			[
+				'packages/presentation/src/probe.ts',
+				'const settings=process.env;',
+				/presentation uses Node global/
+			],
+			[
 				'packages/application/src/probe.ts',
 				"import * as tui from '@voxel-pilot/tui';",
 				/library workspace imports application/
@@ -336,6 +354,27 @@ test('AST checker enforces TUI ownership across static/type/export/dynamic impor
 			await write(file, 'export const valid=1;')
 		}
 		assert.equal(check().status, 0)
+		for (const dependencies of [
+			{ '@voxel-pilot/core': 'workspace:*' },
+			{ 'arbitrary-library': 'fixture' }
+		]) {
+			await writeFile(
+				join(directory, 'packages/presentation/package.json'),
+				JSON.stringify({
+					...manifests['packages/presentation'],
+					dependencies
+				})
+			)
+			assert.match(check().stderr, /presentation depends only on contracts/)
+		}
+		await writeFile(
+			join(directory, 'packages/presentation/package.json'),
+			JSON.stringify({
+				...manifests['packages/presentation'],
+				devDependencies: { '@types/node': 'fixture' }
+			})
+		)
+		assert.match(check().stderr, /nonportable presentation dependency/)
 	} finally {
 		assert.equal(dirname(resolve(directory)), resolve(tmpdir()))
 		await rm(directory, { recursive: true, force: true })

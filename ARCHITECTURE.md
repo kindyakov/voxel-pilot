@@ -22,6 +22,7 @@ voxel-pilot/
 ├── apps/tui/                        # React/Ink приложение; локальные AGENTS/ARCHITECTURE
 ├── packages/application/src/        # Общая явная settings/path/runtime composition CLI/TUI
 ├── packages/contracts/src/         # Переносимые интерфейсы runtime и сериализуемые DTO
+├── packages/presentation/src/      # Переносимая модель фильтра/паузы/якоря журнала
 ├── packages/core/src/               # Workspace-ядро runtime и тесты
 │   ├── core/                        # Жизненный цикл бота и постоянных сервисов
 │   │   ├── runtime.ts               # Переносимый фасад, кеш снимка и дедлайн остановки
@@ -73,6 +74,8 @@ voxel-pilot/
 ```
 
 ## Границы workspaces
+
+`packages/presentation` использует только contracts. [createLogView](packages/presentation/src/logs.ts) принимает полную текущую историю и владеет INFO+/DEBUG, LIVE/PAUSED, opaque-ID якорем и pause-baseline накопительных счётчиков. Модель хранит только текущую ограниченную ссылку/проекцию и скаляры; терминальные строки и ввод принадлежат TUI. Публичный вход — `@voxel-pilot/presentation`, проверки действий — [logs.test.ts](packages/presentation/tests/logs.test.ts). Browser declarations и отсутствие Node globals проверяются в [presentation.test.ts](tests/presentation.test.ts); существующий AST checker запрещает Node/framework/runtime-зависимости и любые production dependencies, кроме contracts.
 
 `packages/contracts` владеет переносимыми интерфейсами и DTO: обычные сериализуемые данные, без Node.js, Mineflayer, XState и UI-фреймворков. `packages/core` использует contracts и владеет поведением, Mineflayer-адаптерами и тестами подсистем. `packages/application` обслуживает реальные CLI/TUI: явная settings/path/output composition и создание inert runtime через публичные exports ядра. Приложения владеют своим процессом и app shutdown; CLI — standalone-командами, TUI — Ink и терминалом. Приложение импортирует только публичные ESM exports workspaces; внутренний алиас `@/*` действует внутри ядра. Межпакетные зависимости объявляй через `workspace:*`; прямые runtime- и type/test-зависимости размещай у потребителя. Границы и объявления проверяет `pnpm run check:imports`.
 

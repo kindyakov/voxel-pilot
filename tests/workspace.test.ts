@@ -20,6 +20,7 @@ const repository = fileURLToPath(new URL('../', import.meta.url))
 
 const workspaceFolders: Readonly<Record<string, string>> = {
 	'@voxel-pilot/contracts': 'packages/contracts',
+	'@voxel-pilot/presentation': 'packages/presentation',
 	'@voxel-pilot/core': 'packages/core',
 	'@voxel-pilot/application': 'packages/application',
 	'@voxel-pilot/tui': 'apps/tui'
@@ -50,6 +51,7 @@ test('built public imports are inert and actual CLI/TUI composition shares root 
 	try {
 		const folders = [
 			'packages/contracts',
+			'packages/presentation',
 			'packages/core',
 			'packages/application',
 			'apps/cli',
@@ -148,6 +150,8 @@ let tuiAllocations = 0;
 assert.throws(() => startTuiApplication({compose(){tuiAllocations++; throw new Error('must not compose without TTY');}}), /interactive terminal.*pnpm start/);
 assert.equal(tuiAllocations, 0);
 assert.deepEqual(Object.keys(await import('@voxel-pilot/contracts')), []);
+const {createLogView} = await import('@voxel-pilot/presentation');
+assert.equal(typeof createLogView, 'function');
 const serviceApi = await import('@voxel-pilot/core/services');
 for (const path of ['paths', 'schematic', 'hsm-diagram', 'agents-sdk-pilot', 'inspection']) await import('@voxel-pilot/core/' + path);
 assert.deepEqual(Object.keys(await import('@voxel-pilot/core/inspection')), []);
@@ -334,6 +338,7 @@ test('actual CLI/TUI development scripts watch core and shared composition witho
 			try {
 				const folders = [
 					'packages/contracts',
+					'packages/presentation',
 					'packages/core',
 					'packages/application',
 					'apps/cli',
@@ -448,8 +453,31 @@ test('actual CLI/TUI development scripts watch core and shared composition witho
 								.catch(reject)
 						}
 						if (
+							appName === 'tui' &&
+							changed === 2 &&
 							stdout.includes('watch-application-updated') &&
 							stdout.split('watch-entry-ready').length >= 4
+						) {
+							changed = 3
+							const filename = join(
+								temporary,
+								'packages/presentation/src/logs.ts'
+							)
+							void readFile(filename, 'utf8')
+								.then(source =>
+									writeFile(
+										filename,
+										source + "\nconsole.log('watch-presentation-updated')\n"
+									)
+								)
+								.catch(reject)
+						}
+						if (
+							stdout.includes('watch-application-updated') &&
+							stdout.split('watch-entry-ready').length >= 4 &&
+							(appName === 'cli' ||
+								(stdout.includes('watch-presentation-updated') &&
+									stdout.split('watch-entry-ready').length >= 5))
 						) {
 							finished = true
 							resolveProbe()

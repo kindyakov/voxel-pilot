@@ -1,8 +1,9 @@
+import type { LogViewSnapshot } from '@voxel-pilot/presentation'
 import { Box, Text, useWindowSize } from 'ink'
 import { type ComponentType, useSyncExternalStore } from 'react'
 
 import { ConnectionPanel } from '../features/connection/index.js'
-import { LogPanel } from '../features/logs/index.js'
+import { LogPanel, useLogView } from '../features/logs/index.js'
 import type {
 	TelemetryStore,
 	TelemetryView
@@ -10,6 +11,8 @@ import type {
 import { useTelemetry } from '../runtime/useTelemetry.js'
 import { ExitInput } from '../terminal/ExitInput.js'
 import type { DisplayClock } from '../terminal/display.js'
+import { compactDisplayText } from '../terminal/display.js'
+import { logPageSize } from '../terminal/logNavigation.js'
 import { FailureBoundary } from '../ui/FailureBoundary.js'
 import { Header } from '../ui/Header.js'
 import type { ApplicationState, ApplicationStore } from './state.js'
@@ -18,12 +21,14 @@ export interface DashboardProps {
 	readonly telemetry: TelemetryView
 	readonly application: ApplicationState
 	readonly displayClock: DisplayClock
+	readonly logView: LogViewSnapshot
 }
 
 export function Dashboard({
 	telemetry,
 	application,
-	displayClock
+	displayClock,
+	logView
 }: DashboardProps) {
 	const { columns, rows } = useWindowSize()
 	const small = columns < 50 || rows < 9
@@ -64,14 +69,20 @@ export function Dashboard({
 						fallback={<Text color='yellow'>Log view unavailable</Text>}
 					>
 						<LogPanel
-							history={telemetry.history}
-							rows={Math.max(1, rows - 9)}
+							view={logView}
+							rows={logPageSize(rows)}
+							columns={columns}
 							clock={displayClock}
 						/>
 					</FailureBoundary>
 				</Box>
 			)}
-			<Text dimColor>q / Ctrl+C — выход</Text>
+			<Text dimColor>
+				{compactDisplayText(
+					'q / Ctrl+C — выход · d DEBUG · ↑↓ PgUp/PgDn · End LIVE',
+					Math.max(1, columns - 4)
+				)}
+			</Text>
 		</Box>
 	)
 }
@@ -92,13 +103,14 @@ export function App({
 	readonly view?: ComponentType<DashboardProps>
 }) {
 	const current = useTelemetry(telemetry)
+	const logs = useLogView(telemetry)
 	const state = useSyncExternalStore(
 		application.subscribe,
 		application.getSnapshot
 	)
 	return (
 		<>
-			<ExitInput onExit={onExit} onFailure={onFatal} />
+			<ExitInput onExit={onExit} onFailure={onFatal} logs={logs.actions} />
 			<FailureBoundary
 				onFailure={onFatal}
 				fallback={
@@ -109,6 +121,7 @@ export function App({
 					telemetry={current}
 					application={state}
 					displayClock={displayClock}
+					logView={logs.snapshot}
 				/>
 			</FailureBoundary>
 		</>
