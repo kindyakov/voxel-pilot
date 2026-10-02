@@ -52,9 +52,3 @@ export function validateEnvironmentValues(
 
 	return snapshot
 }
-
-/** @deprecated Temporary compatibility for consumers migrated in #24–#26. */
-export function validateEnv() {
-	validateEnvironmentValues(process.env)
-	return process.env as Record<string, string>
-}

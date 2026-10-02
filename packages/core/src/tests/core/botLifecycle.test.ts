@@ -1,17 +1,22 @@
 import assert from 'node:assert/strict'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
 import type { Bot } from '@/types/index.js'
 
-import Config from '@/config/config.js'
-import Logger from '@/config/logger.js'
+import {
+	createRuntimeConfigFromEnvironment,
+	createRuntimeLogger,
+	createRuntimeServices
+} from '@/config/services.js'
 
 import MinecraftBot from '@/core/bot.js'
 import { MemoryManager } from '@/core/memory/index.js'
 import { ProfileMemoryStore } from '@/core/profile/index.js'
 
-import { createHarness } from '../hsm/fixtures/handoffBot.js'
+import { createRuntimeConnectionBot as createConnectionBot } from './fixtures/runtimeBot.js'
 
 const deferred = () => {
 	let resolve!: () => void
@@ -21,22 +26,32 @@ const deferred = () => {
 	return { promise, resolve }
 }
 
-const createConnectionBot = () => {
-	const { bot, actor } = createHarness()
-	actor.stop()
-	return Object.assign(bot, {
-		quitCalls: 0,
-		quit(reason?: string) {
-			this.quitCalls++
-			bot.emit('end', reason)
-		}
-	})
-}
-
 const fixture = (t: test.TestContext) => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
-	t.mock.method(Config, 'assertAIConfigured', () => {})
-	t.mock.method(Logger, 'info', () => {})
+	const config = createRuntimeConfigFromEnvironment(
+		{
+			MINECRAFT_HOST: 'localhost',
+			MINECRAFT_PORT: '25565',
+			MINECRAFT_USERNAME: 'fixture',
+			MINECRAFT_VERSION: '1.20.4',
+			AI_PROVIDER: 'disabled',
+			AI_MODEL: 'fixture-model'
+		},
+		{
+			settingsFile: null,
+			memoryDir: tmpdir(),
+			profileDir: tmpdir(),
+			logFile: join(tmpdir(), 'unused-runtime.log'),
+			errorLogFile: join(tmpdir(), 'unused-runtime-error.log'),
+			aiRequestDumpDir: join(tmpdir(), 'unused-runtime-dumps')
+		}
+	)
+	const handle = createRuntimeLogger({
+		aiModel: config.ai.model,
+		console: false,
+		files: false
+	})
+	const services = createRuntimeServices({ config, logger: handle.logger })
 	const load = t.mock.method(MemoryManager.prototype, 'load', async () => {})
 	const save = t.mock.method(MemoryManager.prototype, 'save', async () => {})
 	const close = t.mock.method(MemoryManager.prototype, 'close', () => {})
@@ -51,7 +66,7 @@ const fixture = (t: test.TestContext) => {
 		() => {}
 	)
 	const connections: ReturnType<typeof createConnectionBot>[] = []
-	const runtime = new MinecraftBot({
+	const runtime = new MinecraftBot(services, {
 		createBot: () => {
 			const bot = createConnectionBot()
 			connections.push(bot)
@@ -72,7 +87,10 @@ const fixture = (t: test.TestContext) => {
 			}
 		}
 	})
-	t.after(() => runtime.stop())
+	t.after(async () => {
+		await runtime.stop()
+		await handle.close()
+	})
 	return { runtime, connections, load, save, close, profileLoad, profileClose }
 }
 
@@ -123,12 +141,6 @@ test('disconnect disposes the old HSM, commands and autosave before a fresh sess
 })
 
 test('disconnect carries an active goal as paused state into the next session', async t => {
-	const previousProvider = Config.ai.provider
-	Config.ai.provider = 'disabled'
-	t.after(() => {
-		Config.ai.provider = previousProvider
-	})
-
 	const { runtime, connections } = fixture(t)
 	runtime.start()
 	const first = connections[0]!

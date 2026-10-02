@@ -32,7 +32,7 @@ If a task is already active, the helper skips the expensive reachability check.
 - `packages/core/src/hsm/guards/combat.guards.ts`
 - `packages/core/src/hsm/actors/combat.actors.ts`
 - `packages/core/src/hsm/actors/monitoring.actors.ts`
-- `packages/core/src/core/hsm.ts`
+- `packages/core/src/core/harness.ts`
 
 ## Notes
 

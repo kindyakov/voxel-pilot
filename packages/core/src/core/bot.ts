@@ -1,25 +1,27 @@
 import EventEmitter from 'node:events'
 
+import type { Bot } from '@/types/index.js'
 import * as mineflayer from 'mineflayer'
 
-import type { Bot } from '@/types/index.js'
-
-import Config from '@/config/config.js'
-import Logger from '@/config/logger.js'
+import type { MinecraftConfig } from '@/config/runtimeConfig.js'
+import type { RuntimeServices } from '@/config/runtimeServices.js'
 
 import CommandHandler from '@/core/CommandHandler.js'
-import BotStateMachine from '@/core/hsm.js'
+import BotStateMachine from '@/core/harness.js'
 import { MemoryManager } from '@/core/memory/index.js'
 import { ProfileMemoryStore } from '@/core/profile/index.js'
 
+import type { HarnessDependencies } from '@/hsm/dependencies.js'
+
+import { createAgentTurnRunner } from '@/ai/loop.js'
 import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
 
-import { initConnection } from '@/modules/connection/index.js'
+import { createConnectionInitializer } from '@/modules/connection/runtimeConnection.js'
 
 import { BotUtils } from '@/utils/minecraft/botUtils.js'
 
-interface ConnectionDependencies {
-	createBot: (options: typeof Config.minecraft) => Bot
+export interface ConnectionDependencies {
+	createBot: (options: MinecraftConfig) => Bot
 	initConnection: (bot: Bot) => () => void
 }
 
@@ -34,17 +36,9 @@ interface BotSession {
 	disposal: Promise<void> | null
 }
 
-const defaultDependencies: ConnectionDependencies = {
-	createBot: (
-		mineflayer as unknown as {
-			createBot: ConnectionDependencies['createBot']
-		}
-	).createBot,
-	initConnection
-}
-
 class MinecraftBot extends EventEmitter {
 	private readonly dependencies: ConnectionDependencies
+	private readonly harnessDependencies: HarnessDependencies
 	private session: BotSession | null = null
 	private closing: Promise<void> | null = null
 	private running = false
@@ -54,9 +48,32 @@ class MinecraftBot extends EventEmitter {
 	private readonly maxReconnectAttempts = 5
 	private readonly reconnectDelay = 3000
 
-	constructor(dependencies: Partial<ConnectionDependencies> = {}) {
+	constructor(
+		private readonly services: RuntimeServices,
+		dependencies: Partial<ConnectionDependencies> = {}
+	) {
 		super()
-		this.dependencies = { ...defaultDependencies, ...dependencies }
+		this.services = Object.freeze({ ...services })
+		const { config, logger } = services
+		this.dependencies = {
+			createBot: options => mineflayer.createBot(options) as Bot,
+			initConnection: createConnectionInitializer(logger),
+			...dependencies
+		}
+		this.harnessDependencies = {
+			logger,
+			runAgentTurn: createAgentTurnRunner({
+				ai: config.ai,
+				logger,
+				debugDump: {
+					enabled: config.aiDebugDump,
+					directory: config.paths.aiRequestDumpDir
+				}
+			}),
+			aiPilotEnabled: !isAiPilotDisabled(config.ai.provider),
+			minecraftVersion: config.minecraft.version,
+			diagnosticsEnabled: config.diagnostics.hsmEnabled
+		}
 	}
 
 	start(): void {
@@ -73,9 +90,8 @@ class MinecraftBot extends EventEmitter {
 			return
 		}
 		try {
-			Logger.info('Запуск бота...')
-			Config.assertAIConfigured()
-			const bot = this.dependencies.createBot(Config.minecraft)
+			this.services.logger.info('Запуск бота...')
+			const bot = this.dependencies.createBot(this.services.config.minecraft)
 			const session: BotSession = {
 				bot,
 				hsm: null,
@@ -107,7 +123,9 @@ class MinecraftBot extends EventEmitter {
 			if (session.disposed) cleanup()
 			else session.connectionCleanup = cleanup
 		} catch (error) {
-			Logger.error('Ошибка запуска бота', { error: String(error) })
+			this.services.logger.error('Ошибка запуска бота', {
+				error: String(error)
+			})
 			if (this.session)
 				void this.disposeSession(this.session, 'Ошибка запуска', true)
 			this.scheduleReconnect()
@@ -119,14 +137,23 @@ class MinecraftBot extends EventEmitter {
 		try {
 			const bot = session.bot
 			bot.utils = new BotUtils(bot)
-			bot.memory = new MemoryManager({ botName: bot.username })
-			bot.profileMemory = new ProfileMemoryStore({ botName: bot.username })
-			const hsm = new BotStateMachine(bot, {
+			bot.memory = new MemoryManager({
+				botName: bot.username,
+				dataDir: this.services.config.paths.memoryDir
+			})
+			bot.profileMemory = new ProfileMemoryStore({
+				botName: bot.username,
+				dataDir: this.services.config.paths.profileDir
+			})
+			const hsm = new BotStateMachine(bot, this.harnessDependencies, {
 				pausedGoal: this.reconnectPausedGoal
 			})
 			session.hsm = hsm
 			bot.hsm = hsm
-			session.commands = new CommandHandler(bot, hsm)
+			session.commands = new CommandHandler(bot, hsm, {
+				logger: this.services.logger,
+				aiPilotEnabled: this.harnessDependencies.aiPilotEnabled
+			})
 			const ready = await hsm.ready
 			if (this.session !== session || session.disposed) return
 			if (!ready) {
@@ -135,7 +162,7 @@ class MinecraftBot extends EventEmitter {
 			}
 			const shouldResumePausedGoal =
 				this.reconnectPausedGoal !== null &&
-				!isAiPilotDisabled(Config.ai.provider)
+				this.harnessDependencies.aiPilotEnabled
 			this.reconnectPausedGoal = null
 			if (shouldResumePausedGoal) hsm.resumePausedGoal()
 			this.reconnectAttempts = 0
@@ -153,7 +180,7 @@ class MinecraftBot extends EventEmitter {
 
 	private failSession(session: BotSession, error: unknown): void {
 		if (this.session !== session || session.disposed) return
-		Logger.error('Ошибка сессии бота', { error: String(error) })
+		this.services.logger.error('Ошибка сессии бота', { error: String(error) })
 		void this.disposeSession(session, 'Ошибка сессии', true)
 		this.scheduleReconnect()
 	}
@@ -162,7 +189,9 @@ class MinecraftBot extends EventEmitter {
 		try {
 			action()
 		} catch (error) {
-			Logger.error('Ошибка очистки сессии', { error: String(error) })
+			this.services.logger.error('Ошибка очистки сессии', {
+				error: String(error)
+			})
 		}
 	}
 
@@ -191,7 +220,9 @@ class MinecraftBot extends EventEmitter {
 		session.connectionCleanup = null
 		const disposal = stopped
 			.catch(error => {
-				Logger.error('Ошибка остановки HSM', { error: String(error) })
+				this.services.logger.error('Ошибка остановки HSM', {
+					error: String(error)
+				})
 			})
 			.finally(() => {
 				if (this.closing === disposal) this.closing = null
@@ -219,13 +250,15 @@ class MinecraftBot extends EventEmitter {
 	private scheduleReconnect(): void {
 		if (!this.running || this.reconnectTimer || this.session) return
 		if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-			Logger.error(
+			this.services.logger.error(
 				'Превышено число попыток реконнекта. Бот больше не подключается.'
 			)
 			return
 		}
 		const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts++)
-		Logger.info(`Попытка реконнекта через ${delay / 1000} секунд...`)
+		this.services.logger.info(
+			`Попытка реконнекта через ${delay / 1000} секунд...`
+		)
 		this.reconnectTimer = setTimeout(() => {
 			this.reconnectTimer = undefined
 			this.connect()

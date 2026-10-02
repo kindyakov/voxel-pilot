@@ -4,7 +4,11 @@ import type { HarnessDependencies } from '@/hsm/dependencies.js'
 import { createBotMachine as createInstanceMachine } from '@/hsm/machine.js'
 import type { MachineFactoryOptions } from '@/hsm/machine.js'
 
-import { runAgentTurn } from '@/ai/loop.js'
+import { createAgentTurnRunner } from '@/ai/loop.js'
+
+import { createTestAgentDependencies } from '../../ai/fixtures/runtimeServices.js'
+
+export const runAgentTurn = createAgentTurnRunner(createTestAgentDependencies())
 
 // Quiet fixture sink only. Production factories always receive their owner dependencies.
 export const fixtureLogger = createRuntimeLogger({

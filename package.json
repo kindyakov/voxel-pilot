@@ -11,7 +11,7 @@
 		"inspect-schematic": "pnpm --filter @voxel-pilot/cli inspect-schematic",
 		"verify:agents-sdk:routerai": "pnpm --filter @voxel-pilot/cli verify:agents-sdk:routerai",
 		"generate:hsm": "pnpm --filter @voxel-pilot/cli generate:hsm",
-		"test": "pnpm --filter @voxel-pilot/core test && tsx --test tests/*.test.ts",
+		"test": "pnpm --filter @voxel-pilot/core test && pnpm --filter @voxel-pilot/cli test && tsx --test tests/*.test.ts",
 		"format": "prettier --write \"packages/*/src/**/*.{ts,js}\" \"apps/*/src/**/*.{ts,js}\"",
 		"knip": "knip",
 		"check:imports": "node scripts/check-imports.mjs",

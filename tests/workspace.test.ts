@@ -36,7 +36,7 @@ async function linkCoreDependencies(temporary: string) {
 	}
 }
 
-test('built public core and legacy paths work from root and CLI with temporary data', async () => {
+test('built core imports are inert and explicit CLI bootstrap preserves root paths and temporary storage', async () => {
 	const temporary = await mkdtemp(join(tmpdir(), 'voxel-pilot-workspace-'))
 	try {
 		for (const folder of ['packages/core', 'apps/cli']) {
@@ -89,23 +89,73 @@ test('built public core and legacy paths work from root and CLI with temporary d
 		const probe = `
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { MinecraftBot } from '@voxel-pilot/core';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
+const require = createRequire(import.meta.url);
+const net = require('node:net'), tls = require('node:tls');
+net.Socket.prototype.connect = () => { throw new Error('network during core import/construction'); };
+tls.connect = () => { throw new Error('TLS during core import/construction'); };
+globalThis.fetch = () => { throw new Error('fetch during core import/construction'); };
+const fs = require('node:fs');
+let forbidResourceCreation = true;
+const readFileSync = fs.readFileSync;
+fs.readFileSync = (filename, ...options) => {
+ if (forbidResourceCreation && filename === ${JSON.stringify(join(temporary, '.env'))}) throw new Error('settings read during core import/construction');
+ return readFileSync(filename, ...options);
+};
+const runtimeArtifacts = () => ['data', 'logs'].map(directory => {
+ const path = ${JSON.stringify(temporary)} + '/' + directory;
+ return fs.existsSync(path) ? fs.readdirSync(path).sort() : null;
+});
+const beforeImportArtifacts = runtimeArtifacts();
+const createWriteStream = fs.createWriteStream;
+fs.createWriteStream = () => { throw new Error('log file during core import/construction'); };
+const sqlite = require('node:sqlite');
+const DatabaseSync = sqlite.DatabaseSync;
+sqlite.DatabaseSync = new Proxy(DatabaseSync, { construct(target, argumentsList) {
+ if (forbidResourceCreation) throw new Error('database during core import/construction');
+ return Reflect.construct(target, argumentsList);
+} });
+syncBuiltinESMExports();
+const { MinecraftBot } = await import('@voxel-pilot/core');
+const serviceApi = await import('@voxel-pilot/core/services');
+for (const path of ['paths', 'schematic', 'hsm-diagram', 'agents-sdk-pilot']) await import('@voxel-pilot/core/' + path);
+assert.equal(process.env.MINECRAFT_HOST, undefined);
 import * as paths from '@voxel-pilot/core/paths';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 assert.equal(paths.repositoryRoot.replace(/[\\\\/]$/, ''), ${JSON.stringify(temporary)});
 assert.equal(paths.defaultDataDirectory, join(paths.repositoryRoot, 'data'));
 assert.equal(paths.defaultLogFile, join(paths.repositoryRoot, 'logs', 'bot.log'));
-let options, disposed = 0, quits = 0;
+let options, disposed = 0, quits = 0, connections = 0;
 const bot = Object.assign(new EventEmitter(), { quit() { quits++; } });
-const runtime = new MinecraftBot({
- createBot(configuration) { options = configuration; return bot; },
+const config = serviceApi.createRuntimeConfigFromEnvironment({ MINECRAFT_HOST:'localhost', MINECRAFT_PORT:'25565', MINECRAFT_USERNAME:'explicit-fixture', MINECRAFT_VERSION:'1.20.4', AI_PROVIDER:'disabled', AI_MODEL:'fixture' }, {
+ settingsFile:null, memoryDir:paths.defaultDataDirectory, profileDir:paths.defaultDataDirectory,
+ logFile:paths.defaultLogFile, errorLogFile:join(paths.repositoryRoot,'logs/error.log'), aiRequestDumpDir:paths.defaultRequestDumpDirectory
+});
+const quiet = serviceApi.createRuntimeLogger({aiModel:config.ai.model, console:false, files:false});
+const runtime = new MinecraftBot(serviceApi.createRuntimeServices({config,logger:quiet.logger}), {
+ createBot(configuration) { connections++; options = configuration; return bot; },
  initConnection() { return () => { disposed++; }; }
 });
+assert.equal(connections,0);
+assert.deepEqual(runtimeArtifacts(), beforeImportArtifacts);
+await assert.rejects(import('@voxel-pilot/core/legacy-logger'), {code:'ERR_PACKAGE_PATH_NOT_EXPORTED'});
+fs.createWriteStream = createWriteStream;
+forbidResourceCreation = false;
+sqlite.DatabaseSync = DatabaseSync;
+syncBuiltinESMExports();
 runtime.start();
-assert.equal(options.username, 'workspace-fixture');
+assert.equal(options.username, 'explicit-fixture');
 await runtime.stop(); await runtime.stop();
+await quiet.close();
 assert.equal(quits, 1); assert.equal(disposed, 1);
+const { createCliRuntime } = await import(pathToFileURL(join(paths.repositoryRoot,'apps/cli/dist/bootstrap.js')));
+const app = createCliRuntime({ connection: {createBot(){ throw new Error('bootstrap must not start'); }, initConnection(){ throw new Error('bootstrap must not initialize'); }} });
+assert.equal(app.services.config.minecraft.username, 'workspace-fixture');
+assert.equal(app.services.config.paths.memoryDir, paths.defaultDataDirectory);
+assert.equal(app.services.config.paths.profileDir, paths.defaultDataDirectory);
+app.loggerHandle.logger.info('called bootstrap output');
+await app.runtime.stop(); await app.loggerHandle.close();
 // Tests may inspect storage owners; applications use only package exports.
 const { MemoryManager } = await import(pathToFileURL(join(paths.repositoryRoot, 'packages/core/dist/core/memory/index.js')));
 const { ProfileMemoryStore } = await import(pathToFileURL(join(paths.repositoryRoot, 'packages/core/dist/core/profile/index.js')));

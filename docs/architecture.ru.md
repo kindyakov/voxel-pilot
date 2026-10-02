@@ -8,7 +8,7 @@
 - `apps/cli/src/index.ts` грузит dotenv и стартует бота.
 - `packages/core/src/core/bot.ts` отвечает за connect, reconnect и shutdown.
 - `packages/core/src/core/CommandHandler.ts` превращает чат в события HSM.
-- `packages/core/src/core/hsm.ts` связывает стейт-машину с рантаймом бота.
+- `packages/core/src/core/harness.ts` связывает стейт-машину с рантаймом бота через явные зависимости экземпляра.
 - `packages/core/src/ai/loop.ts` крутит агентский цикл.
 - `packages/core/src/ai/snapshot.ts` строит снимок для модели.
 - `packages/core/src/core/memory/` владеет постоянным хранилищем.

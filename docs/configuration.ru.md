@@ -2,7 +2,7 @@
 
 Языковые версии: [English](configuration.md) | [Русский](configuration.ru.md)
 
-Конфигурация валидируется в `packages/core/src/config/env.ts` через Ajv и потребляется в `packages/core/src/config/config.ts`.
+CLI явно загружает настройки в `apps/cli/src/settings.ts`; заданные значения окружения имеют приоритет над выбранным файлом. Ядро проверяет переданный снимок через `packages/core/src/config/env.ts` и `packages/core/src/config/runtimeConfig.ts`. Импорт ядра не читает `.env` и не создаёт вывод.
 Рекомендуемый способ задавать значения — `.env` на основе `.env.example`.
 
 ## Обязательные переменные

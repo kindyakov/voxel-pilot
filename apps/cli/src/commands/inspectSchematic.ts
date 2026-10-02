@@ -1,10 +1,14 @@
 import { resolve } from 'node:path'
 
-import Logger from '@voxel-pilot/core/legacy-logger'
 import {
 	formatSchematicSummary,
 	inspectSchematicFile
 } from '@voxel-pilot/core/schematic'
+
+import { createCommandLogger } from '../bootstrap.js'
+
+const handle = createCommandLogger()
+const Logger = handle.logger
 
 const main = async () => {
 	const invocationDirectory = process.env.INIT_CWD ?? process.cwd()
@@ -30,7 +34,9 @@ const main = async () => {
 	}
 }
 
-main().catch(error => {
+try {
+	await main()
+} catch (error) {
 	Logger.error(
 		error instanceof Error
 			? error.message
@@ -40,4 +46,6 @@ main().catch(error => {
 		}
 	)
 	process.exitCode = 1
-})
+} finally {
+	await handle.close()
+}

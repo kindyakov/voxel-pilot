@@ -8,7 +8,7 @@ The current design is small and explicit:
 - `apps/cli/src/index.ts` loads dotenv and starts the bot.
 - `packages/core/src/core/bot.ts` handles connect, reconnect, and shutdown.
 - `packages/core/src/core/CommandHandler.ts` converts chat into HSM events.
-- `packages/core/src/core/hsm.ts` wires the state machine to the bot runtime.
+- `packages/core/src/core/harness.ts` wires the state machine to the bot runtime with explicit instance dependencies.
 - `packages/core/src/ai/loop.ts` runs the agent loop.
 - `packages/core/src/ai/snapshot.ts` builds the model snapshot.
 - `packages/core/src/core/memory/` owns persistent storage.
