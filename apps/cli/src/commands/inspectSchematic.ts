@@ -1,12 +1,16 @@
-import Logger from '@/config/logger.js'
+import { resolve } from 'node:path'
 
+import Logger from '@voxel-pilot/core/legacy-logger'
 import {
 	formatSchematicSummary,
 	inspectSchematicFile
-} from '../building/schematicInspection.js'
+} from '@voxel-pilot/core/schematic'
 
 const main = async () => {
-	const paths = process.argv.slice(2)
+	const invocationDirectory = process.env.INIT_CWD ?? process.cwd()
+	const paths = process.argv
+		.slice(2)
+		.map(value => resolve(invocationDirectory, value))
 
 	if (paths.length === 0) {
 		Logger.error(
@@ -28,7 +32,9 @@ const main = async () => {
 
 main().catch(error => {
 	Logger.error(
-		error instanceof Error ? error.message : 'Unknown schematic inspection error',
+		error instanceof Error
+			? error.message
+			: 'Unknown schematic inspection error',
 		{
 			stack: error instanceof Error ? error.stack : undefined
 		}

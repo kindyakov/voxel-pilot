@@ -2,7 +2,7 @@
 
 Language versions: [English](enemy-visibility-system.md) | [Русский](enemy-visibility-system.ru.md)
 
-This document covers the current shared combat visibility helpers in `src/utils/combat/enemyVisibility.ts`.
+This document covers the current shared combat visibility helpers in `packages/core/src/utils/combat/enemyVisibility.ts`.
 
 ## Functions
 
@@ -29,10 +29,10 @@ If a task is already active, the helper skips the expensive reachability check.
 
 ## Where It Is Used
 
-- `src/hsm/guards/combat.guards.ts`
-- `src/hsm/actors/combat.actors.ts`
-- `src/hsm/actors/monitoring.actors.ts`
-- `src/core/hsm.ts`
+- `packages/core/src/hsm/guards/combat.guards.ts`
+- `packages/core/src/hsm/actors/combat.actors.ts`
+- `packages/core/src/hsm/actors/monitoring.actors.ts`
+- `packages/core/src/core/hsm.ts`
 
 ## Notes
 

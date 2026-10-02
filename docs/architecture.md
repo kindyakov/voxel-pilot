@@ -5,13 +5,13 @@ Language versions: [English](architecture.md) | [Русский](architecture.ru
 This bot is a Mineflayer runtime wrapped in an XState machine.
 The current design is small and explicit:
 
-- `src/index.ts` loads dotenv and starts the bot.
-- `src/core/bot.ts` handles connect, reconnect, and shutdown.
-- `src/core/CommandHandler.ts` converts chat into HSM events.
-- `src/core/hsm.ts` wires the state machine to the bot runtime.
-- `src/ai/loop.ts` runs the agent loop.
-- `src/ai/snapshot.ts` builds the model snapshot.
-- `src/core/memory/` owns persistent storage.
+- `apps/cli/src/index.ts` loads dotenv and starts the bot.
+- `packages/core/src/core/bot.ts` handles connect, reconnect, and shutdown.
+- `packages/core/src/core/CommandHandler.ts` converts chat into HSM events.
+- `packages/core/src/core/hsm.ts` wires the state machine to the bot runtime.
+- `packages/core/src/ai/loop.ts` runs the agent loop.
+- `packages/core/src/ai/snapshot.ts` builds the model snapshot.
+- `packages/core/src/core/memory/` owns persistent storage.
 
 ## System Goal
 
@@ -84,7 +84,7 @@ While alive in `MAIN_ACTIVITY.IDLE`, the bot smoothly watches visible players an
 
 `THINKING` calls `runAgentTurn()`.
 `EXECUTING` resolves one pending execution tool to a primitive.
-Canonical names (see `src/ai/tools/catalog.ts`, `src/ai/tools/names.ts` — code wins over this doc):
+Canonical names (see `packages/core/src/ai/tools/catalog.ts`, `packages/core/src/ai/tools/names.ts` — code wins over this doc):
 
 - `navigate_to` -> `primitiveNavigating`
 - `break_block` -> `primitiveBreaking`
@@ -109,7 +109,7 @@ Callback services deliver synchronous and asynchronous failures as `ERROR`. They
 
 Ranged equip failure disables ranged combat for the current encounter and falls back to melee. Combat async operations, including startup equip, have a 15-second deadline without limiting the duration of a healthy encounter. A combat service error exits combat and suppresses automatic re-entry. Fleeing uses the movement controller's terrain heuristics; its fallback yaw follows Mineflayer's forward-axis convention.
 
-The shared policy in `src/ai/goalExecution.ts` stops a goal after three consecutive rejections or execution failures, including different causes, or after 128 started actions. Success resets consecutive failures, not the total budget; combat/survival interruption preserves both counters. Invalid model actions produce `rejected` and may be corrected in the next turn; exhausted provider retries remain terminal `failed`. The global transition-rate guard resets its internal detection state after its 60-second cooldown.
+The shared policy in `packages/core/src/ai/goalExecution.ts` stops a goal after three consecutive rejections or execution failures, including different causes, or after 128 started actions. Success resets consecutive failures, not the total budget; combat/survival interruption preserves both counters. Invalid model actions produce `rejected` and may be corrected in the next turn; exhausted provider retries remain terminal `failed`. The global transition-rate guard resets its internal detection state after its 60-second cooldown.
 
 `WindowRuntime` owns both active and temporary windows. Failed close retains the session for retry and blocks other window operations, but never delays survival. Cancellation or a 15-second deadline releases the caller; an unresolved Mineflayer call keeps the window slot occupied until it settles. Late cleanup cannot close a newer window or complete another execution. Close confirmation is local release of the owned window, not a server acknowledgment.
 
@@ -117,7 +117,7 @@ Eating performs one attempt at a time; only the active survival actor owns retri
 
 ## AI Loop
 
-`src/ai/loop.ts` does one turn at a time.
+`packages/core/src/ai/loop.ts` does one turn at a time.
 It builds a deterministic snapshot, sends it to the model, and handles these model requests:
 
 - one execution tool
@@ -131,11 +131,11 @@ The loop is intentionally strict:
 - retry is limited when the model fails to return a tool call
 - plain-text output without a tool call is `rejected`, unless inspect data was already gathered in the turn (grounded fallback to `finish`; see `docs/tasks/grounded-plain-text-fallback-для-agent-loop.md`)
 
-Execution schemas, typed argument variants, parsers, and summaries live together in `src/ai/tools/executionDefinitions.ts`. Validation does not coerce supplied values or replace invalid options with defaults. Provider tools use `strict: false` to retain omitted optional fields; execution arguments are validated locally before HSM dispatch.
+Execution schemas, typed argument variants, parsers, and summaries live together in `packages/core/src/ai/tools/executionDefinitions.ts`. Validation does not coerce supplied values or replace invalid options with defaults. Provider tools use `strict: false` to retain omitted optional fields; execution arguments are validated locally before HSM dispatch.
 
 ## Snapshot
 
-`src/ai/snapshot.ts` is intentionally minimal. It summarizes only the current cycle state:
+`packages/core/src/ai/snapshot.ts` is intentionally minimal. It summarizes only the current cycle state:
 
 - health, food, oxygen
 - position, dimension

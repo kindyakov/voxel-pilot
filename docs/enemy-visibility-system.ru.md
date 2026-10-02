@@ -2,7 +2,7 @@
 
 Языковые версии: [English](enemy-visibility-system.md) | [Русский](enemy-visibility-system.ru.md)
 
-Документ описывает текущие общие хелперы видимости боя в `src/utils/combat/enemyVisibility.ts`.
+Документ описывает текущие общие хелперы видимости боя в `packages/core/src/utils/combat/enemyVisibility.ts`.
 
 ## Функции
 
@@ -29,10 +29,10 @@
 
 ## Где используется
 
-- `src/hsm/guards/combat.guards.ts`
-- `src/hsm/actors/combat.actors.ts`
-- `src/hsm/actors/monitoring.actors.ts`
-- `src/core/hsm.ts`
+- `packages/core/src/hsm/guards/combat.guards.ts`
+- `packages/core/src/hsm/actors/combat.actors.ts`
+- `packages/core/src/hsm/actors/monitoring.actors.ts`
+- `packages/core/src/core/hsm.ts`
 
 ## Заметки
 

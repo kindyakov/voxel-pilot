@@ -1,9 +1,18 @@
-import 'dotenv/config'
+import { resolve } from 'node:path'
+
+import dotenv from 'dotenv'
 
 import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
 
+import { defaultLogFile, defaultSettingsFile } from '../runtimePaths.js'
+import { repositoryRoot } from '../runtimePaths.js'
 import { WinstonLogLevel } from '../types/index.js'
 import { validateEnv } from './env.js'
+
+dotenv.config({
+	path: process.env.DOTENV_CONFIG_PATH ?? defaultSettingsFile,
+	quiet: true
+})
 
 interface MinecraftConfig {
 	host: string
@@ -58,7 +67,9 @@ export class Config {
 
 		this._logging = {
 			level: (env.LOG_LEVEL as WinstonLogLevel) || 'info',
-			file: env.LOG_FILE || 'logs/bot.log'
+			file: env.LOG_FILE
+				? resolve(repositoryRoot, env.LOG_FILE)
+				: defaultLogFile
 		}
 
 		this._diagnostics = {

@@ -2,7 +2,7 @@
 
 Language versions: [English](configuration.md) | [Русский](configuration.ru.md)
 
-Configuration is validated in `src/config/env.ts` with Ajv and consumed in `src/config/config.ts`.
+Configuration is validated in `packages/core/src/config/env.ts` with Ajv and consumed in `packages/core/src/config/config.ts`.
 The recommended way to set values is `.env` based on `.env.example`.
 
 ## Required Variables

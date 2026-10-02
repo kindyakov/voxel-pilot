@@ -3,7 +3,7 @@
 Языковые версии: [English](README.md) | [Русский](README.ru.md)
 
 Здесь лежит актуальная, сверенная с кодом документация проекта.
-При споре доки с `src/` или тестами прав код.
+При споре доки с `packages/core/src/` или тестами прав код.
 
 ## Начни отсюда
 
@@ -22,4 +22,4 @@
 
 ## Диаграммы
 
-- `diagrams/xstate-machine.drawio` — структурный скетч машины. Секция боя ещё показывает удалённый стейт `APPROACHING`; при споре верь `src/hsm/machine.ts` (`DECIDING -> MELEE_ATTACKING | RANGED_SKIRMISHING`).
+- `diagrams/xstate-machine.drawio` — структурный скетч машины. Секция боя ещё показывает удалённый стейт `APPROACHING`; при споре верь `packages/core/src/hsm/machine.ts` (`DECIDING -> MELEE_ATTACKING | RANGED_SKIRMISHING`).

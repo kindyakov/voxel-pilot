@@ -123,6 +123,7 @@ Useful commands:
 ```bash
 pnpm run dev
 pnpm run build
+pnpm run check:imports
 pnpm run type-check
 pnpm test
 pnpm run format
@@ -141,7 +142,7 @@ Before opening a pull request:
 
 1. Run `pnpm run type-check`.
 2. Run `pnpm run build`.
-3. Run the relevant focused tests under `src/tests/`.
+3. Run the relevant focused tests under `packages/core/src/tests/` using `pnpm --filter @voxel-pilot/core exec tsx --import ./src/tests/setupEnv.mjs --test <paths relative to packages/core>`.
 4. Keep changes aligned with the existing architecture and naming conventions.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.

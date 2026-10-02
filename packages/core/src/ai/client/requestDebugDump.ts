@@ -3,9 +3,10 @@ import path from 'node:path'
 
 import type { AgentPromptAssembly } from '@/ai/prompt.js'
 
+import { defaultRequestDumpDirectory } from '../../runtimePaths.js'
 import type { AgentToolDefinition } from '../contracts/agentClient.js'
 
-const REQUEST_DEBUG_DIR = path.resolve(process.cwd(), 'logs', 'ai-requests')
+const REQUEST_DEBUG_DIR = defaultRequestDumpDirectory
 const MAX_DEBUG_DUMP_FILES = 50
 
 export const shouldWriteRequestDebugDump = (): boolean =>

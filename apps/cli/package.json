@@ -1,0 +1,25 @@
+{
+	"name": "@voxel-pilot/cli",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "tsc",
+		"type-check": "tsc --noEmit",
+		"start": "node dist/index.js",
+		"dev": "tsx watch --tsconfig ../../packages/core/tsconfig.json --include \"../../packages/core/src/**/*.ts\" --conditions=development src/index.ts",
+		"inspect-schematic": "pnpm --filter @voxel-pilot/core build && tsx src/commands/inspectSchematic.ts",
+		"verify:agents-sdk:routerai": "pnpm --filter @voxel-pilot/core build && tsx src/commands/verifyAgentsSdkRouterAi.ts",
+		"generate:hsm": "pnpm --filter @voxel-pilot/core build && tsx src/commands/generateHsmDiagram.ts",
+		"clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+	},
+	"dependencies": {
+		"@voxel-pilot/core": "workspace:*",
+		"dotenv": "^17.2.1"
+	},
+	"devDependencies": {
+		"@types/node": "^24.12.0",
+		"tsx": "^4.20.6",
+		"typescript": "^5.9.3"
+	}
+}

@@ -1,11 +1,11 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
-import Logger from '@/config/logger.js'
+import { buildHsmDrawioDiagram } from '@voxel-pilot/core/hsm-diagram'
+import Logger from '@voxel-pilot/core/legacy-logger'
+import { repositoryRoot } from '@voxel-pilot/core/paths'
 
-import { buildHsmDrawioDiagram } from '@/hsm/utils/hsmDrawioDiagram.js'
-
-const outputDirectory = resolve(process.cwd(), 'docs', 'diagrams')
+const outputDirectory = resolve(repositoryRoot, 'docs', 'diagrams')
 const drawioOutputPath = resolve(outputDirectory, 'xstate-machine.drawio')
 
 const main = async () => {

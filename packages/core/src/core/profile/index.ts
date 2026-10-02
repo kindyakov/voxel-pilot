@@ -2,10 +2,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
-import type {
-	ProfileMemoryStoreOptions,
-	UserProfilePrompt
-} from './types.js'
+import { defaultDataDirectory } from '../../runtimePaths.js'
+import type { ProfileMemoryStoreOptions, UserProfilePrompt } from './types.js'
 import {
 	createEmptyUserProfilePrompt,
 	normalizeUserProfilePrompt
@@ -31,7 +29,7 @@ export class ProfileMemoryStore {
 
 	constructor(options: ProfileMemoryStoreOptions) {
 		this.botName = options.botName
-		this.dataDir = options.dataDir ?? path.resolve('data')
+		this.dataDir = options.dataDir ?? defaultDataDirectory
 		this.dbPath = path.join(this.dataDir, `bot_profile_${this.botName}.db`)
 	}
 
@@ -113,7 +111,8 @@ export class ProfileMemoryStore {
 	}
 
 	private ensureMeta(): void {
-		const createdAt = this.getMetaValue('created_at') ?? new Date().toISOString()
+		const createdAt =
+			this.getMetaValue('created_at') ?? new Date().toISOString()
 		this.touchMeta('bot_name', this.botName)
 		this.touchMeta('created_at', createdAt)
 		this.touchMeta('last_updated', new Date().toISOString())

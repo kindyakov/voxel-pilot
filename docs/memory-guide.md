@@ -9,7 +9,7 @@ The database file is created per bot name at:
 data/bot_memory_<botName>.db
 ```
 
-`MemoryManager` lives in `src/core/memory/`.
+`MemoryManager` lives in `packages/core/src/core/memory/`.
 
 ## What Memory Stores
 

@@ -3,7 +3,7 @@
 Language versions: [English](README.md) | [Русский](README.ru.md)
 
 This folder contains the current, code-aligned documentation for the project.
-If a doc conflicts with `src/` or tests, the code wins.
+If a doc conflicts with `packages/core/src/` or tests, the code wins.
 
 ## Start Here
 
@@ -22,4 +22,4 @@ Short-lived Russian-language notes that pin down the current agent-runtime bound
 
 ## Diagrams
 
-- `diagrams/xstate-machine.drawio` — structural sketch of the machine. The combat section still shows the removed `APPROACHING` state; trust `src/hsm/machine.ts` (`DECIDING -> MELEE_ATTACKING | RANGED_SKIRMISHING`) when they disagree.
+- `diagrams/xstate-machine.drawio` — structural sketch of the machine. The combat section still shows the removed `APPROACHING` state; trust `packages/core/src/hsm/machine.ts` (`DECIDING -> MELEE_ATTACKING | RANGED_SKIRMISHING`) when they disagree.

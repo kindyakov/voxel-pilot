@@ -2,7 +2,7 @@
 
 Языковые версии: [English](configuration.md) | [Русский](configuration.ru.md)
 
-Конфигурация валидируется в `src/config/env.ts` через Ajv и потребляется в `src/config/config.ts`.
+Конфигурация валидируется в `packages/core/src/config/env.ts` через Ajv и потребляется в `packages/core/src/config/config.ts`.
 Рекомендуемый способ задавать значения — `.env` на основе `.env.example`.
 
 ## Обязательные переменные
