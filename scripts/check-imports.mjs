@@ -37,6 +37,9 @@ for (const owner of owners) {
 	}
 	const core = owner.manifest.name === '@voxel-pilot/core'
 	const contracts = owner.manifest.name === '@voxel-pilot/contracts'
+	const presentation = owner.manifest.name === '@voxel-pilot/presentation'
+	const tui = owner.manifest.name === '@voxel-pilot/tui'
+	const cli = owner.manifest.name === '@voxel-pilot/cli'
 	if (contracts) {
 		for (const name of Object.keys(owner.manifest.dependencies ?? {})) {
 			violations.push(
@@ -74,6 +77,8 @@ for (const owner of owners) {
 		const fail = message =>
 			violations.push(`${relative(root, filename)}: ${message}`)
 		const productionCore = core && !filename.includes(`${sep}tests${sep}`)
+		const productionTui = tui && !filename.includes(`${sep}tests${sep}`)
+		const local = relative(resolve(owner.directory, 'src'), filename).split(sep)
 		const check = (specifier, typeOnly) => {
 			if (contracts && !specifier.startsWith('.')) {
 				fail(`contracts must use portable local types: ${specifier}`)
@@ -96,6 +101,43 @@ for (const owner of owners) {
 				const target = resolve(dirname(filename), specifier)
 				if (!target.startsWith(owner.directory + sep))
 					fail(`relative import crosses package boundary: ${specifier}`)
+				if (productionTui) {
+					const destination = relative(
+						resolve(owner.directory, 'src'),
+						target
+					).split(sep)
+					if (
+						local[0] !== 'app' &&
+						local[0] !== 'index.ts' &&
+						(destination[0] === 'app' ||
+							/^index(?:\.[cm]?[jt]sx?)?$/.test(destination[0]))
+					)
+						fail(`TUI reusable module imports composition: ${specifier}`)
+					if (
+						local[0] === 'ui' &&
+						['features', 'runtime', 'terminal'].includes(destination[0])
+					)
+						fail(
+							`independent TUI UI imports integration or feature: ${specifier}`
+						)
+					if (
+						local[0] === 'runtime' &&
+						['features', 'terminal', 'ui'].includes(destination[0])
+					)
+						fail(`TUI runtime bridge imports display: ${specifier}`)
+					if (
+						local[0] === 'terminal' &&
+						['features', 'runtime'].includes(destination[0])
+					)
+						fail(`TUI terminal imports runtime or feature: ${specifier}`)
+					if (
+						local[0] === 'features' &&
+						destination[0] === 'features' &&
+						local[1] !== destination[1] &&
+						!/^index\.[cm]?[jt]sx?$/.test(destination.slice(2).join('/'))
+					)
+						fail(`TUI sibling feature requires public index: ${specifier}`)
+				}
 				return
 			}
 			const segments = specifier.split('/')
@@ -103,10 +145,40 @@ for (const owner of owners) {
 				? segments.slice(0, 2).join('/')
 				: segments[0]
 			if (!declared[packageName]) fail(`undeclared dependency: ${packageName}`)
+			if (
+				productionTui &&
+				local[0] !== 'app' &&
+				['@voxel-pilot/core', '@voxel-pilot/application'].includes(packageName)
+			)
+				fail(
+					`TUI executable runtime dependency outside composition: ${specifier}`
+				)
+			if (
+				cli &&
+				!filename.includes(`${sep}tests${sep}`) &&
+				packageName === '@voxel-pilot/application' &&
+				!['bootstrap.ts', 'settings.ts'].includes(local.join('/'))
+			)
+				fail(`CLI application dependency outside composition: ${specifier}`)
+			if (
+				presentation &&
+				[
+					'@voxel-pilot/core',
+					'@voxel-pilot/application',
+					'react',
+					'ink'
+				].includes(packageName)
+			)
+				fail(`presentation must remain portable: ${specifier}`)
 			const workspace = owners.find(
 				candidate => candidate.manifest.name === packageName
 			)
 			if (workspace) {
+				if (
+					owner.directory.startsWith(resolve(root, 'packages') + sep) &&
+					workspace.directory.startsWith(resolve(root, 'apps') + sep)
+				)
+					fail(`library workspace imports application: ${specifier}`)
 				if (core && workspace.manifest.name !== '@voxel-pilot/contracts')
 					fail(
 						`core workspace dependency must be portable contracts: ${specifier}`
@@ -130,13 +202,18 @@ for (const owner of owners) {
 		}
 		const visit = node => {
 			if (
-				productionCore &&
+				(productionCore ||
+					(productionTui && local[0] !== 'app' && local[0] !== 'index.ts')) &&
 				ts.isPropertyAccessExpression(node) &&
 				ts.isIdentifier(node.expression) &&
 				node.expression.text === 'process' &&
 				node.name.text === 'env'
 			) {
-				fail('core reads process.env instead of an explicit settings snapshot')
+				fail(
+					core
+						? 'core reads process.env instead of an explicit settings snapshot'
+						: 'TUI reusable module reads process.env'
+				)
 			}
 			if (
 				(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&

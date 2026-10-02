@@ -4,6 +4,7 @@ build
 coverage
 data
 logs
+!apps/tui/src/features/logs/
 .git
 .vscode
 *.lock

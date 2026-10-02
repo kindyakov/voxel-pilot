@@ -8,16 +8,16 @@
 		"type-check": "tsc --noEmit",
 		"test": "tsx --import ../../packages/core/src/tests/setupEnv.mjs --test src/tests/*.test.ts",
 		"start": "node dist/index.js",
-		"dev": "tsx watch --tsconfig ../../packages/core/tsconfig.json --include \"../../packages/core/src/**/*.ts\" --conditions=development src/index.ts",
+		"dev": "tsx watch --tsconfig ../../packages/core/tsconfig.json --include \"../../packages/core/src/**/*.ts\" --include \"../../packages/application/src/**/*.ts\" --conditions=development src/index.ts",
 		"inspect-schematic": "pnpm --filter @voxel-pilot/core build && tsx src/commands/inspectSchematic.ts",
 		"verify:agents-sdk:routerai": "pnpm --filter @voxel-pilot/core build && tsx src/commands/verifyAgentsSdkRouterAi.ts",
 		"generate:hsm": "pnpm --filter @voxel-pilot/core build && tsx src/commands/generateHsmDiagram.ts",
 		"clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
 	},
 	"dependencies": {
+		"@voxel-pilot/application": "workspace:*",
 		"@voxel-pilot/contracts": "workspace:*",
-		"@voxel-pilot/core": "workspace:*",
-		"dotenv": "^17.2.1"
+		"@voxel-pilot/core": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/node": "^24.12.0",

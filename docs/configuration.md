@@ -2,10 +2,12 @@
 
 Language versions: [English](configuration.md) | [Русский](configuration.ru.md)
 
-The CLI explicitly loads settings in `apps/cli/src/settings.ts`; existing environment values override the selected file. Core validates the supplied snapshot through `packages/core/src/config/env.ts` and `packages/core/src/config/runtimeConfig.ts`. Importing core does not load `.env` or create output.
+CLI and TUI explicitly load settings through `packages/application/src/settings.ts`; existing environment values override the selected file. Both use the same repository-root defaults and path overrides. Core validates the supplied snapshot through `packages/core/src/config/env.ts` and `packages/core/src/config/runtimeConfig.ts`. Public package imports do not load `.env`, create stores or start a connection.
 The recommended way to set values is `.env` based on `.env.example`.
 
-Runtime composition accepts `stopTimeoutMs` (default 10 seconds). CLI application composition accepts `shutdownTimeoutMs` (default 15 seconds), covering runtime and logger close together. Both require a positive integer in the supported timer range. A deadline produces a nonzero exit and warns that persistence or cleanup may be incomplete; connection retry exhaustion also exits unsuccessfully. The portable runtime keeps measured fields unknown until their observation adapters are implemented.
+Runtime composition accepts `stopTimeoutMs` (default 10 seconds). CLI and TUI application composition accept `shutdownTimeoutMs` (default 15 seconds), covering runtime and logger close together; TUI also includes renderer/output cleanup. Both require a positive integer in the supported timer range. A deadline produces a nonzero exit and warns that persistence or cleanup may be incomplete. TUI retains final connection failure until explicit exit; CLI exits on retry exhaustion. TUI requests terminal restoration at its deadline, but a broken or blocked output stream cannot acknowledge that restoration.
+
+`pnpm tui` requires interactive input/output and raw-input support; unsupported terminals are rejected before loading settings, with `pnpm start` offered for headless use. TUI collects DEBUG from the start while initially displaying INFO and above. Console logging is disabled to protect the dashboard; configured file thresholds and rotation remain independent.
 
 ## Required Variables
 
