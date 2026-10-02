@@ -65,10 +65,60 @@ export interface StopResult {
 	readonly issues: readonly StopIssue[]
 }
 
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+export interface LogEntry {
+	/** Opaque identity; eviction/filtering never renumbers entries. */
+	readonly id: string
+	readonly timestamp: number
+	readonly level: LogLevel
+	readonly source: string
+	readonly message: string
+	readonly truncation: Readonly<{ originalMessageBytes: number }> | null
+}
+
+export interface LogHistoryLimits {
+	readonly maxEntries: number
+	readonly maxBytes: number
+	readonly maxEntryBytes: number
+}
+
+export interface LogHistoryStats {
+	readonly retainedEntries: number
+	/** Sum of UTF-8 JSON bytes of retained safe entries, excluding snapshot envelope. */
+	readonly retainedBytes: number
+	readonly acceptedEntries: number
+	readonly acceptedByLevel: Readonly<Record<LogLevel, number>>
+	readonly evictedEntries: number
+	readonly evictedBytes: number
+	readonly truncatedEntries: number
+}
+
+export interface LogHistory {
+	/** Identity of this runtime's journal, preserved across explicit restart. */
+	readonly id: string
+	readonly revision: number
+	readonly level: LogLevel
+	readonly limits: LogHistoryLimits
+	readonly entries: readonly LogEntry[]
+	readonly stats: LogHistoryStats
+}
+
+export type LogUpdate =
+	| { readonly kind: 'snapshot'; readonly history: LogHistory }
+	| {
+			readonly kind: 'append'
+			readonly entry: LogEntry
+			readonly history: LogHistory
+	  }
+
 export interface BotTelemetry {
 	getSnapshot(): BotSnapshot
 	/** Immediately delivers the cached snapshot; disposer prevents later delivery. */
 	subscribe(listener: (snapshot: BotSnapshot) => void): () => void
+	getLogHistory(): LogHistory
+	/** Initial history, then appends. A reentrant newer revision supersedes older delivery. */
+	subscribeLogs(listener: (update: LogUpdate) => void): () => void
 }
 
 export interface BotRuntime {

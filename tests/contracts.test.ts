@@ -32,10 +32,14 @@ test('built contracts import independently and declarations compile in a browser
 		)
 		await writeFile(
 			join(directory, 'consumer.ts'),
-			`import type { BotRuntime, BotSnapshot, StopResult } from './contracts.js';
+			`import type { BotRuntime, BotSnapshot, StopResult, LogHistory, LogUpdate } from './contracts.js';
 declare const runtime: BotRuntime;
 const snapshot: BotSnapshot = runtime.telemetry.getSnapshot();
 runtime.telemetry.subscribe(value => { document.title = value.connection.state; });
+const history: LogHistory = runtime.telemetry.getLogHistory();
+runtime.telemetry.subscribeLogs((update: LogUpdate) => { document.title = String(update.history.stats.acceptedByLevel.debug); });
+// @ts-expect-error Safe logs have no raw metadata, stacks or runtime handles.
+history.entries[0]?.meta;
 const stopped: Promise<StopResult> = runtime.stop(); void stopped; void snapshot;
 // @ts-expect-error Native Node globals are absent in this browser consumer.
 process.exit();

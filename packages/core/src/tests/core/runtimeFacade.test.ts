@@ -102,8 +102,10 @@ test('facade is inert, frozen and supplies cached complete unknown snapshots wit
 	const { runtime, attempts } = fixture(t)
 	assert.deepEqual(Object.keys(runtime).sort(), ['start', 'stop', 'telemetry'])
 	assert.deepEqual(Object.keys(runtime.telemetry).sort(), [
+		'getLogHistory',
 		'getSnapshot',
-		'subscribe'
+		'subscribe',
+		'subscribeLogs'
 	])
 	assert.ok(Object.isFrozen(runtime) && Object.isFrozen(runtime.telemetry))
 	const first = runtime.telemetry.getSnapshot()

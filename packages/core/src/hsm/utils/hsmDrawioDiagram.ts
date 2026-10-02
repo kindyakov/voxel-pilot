@@ -8,6 +8,7 @@ const machineForDiagram = () => {
 	return createBotMachine({
 		logger: {
 			correlationId: null,
+			subscribeRecords: unavailable,
 			setCorrelationId: unavailable,
 			clearCorrelationId: unavailable,
 			log: unavailable,
