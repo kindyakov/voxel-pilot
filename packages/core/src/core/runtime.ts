@@ -9,10 +9,15 @@ import type { RuntimeServices } from '@/config/runtimeServices.js'
 
 import MinecraftBot, { type ConnectionDependencies } from './bot.js'
 import { stopIssue } from './finalization.js'
+import {
+	type LogHistoryOptions,
+	createLogJournal
+} from './telemetry/logJournal.js'
 
 export interface BotRuntimeOptions {
 	readonly stopTimeoutMs?: number
 	readonly connection?: Partial<ConnectionDependencies>
+	readonly logs?: LogHistoryOptions
 }
 
 const unknown = Object.freeze({ value: null, updatedAt: null, stale: false })
@@ -43,7 +48,18 @@ export function createBotRuntime(
 	) {
 		throw new Error('stopTimeoutMs must be positive and finite')
 	}
+	const journal = createLogJournal(services.config.ai, options.logs)
+	let disposeLogs: (() => void) | undefined
+	const attachLogs = () => {
+		if (disposeLogs) return
+		journal.resume()
+		disposeLogs = services.logger.subscribeRecords(
+			journal.append,
+			journal.level
+		)
+	}
 	const owner = new MinecraftBot(services, options.connection)
+	attachLogs()
 	const listeners = new Set<{ listener: (snapshot: BotSnapshot) => void }>()
 	let snapshot: BotSnapshot
 	let stopping = false
@@ -68,6 +84,8 @@ export function createBotRuntime(
 	owner.subscribeConnection(observe)
 	const telemetry = Object.freeze({
 		getSnapshot: () => snapshot,
+		getLogHistory: journal.getHistory,
+		subscribeLogs: journal.subscribe,
 		subscribe(listener: (snapshot: BotSnapshot) => void) {
 			const subscription = { listener }
 			listeners.add(subscription)
@@ -83,6 +101,7 @@ export function createBotRuntime(
 			if (stopping) return
 			if (['idle', 'stopped', 'failed'].includes(snapshot.connection.state)) {
 				stopPromise = null
+				attachLogs()
 			}
 			owner.start()
 		},
@@ -105,6 +124,9 @@ export function createBotRuntime(
 					issues: Object.freeze([...result.issues])
 				})
 				owner.completeStop(frozen)
+				disposeLogs?.()
+				disposeLogs = undefined
+				journal.detach()
 				stopping = false
 				resolve(frozen)
 			}

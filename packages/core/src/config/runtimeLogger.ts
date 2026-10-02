@@ -15,6 +15,11 @@ export type ActionStatus = 'started' | 'completed' | 'failed'
 /** Internal logging dependency, never exposed as the dashboard data contract. */
 export interface RuntimeLogger {
 	readonly correlationId: CorrelationId
+	/** Internal live records only, independent of output transports; owns no history. */
+	subscribeRecords(
+		listener: (record: RuntimeLogRecord) => void,
+		level?: RuntimeLogLevel
+	): () => void
 	setCorrelationId(id?: CorrelationId): CorrelationId
 	clearCorrelationId(): void
 	log(level: RuntimeLogLevel, message: string, meta?: LogMetadata): void
@@ -270,9 +275,32 @@ export function createRuntimeLogger(
 	let correlationId: CorrelationId = null
 	let closed = false
 	let closing: Promise<void> | undefined
+	const observers = new Set<{
+		listener: (record: RuntimeLogRecord) => void
+		level: RuntimeLogLevel
+	}>()
+	const deliverRecord = (
+		listener: (record: RuntimeLogRecord) => void,
+		record: RuntimeLogRecord
+	) => {
+		try {
+			void Promise.resolve(listener(record)).catch(() => {})
+		} catch {
+			// Observers cannot interrupt gameplay, other observers or output.
+		}
+	}
 	const logger: RuntimeLogger = {
 		get correlationId() {
 			return correlationId
+		},
+		subscribeRecords(listener, level = 'debug') {
+			if (!Object.hasOwn(levels, level)) throw new Error('Invalid logger level')
+			if (closed) return () => {}
+			const observer = { listener, level }
+			observers.add(observer)
+			return () => {
+				observers.delete(observer)
+			}
 		},
 		setCorrelationId(id = null) {
 			correlationId = id || Math.random().toString(36).substring(2, 15)
@@ -284,22 +312,26 @@ export function createRuntimeLogger(
 		log(level, message, meta = {}) {
 			if (closed) return
 			const snapshot = Object.freeze({ ...meta })
+			const record = Object.freeze({
+				timestamp: new Date().toISOString(),
+				level,
+				message,
+				correlationId,
+				meta: snapshot
+			})
 			if (options.sink && levels[level] <= levels[options.sink.level]) {
-				try {
-					options.sink.write(
-						Object.freeze({
-							timestamp: new Date().toISOString(),
-							level,
-							message,
-							correlationId,
-							meta: snapshot
-						})
-					)
-				} catch {
-					// An observer is never allowed to interrupt gameplay or other outputs.
-				}
+				const sink = options.sink
+				deliverRecord(record => sink.write(record), record)
 			}
 			backend.log(level, message, { ...snapshot, correlationId })
+			for (const observer of [...observers]) {
+				if (
+					observers.has(observer) &&
+					levels[level] <= levels[observer.level]
+				) {
+					deliverRecord(observer.listener, record)
+				}
+			}
 		},
 		debug(message, meta) {
 			logger.log('debug', message, meta)
@@ -354,6 +386,7 @@ export function createRuntimeLogger(
 		close() {
 			if (closing) return closing
 			closed = true
+			observers.clear()
 			closing = new Promise<void>((resolve, reject) => {
 				const finish = () => settle(failure)
 				const settle = (error?: Error) => {

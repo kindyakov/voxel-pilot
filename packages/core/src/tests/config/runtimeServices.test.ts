@@ -248,6 +248,69 @@ test('separate loggers own their correlation, model and sink level, and repeated
 	}
 })
 
+test('live raw subscriptions own no replay and independently isolate levels, failures, disposal and close', async () => {
+	const sink: string[] = [],
+		records: RuntimeLogRecord[] = []
+	const handle = createRuntimeLogger({
+		aiModel: 'source-fixture',
+		console: false,
+		files: false,
+		sink: {
+			level: 'warn',
+			write(record) {
+				sink.push(`${this.level}:${record.message}`)
+			}
+		}
+	})
+	const logger = handle.logger
+	logger.info('before observation')
+	logger.subscribeRecords(() => {
+		throw new Error('observer failed')
+	})
+	logger.subscribeRecords(async () => {
+		throw new Error('async observer failed')
+	})
+	const listen = (record: RuntimeLogRecord) => {
+		records.push(record)
+	}
+	const first = logger.subscribeRecords(listen)
+	const second = logger.subscribeRecords(listen)
+	assert.equal(records.length, 0)
+	logger.debug('debug')
+	assert.equal(records.length, 2)
+	assert.equal(records[0], records[1])
+	assert.ok(Object.isFrozen(records[0]) && Object.isFrozen(records[0]!.meta))
+	first()
+	first()
+	logger.info('info')
+	assert.equal(records.length, 3)
+	let skipped = 0
+	let disposeOther: () => void
+	logger.subscribeRecords(() => {
+		disposeOther()
+	}, 'warn')
+	disposeOther = logger.subscribeRecords(() => {
+		skipped++
+	}, 'warn')
+	logger.warn('warn')
+	assert.equal(skipped, 0)
+	assert.deepEqual(sink, ['warn:warn'])
+	second()
+	await handle.close()
+	logger.error('closed')
+	const late = logger.subscribeRecords(() => {
+		throw new Error('closed observer must not run')
+	})
+	late()
+	late()
+	assert.equal(records.length, 4)
+	assert.deepEqual(sink, ['warn:warn'])
+	assert.throws(() => {
+		// @ts-expect-error Exercise the invalid level boundary for JavaScript callers.
+		logger.subscribeRecords(listen, 'invalid')
+	}, /Invalid logger level/)
+})
+
 test('file level and retention are explicit and close persists output even when sink throws', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'voxel-logger-'))
 	const handle = createRuntimeLogger({

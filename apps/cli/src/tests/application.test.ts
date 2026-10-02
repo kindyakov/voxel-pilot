@@ -6,6 +6,7 @@ import { setImmediate as flush } from 'node:timers/promises'
 import type {
 	BotRuntime,
 	BotSnapshot,
+	LogHistory,
 	StopResult
 } from '@voxel-pilot/contracts'
 import { createRuntimeLogger } from '@voxel-pilot/core/services'
@@ -64,6 +65,28 @@ function fixture(t: test.TestContext) {
 		start,
 		stop,
 		telemetry: {
+			getLogHistory(): LogHistory {
+				return {
+					id: 'application-fixture',
+					revision: 0,
+					level: 'debug',
+					limits: { maxEntries: 1, maxBytes: 256, maxEntryBytes: 256 },
+					entries: [],
+					stats: {
+						retainedEntries: 0,
+						retainedBytes: 0,
+						acceptedEntries: 0,
+						acceptedByLevel: { debug: 0, info: 0, warn: 0, error: 0 },
+						evictedEntries: 0,
+						evictedBytes: 0,
+						truncatedEntries: 0
+					}
+				}
+			},
+			subscribeLogs(listener) {
+				listener({ kind: 'snapshot', history: this.getLogHistory() })
+				return () => {}
+			},
 			getSnapshot: () => snapshot,
 			subscribe(listener) {
 				listeners.add(listener)
