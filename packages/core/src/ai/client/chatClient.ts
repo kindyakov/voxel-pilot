@@ -1,9 +1,7 @@
 import OpenAI from 'openai'
 
-import defaultConfig from '@/config/config.js'
-import Logger from '@/config/logger.js'
-
 import type {
+	AgentClientOptions,
 	AgentModelClient,
 	AgentResponseRequest,
 	ChatCompletionToolCall,
@@ -19,7 +17,6 @@ import {
 } from './parsers.js'
 import {
 	buildChatRequestDebugMarkdown,
-	shouldWriteRequestDebugDump,
 	writeRequestDebugDump
 } from './requestDebugDump.js'
 import { withApiRetry } from './retry.js'
@@ -33,23 +30,36 @@ export class OpenAICompatibleChatClient implements AgentModelClient {
 	private readonly pendingToolCalls = new Map<string, ChatCompletionToolCall>()
 	private activeInstructions: string | null = null
 
-	constructor(options?: {
-		apiKey?: string
-		client?: OpenAICompatibleChatSdkLike
-		model?: string
-		timeoutMs?: number
-		maxOutputTokens?: number
-		baseUrl?: string
-	}) {
+	private readonly logger: AgentClientOptions['logger']
+	private readonly debugDump: AgentClientOptions['debugDump']
+
+	constructor(
+		options: AgentClientOptions & { client?: OpenAICompatibleChatSdkLike }
+	) {
+		if (!options.client && !options.apiKey?.trim()) {
+			throw new Error('Explicit AI API key is required')
+		}
 		this.client =
-			options?.client ??
+			options.client ??
 			(new OpenAI({
-				apiKey: options?.apiKey ?? defaultConfig.ai.apiKey,
-				baseURL: options?.baseUrl ?? defaultConfig.ai.baseUrl
+				apiKey: options.apiKey,
+				baseURL: options.baseUrl ?? 'https://api.openai.com/v1',
+				organization: null,
+				project: null,
+				adminAPIKey: null,
+				webhookSecret: null,
+				defaultHeaders: {
+					Authorization: `Bearer ${options.apiKey}`,
+					'OpenAI-Organization': null,
+					'OpenAI-Project': null
+				},
+				logLevel: 'off'
 			}) as unknown as OpenAICompatibleChatSdkLike)
-		this.model = options?.model ?? defaultConfig.ai.model
-		this.timeoutMs = options?.timeoutMs ?? defaultConfig.ai.timeout
-		this.maxTokens = options?.maxOutputTokens ?? defaultConfig.ai.maxTokens
+		this.model = options.model
+		this.timeoutMs = options.timeoutMs
+		this.maxTokens = options.maxOutputTokens
+		this.logger = options.logger
+		this.debugDump = Object.freeze({ ...options.debugDump })
 	}
 
 	private ensureSession(instructions: string): void {
@@ -120,8 +130,9 @@ export class OpenAICompatibleChatClient implements AgentModelClient {
 			temperature: 0,
 			stream: false
 		}
-		if (shouldWriteRequestDebugDump()) {
+		if (this.debugDump.enabled) {
 			const requestDumpPath = await writeRequestDebugDump({
+				directory: this.debugDump.directory,
 				filePrefix: 'chat-request',
 				markdown: buildChatRequestDebugMarkdown({
 					model: requestBody.model,
@@ -135,20 +146,17 @@ export class OpenAICompatibleChatClient implements AgentModelClient {
 					promptAssembly: request.promptAssembly
 				})
 			})
-			Logger.debug('[AI] model_request_dump', {
+			this.logger.debug('[AI] model_request_dump', {
 				path: requestDumpPath
 			})
 		}
 
 		const response = await withApiRetry(
 			() =>
-				this.client.chat.completions.create(
-					requestBody,
-					{
-						timeout: this.timeoutMs,
-						signal: request.signal
-					}
-				),
+				this.client.chat.completions.create(requestBody, {
+					timeout: this.timeoutMs,
+					signal: request.signal
+				}),
 			{ signal: request.signal }
 		)
 

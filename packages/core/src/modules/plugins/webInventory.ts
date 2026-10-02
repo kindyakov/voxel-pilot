@@ -1,11 +1,11 @@
-import inventoryViewer from 'mineflayer-web-inventory'
-
 import type { Bot } from '@/types/index.js'
 
-import Config from '@/config/config.js'
-
-export const loadWebInventory = (bot: Bot): void => {
+export const loadWebInventory = async (
+	bot: Bot,
+	port: number
+): Promise<void> => {
+	const { default: inventoryViewer } = await import('mineflayer-web-inventory')
 	inventoryViewer(bot, {
-		port: Config.diagnostics.webInventoryPort
+		port
 	})
 }

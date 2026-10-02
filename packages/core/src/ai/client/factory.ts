@@ -1,15 +1,23 @@
-import defaultConfig, { type Config as ConfigInstance } from '@/config/config.js'
+import type { AIConfig } from '@/config/runtimeConfig.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import type { AgentModelClient } from '../contracts/agentClient.js'
 import { isAiPilotDisabled } from '../pilotAvailability.js'
 import { OpenAICompatibleChatClient } from './chatClient.js'
 import { NoOpAgentClient } from './noOpClient.js'
+import type { RequestDebugDumpOptions } from './requestDebugDump.js'
 import { OpenAIResponsesClient } from './responsesClient.js'
 
+export interface AgentClientDependencies {
+	readonly logger: RuntimeLogger
+	readonly debugDump: RequestDebugDumpOptions
+}
+
 export const createAgentClient = (
-	config: Pick<ConfigInstance, 'ai'> = defaultConfig
+	ai: AIConfig,
+	dependencies: AgentClientDependencies
 ): AgentModelClient => {
-	const provider = config.ai.provider
+	const provider = ai.provider
 	if (isAiPilotDisabled(provider)) {
 		return new NoOpAgentClient(provider)
 	}
@@ -19,19 +27,21 @@ export const createAgentClient = (
 		case 'openrouter':
 		case 'openai_compatible':
 			return new OpenAICompatibleChatClient({
-				apiKey: config.ai.apiKey,
-				model: config.ai.model,
-				timeoutMs: config.ai.timeout,
-				maxOutputTokens: config.ai.maxTokens,
-				baseUrl: config.ai.baseUrl
+				apiKey: ai.apiKey,
+				model: ai.model,
+				timeoutMs: ai.timeout,
+				maxOutputTokens: ai.maxTokens,
+				baseUrl: ai.baseUrl,
+				...dependencies
 			})
 		default:
 			return new OpenAIResponsesClient({
-				apiKey: config.ai.apiKey,
-				model: config.ai.model,
-				timeoutMs: config.ai.timeout,
-				maxOutputTokens: config.ai.maxTokens,
-				baseUrl: config.ai.baseUrl
+				apiKey: ai.apiKey,
+				model: ai.model,
+				timeoutMs: ai.timeout,
+				maxOutputTokens: ai.maxTokens,
+				baseUrl: ai.baseUrl,
+				...dependencies
 			})
 	}
 }

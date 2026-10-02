@@ -1,6 +1,9 @@
-import Logger from '@/config/logger.js'
+import type { AIConfig } from '@/config/runtimeConfig.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
-import { createAgentClient } from '@/ai/client.js'
+import { createAgentClient } from '@/ai/client/factory.js'
+import { summarizeModelError } from '@/ai/client/modelError.js'
+import type { RequestDebugDumpOptions } from '@/ai/client/requestDebugDump.js'
 import { isTransportApiError } from '@/ai/client/retry.js'
 import { assembleAgentPrompt } from '@/ai/prompt.js'
 import {
@@ -12,7 +15,11 @@ import {
 	summarizeExecution
 } from '@/ai/tools.js'
 
-import type { AgentTurnInput, AgentTurnResult } from '../contracts/agentTurn.js'
+import type {
+	AgentTurnInput,
+	AgentTurnResult,
+	AgentTurnRunner
+} from '../contracts/agentTurn.js'
 import type { PendingExecution } from '../contracts/execution.js'
 import { getWindowRuntime } from '../runtime/window.js'
 import { parseExecution } from '../tools/executionDefinitions.js'
@@ -28,12 +35,33 @@ import {
 } from './policy.js'
 import { validateExecutionTool, validateInlineTool } from './validation.js'
 
-export const runAgentTurn = async (
-	input: AgentTurnInput
+export interface AgentTurnDependencies {
+	readonly ai: AIConfig
+	readonly logger: RuntimeLogger
+	readonly debugDump: RequestDebugDumpOptions
+}
+
+/** Captures instance policy; a model conversation client is created for each turn. */
+export function createAgentTurnRunner(
+	dependencies: AgentTurnDependencies
+): AgentTurnRunner {
+	const captured = Object.freeze({
+		ai: Object.freeze({ ...dependencies.ai }),
+		logger: dependencies.logger,
+		debugDump: Object.freeze({ ...dependencies.debugDump })
+	})
+	return input => runAgentTurn(input, captured)
+}
+
+const runAgentTurn = async (
+	input: AgentTurnInput,
+	dependencies: AgentTurnDependencies
 ): Promise<AgentTurnResult> => {
+	const logger = dependencies.logger
 	const windows = input.windows ?? getWindowRuntime(input.bot)
 	const windowState = windows.getSnapshot()
-	const client = input.client ?? createAgentClient()
+	const client =
+		input.client ?? createAgentClient(dependencies.ai, dependencies)
 	const transcript: string[] = []
 	const promptAssembly = assembleAgentPrompt({
 		bot: input.bot,
@@ -78,8 +106,8 @@ export const runAgentTurn = async (
 				throw error
 			}
 
-			const reason = error instanceof Error ? error.message : String(error)
-			Logger.info('[AI] turn_failed', {
+			const reason = summarizeModelError(error, dependencies.ai)
+			logger.info('[AI] turn_failed', {
 				reason: `Model request failed: ${reason}`,
 				transcript
 			})
@@ -100,7 +128,7 @@ export const runAgentTurn = async (
 					? response.outputText.trim()
 					: ''
 			if (plainTextOutput && hasGroundedReferences(groundedFacts)) {
-				Logger.debug('[AI] plain_text_fallback_finish', {
+				logger.debug('[AI] plain_text_fallback_finish', {
 					round,
 					responseId: response.id,
 					message: plainTextOutput
@@ -110,7 +138,7 @@ export const runAgentTurn = async (
 					message: plainTextOutput,
 					transcript
 				}
-				Logger.info('[AI] turn_finish', {
+				logger.info('[AI] turn_finish', {
 					kind: result.kind,
 					message: result.message,
 					transcript
@@ -119,7 +147,7 @@ export const runAgentTurn = async (
 			}
 
 			if (plainTextOutput) {
-				Logger.info('[AI] turn_failed', {
+				logger.info('[AI] turn_failed', {
 					reason: 'Model returned plain text without grounded inspect data',
 					transcript
 				})
@@ -131,7 +159,7 @@ export const runAgentTurn = async (
 			}
 
 			if (modelRetries < MAX_MODEL_RETRIES) {
-				Logger.debug('[AI] retry_no_tool_call', {
+				logger.debug('[AI] retry_no_tool_call', {
 					round,
 					responseId: response.id,
 					retry: modelRetries + 1
@@ -143,7 +171,7 @@ export const runAgentTurn = async (
 				continue
 			}
 
-			Logger.info('[AI] turn_failed', {
+			logger.info('[AI] turn_failed', {
 				reason: 'Model did not return a tool call',
 				transcript
 			})
@@ -187,7 +215,7 @@ export const runAgentTurn = async (
 					groundedFacts
 				)
 				if (executionValidationError) {
-					Logger.info('[AI] turn_failed', {
+					logger.info('[AI] turn_failed', {
 						reason: executionValidationError,
 						transcript
 					})
@@ -197,7 +225,7 @@ export const runAgentTurn = async (
 						transcript
 					}
 				}
-				Logger.debug('[AI] execution_selected', {
+				logger.debug('[AI] execution_selected', {
 					round,
 					toolName: execution.toolName,
 					args: execution.args
@@ -212,7 +240,7 @@ export const runAgentTurn = async (
 						: typeof toolCall.arguments.summary === 'string'
 							? toolCall.arguments.summary
 							: response.outputText || 'Goal finished'
-				Logger.debug('[AI] finish_selected', {
+				logger.debug('[AI] finish_selected', {
 					round,
 					message: finishMessage
 				})
@@ -220,7 +248,7 @@ export const runAgentTurn = async (
 			}
 
 			if (!isInlineToolName(toolCall.name)) {
-				Logger.info('[AI] turn_failed', {
+				logger.info('[AI] turn_failed', {
 					reason: `Unknown tool requested: ${toolCall.name}`,
 					transcript
 				})
@@ -237,7 +265,7 @@ export const runAgentTurn = async (
 				input.taskContext
 			)
 			if (inlineValidationError) {
-				Logger.info('[AI] turn_failed', {
+				logger.info('[AI] turn_failed', {
 					reason: inlineValidationError,
 					transcript
 				})
@@ -261,8 +289,8 @@ export const runAgentTurn = async (
 				)
 			} catch (error) {
 				input.signal?.throwIfAborted()
-				const reason = error instanceof Error ? error.message : String(error)
-				Logger.info('[AI] turn_failed', {
+				const reason = summarizeModelError(error, dependencies.ai)
+				logger.info('[AI] turn_failed', {
 					reason: `Inline tool "${toolCall.name}" threw: ${reason}`,
 					transcript
 				})
@@ -294,7 +322,7 @@ export const runAgentTurn = async (
 				),
 				transcript
 			}
-			Logger.info('[AI] turn_finish', {
+			logger.info('[AI] turn_finish', {
 				kind: result.kind,
 				toolName: result.execution.toolName,
 				args: result.execution.args,
@@ -310,7 +338,7 @@ export const runAgentTurn = async (
 				message: finishMessage,
 				transcript
 			}
-			Logger.info('[AI] turn_finish', {
+			logger.info('[AI] turn_finish', {
 				kind: result.kind,
 				message: result.message,
 				transcript
@@ -319,7 +347,7 @@ export const runAgentTurn = async (
 		}
 
 		if (inlineOutputs.length === 0) {
-			Logger.info('[AI] turn_failed', {
+			logger.info('[AI] turn_failed', {
 				reason: 'Model requested no actionable tool output',
 				transcript
 			})
@@ -334,7 +362,7 @@ export const runAgentTurn = async (
 		nextInput = inlineOutputs
 	}
 
-	Logger.info('[AI] turn_failed', {
+	logger.info('[AI] turn_failed', {
 		reason: 'Inline tool round limit exceeded',
 		transcript
 	})

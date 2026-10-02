@@ -58,3 +58,7 @@ export type AgentTurnResult =
 			/** Maps to `transport_failed`: pause the goal without consuming its budget. */
 			isTransport?: boolean
 	  }
+
+export type AgentTurnRunner = (
+	input: AgentTurnInput
+) => Promise<AgentTurnResult>
