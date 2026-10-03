@@ -1,8 +1,8 @@
 diff --git a/index.d.ts b/index.d.ts
-index f650743..0927561 100644
+index f650743133708682ba69c0400c4dbc271be4db26..73b48d5535715a168d0db28ba05b2858b68be872 100644
 --- a/index.d.ts
 +++ b/index.d.ts
-@@ -303,7 +303,8 @@ export interface Bot extends TypedEmitter<BotEvents> {
+@@ -303,11 +303,13 @@ export interface Bot extends TypedEmitter<BotEvents> {
  
    equip: (
      item: Item | number,
@@ -12,7 +12,13 @@ index f650743..0927561 100644
    ) => Promise<void>
  
    unequip: (
-@@ -326,9 +327,13 @@ export interface Bot extends TypedEmitter<BotEvents> {
+-    destination: EquipmentDestination | null
++    destination: EquipmentDestination | null,
++    options?: { signal?: AbortSignal }
+   ) => Promise<void>
+ 
+   tossStack: (item: Item) => Promise<void>
+@@ -326,9 +328,13 @@ export interface Bot extends TypedEmitter<BotEvents> {
  
    placeBlock: (referenceBlock: Block, faceVector: Vec3) => Promise<void>
  
@@ -27,7 +33,7 @@ index f650743..0927561 100644
  
    activateEntity: (entity: Entity) => Promise<void>
  
-@@ -396,7 +401,8 @@ export interface Bot extends TypedEmitter<BotEvents> {
+@@ -396,7 +402,8 @@ export interface Bot extends TypedEmitter<BotEvents> {
    clickWindow: (
      slot: number,
      mouseButton: number,
@@ -37,7 +43,7 @@ index f650743..0927561 100644
    ) => Promise<void>
  
    putSelectedItemRange: (
-@@ -447,6 +453,16 @@ export interface Bot extends TypedEmitter<BotEvents> {
+@@ -447,6 +454,16 @@ export interface Bot extends TypedEmitter<BotEvents> {
    respawn: () => void
  }
  
@@ -55,7 +61,7 @@ index f650743..0927561 100644
    leftMouse: (slot: number) => Promise<void>
    rightMouse: (slot: number) => Promise<void>
 diff --git a/lib/plugins/generic_place.js b/lib/plugins/generic_place.js
-index 448dfc0..d8a9ab5 100644
+index 448dfc00d37a3171fb59843adad1b7afe4b78d99..d8a9ab5ffca5ac6d35c7e5ed9c4dac41dcc6a366 100644
 --- a/lib/plugins/generic_place.js
 +++ b/lib/plugins/generic_place.js
 @@ -7,9 +7,10 @@ function inject (bot) {
@@ -79,7 +85,7 @@ index 448dfc0..d8a9ab5 100644
      const pos = referenceBlock.position
  
 diff --git a/lib/plugins/inventory.js b/lib/plugins/inventory.js
-index bab0eef..525c693 100644
+index bab0eef7bac7b251bf44c5bb1c623f86c324d4ff..525c6933284fc67dc4f4b26141024a57a9a05b0f 100644
 --- a/lib/plugins/inventory.js
 +++ b/lib/plugins/inventory.js
 @@ -1,6 +1,6 @@
@@ -206,7 +212,7 @@ index bab0eef..525c693 100644
  
    async function putAway (slot) {
 diff --git a/lib/plugins/place_block.js b/lib/plugins/place_block.js
-index dc86e1e..6415925 100644
+index dc86e1e84fcfa0d48d3c1147e184737f9de723da..641592534c9cd1217cdc71939a2de1cc28451e69 100644
 --- a/lib/plugins/place_block.js
 +++ b/lib/plugins/place_block.js
 @@ -13,6 +13,7 @@ function inject (bot) {
@@ -238,10 +244,23 @@ index dc86e1e..6415925 100644
      if (newBlock.type === oldBlock.type) {
        throw new Error(`Server refused to place ${bot.heldItem?.name ?? 'block'} at ${dest}: the block is still ${newBlock.name}`)
 diff --git a/lib/plugins/simple_inventory.js b/lib/plugins/simple_inventory.js
-index 6fff5b2..f426932 100644
+index 6fff5b263ee24ad65043d0a3e99006a33328393f..ac46987e9c12c018507c23f867b7b7e5aec93139 100644
 --- a/lib/plugins/simple_inventory.js
 +++ b/lib/plugins/simple_inventory.js
-@@ -53,6 +53,7 @@ function inject (bot) {
+@@ -40,9 +40,10 @@ function inject (bot) {
+     await bot.transfer(options)
+   }
+ 
+-  async function unequip (destination) {
++  async function unequip (destination, options = {}) {
++    options.signal?.throwIfAborted()
+     if (destination === 'hand') {
+-      await equipEmpty()
++      await equipEmpty(options)
+     } else {
+       await disrobe(destination)
+     }
+@@ -53,13 +54,15 @@ function inject (bot) {
      assert.ok(slot < 9)
      if (bot.quickBarSlot === slot) return
      bot.quickBarSlot = slot
@@ -249,7 +268,34 @@ index 6fff5b2..f426932 100644
      bot._client.write('held_item_slot', {
        slotId: slot
      })
-@@ -85,7 +86,9 @@ function inject (bot) {
+     bot.updateHeldItem()
+   }
+ 
+-  async function equipEmpty () {
++  async function equipEmpty (options = {}) {
++    options.signal?.throwIfAborted()
+     for (let i = 0; i < QUICK_BAR_COUNT; ++i) {
+       if (!bot.inventory.slots[QUICK_BAR_START + i]) {
+         setQuickBarSlot(i)
+@@ -67,6 +70,17 @@ function inject (bot) {
+       }
+     }
+     const slot = bot.inventory.firstEmptyInventorySlot()
++    if (options.signal) {
++      // Bare-hand combat must never toss a stack or carry it on the cursor.
++      // Prepare an inactive slot, so cancellation cannot replace the new owner's hand.
++      assert.ok(slot >= 9 && slot < QUICK_BAR_START, 'No empty inventory slot for a free hand')
++      const stagingSlot = QUICK_BAR_START + (bot.quickBarSlot + 1) % QUICK_BAR_COUNT
++      await swapWithHotbar(slot, stagingSlot, options)
++      options.signal.throwIfAborted()
++      assert.strictEqual(bot.inventory.slots[stagingSlot], null, 'Free-hand slot is no longer empty')
++      setQuickBarSlot(stagingSlot - QUICK_BAR_START)
++      return
++    }
+     if (!slot) {
+       await bot.tossStack(bot.heldItem)
+       return
+@@ -85,7 +99,9 @@ function inject (bot) {
      await bot.putAway(destSlot)
    }
  
@@ -260,7 +306,7 @@ index 6fff5b2..f426932 100644
      if (typeof item === 'number') {
        item = bot.inventory.findInventoryItem(item)
      }
-@@ -104,7 +107,21 @@ function inject (bot) {
+@@ -104,7 +120,21 @@ function inject (bot) {
      }
  
      if (destination !== 'hand') {
@@ -283,7 +329,7 @@ index 6fff5b2..f426932 100644
        return
      }
  
-@@ -121,8 +138,24 @@ function inject (bot) {
+@@ -121,8 +151,24 @@ function inject (bot) {
        destSlot = QUICK_BAR_START + nextQuickBarSlot
        nextQuickBarSlot = (nextQuickBarSlot + 1) % QUICK_BAR_COUNT
      }
@@ -310,7 +356,7 @@ index 6fff5b2..f426932 100644
  
    function getDestSlot (destination) {
 diff --git a/lib/promise_utils.js b/lib/promise_utils.js
-index a609111..277d1a4 100644
+index a6091115d6d911496a0cd93cb8e8e687e8b4aef7..277d1a496c86dad8d283adc3e6ca13f35b2c0fbd 100644
 --- a/lib/promise_utils.js
 +++ b/lib/promise_utils.js
 @@ -81,17 +81,19 @@ function onceWithCleanup (emitter, event, { timeout = 0, checkCondition = undefi

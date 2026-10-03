@@ -13,8 +13,8 @@ import {
 } from '@/utils/combat/combatRange.js'
 import { canSeeEnemy } from '@/utils/combat/enemyVisibility.js'
 import {
+	canUseMeleeLoadout,
 	forbidsMelee,
-	hasCombatWeapon,
 	isDefensiveCandidate,
 	requiresAvoidance
 } from '@/utils/combat/selfDefense.js'
@@ -69,7 +69,6 @@ export const eventCanAutoEnterCombat = ({
 	isCombatTargetUpdateEvent(event) &&
 	context.preferences.autoDefend &&
 	!context.combatStopRequested &&
-	hasCombatWeapon(context) &&
 	isDefensiveCandidate(context, event.combatTarget.entity)
 
 export const eventEnemyInMeleeRange = ({
@@ -121,7 +120,7 @@ const canMelee = ({ context }: MachineGuardParams) =>
 	!requiresAvoidance(context) &&
 	!forbidsMelee(context) &&
 	!approachIsBlocked(context) &&
-	Boolean(context.bot?.utils.getMeleeWeapon())
+	canUseMeleeLoadout(context)
 
 export default {
 	canAttack: (params: MachineGuardParams) =>
@@ -133,7 +132,7 @@ export default {
 		canResumeApproach(context) &&
 		!requiresAvoidance(context) &&
 		!forbidsMelee(context) &&
-		Boolean(context.bot?.utils.getMeleeWeapon()),
+		canUseMeleeLoadout(context),
 	canSkirmishRanged,
 	isEnemyInMeleeRange
 }

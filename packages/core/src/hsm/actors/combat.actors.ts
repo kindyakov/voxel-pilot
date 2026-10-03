@@ -21,10 +21,12 @@ import {
 	stopMeleeAttack,
 	stopRangedAttack
 } from '@/utils/combat/runtimeControl.js'
+import { canUseMeleeLoadout } from '@/utils/combat/selfDefense.js'
 
 interface MeleeAttackState extends BaseServiceState {
 	currentTarget: Entity | null
 	ready: boolean
+	armed: boolean
 }
 
 interface RangedSkirmishState extends BaseServiceState {
@@ -113,8 +115,12 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 	}: ServiceAPI<MeleeAttackState>) => {
 		if (!state.ready || abortSignal.aborted) return
 		const weapon = bot.utils.getMeleeWeapon()
-		if (!weapon || bot.heldItem?.type !== weapon.type) {
-			// Inventory availability is not permission to hit with an empty hand.
+		if (
+			!canUseMeleeLoadout(context) ||
+			Boolean(weapon) !== state.armed ||
+			(weapon ? bot.heldItem?.type !== weapon.type : bot.heldItem !== null)
+		) {
+			// Inventory availability is not permission to skip weapon preparation.
 			// Re-enter through the HSM so the old controller stops before rearming.
 			sendBack({ type: 'WEAPON_BROKEN' })
 			return
@@ -175,7 +181,7 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		name: 'MeleeAttack',
 		operationTimeoutMs: 15_000,
 		tickInterval: 500,
-		initialState: { currentTarget: null, ready: false },
+		initialState: { currentTarget: null, ready: false, armed: false },
 		onStart: async api => {
 			const { bot, abortSignal, setState } = api
 			bot.utils.stopEating?.()
@@ -184,8 +190,11 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 				await bot.equip(meleeWeapon, 'hand', { signal: abortSignal })
 				if (abortSignal.aborted) return
 				logger.debug(`Melee equipped: ${meleeWeapon.name}`)
+			} else {
+				await bot.unequip('hand', { signal: abortSignal })
+				if (abortSignal.aborted) return
 			}
-			setState({ ready: true })
+			setState({ ready: true, armed: Boolean(meleeWeapon) })
 			// Read the current target after equip: it may have changed while awaiting inventory.
 			updateMelee(api)
 		},

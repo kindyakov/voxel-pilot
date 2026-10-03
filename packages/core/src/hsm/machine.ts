@@ -650,7 +650,9 @@ export const createBotMachine = (
 				}
 			),
 			sendMissingCombatWeaponMessage: ({ context }) => {
-				context.bot?.chat('Оружия нет (или нет боеприпасов). Бой не начинаю.')
+				context.bot?.chat(
+					'Оружия нет (или нет боеприпасов). Для ближней самообороны использую кулаки.'
+				)
 			},
 
 			removeEntity: assign(({ context, event }) => {
@@ -1109,7 +1111,6 @@ export const createBotMachine = (
 			START_COMBAT: [
 				{
 					guard: ({ context, event }) =>
-						hasCombatWeapon(context) &&
 						isDefensiveCandidate(context, event.target),
 					target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
 					actions: [
@@ -1402,8 +1403,7 @@ export const createBotMachine = (
 									not(
 										stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.RETREATING')
 									),
-									({ context }) =>
-										!context.combatTarget.entity || !hasCombatWeapon(context)
+									({ context }) => !context.combatTarget.entity
 								]),
 								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING',
 								actions: 'notifyMissingCombatWeapon'
@@ -1517,8 +1517,7 @@ export const createBotMachine = (
 								entry: 'notifyMissingCombatWeapon',
 								always: [
 									{
-										guard: ({ context }) =>
-											!context.combatTarget.entity || !hasCombatWeapon(context),
+										guard: ({ context }) => !context.combatTarget.entity,
 										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING'
 									},
 									{

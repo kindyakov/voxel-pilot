@@ -173,10 +173,25 @@ export class HandoffBot extends EventEmitter {
 	get heldItem() {
 		return this.inventory.slots[36 + this.quickBarSlot] ?? null
 	}
-	async equip(item: Item, destination: string) {
+	async equip(
+		item: Item,
+		destination: string,
+		options?: { signal?: AbortSignal }
+	) {
+		options?.signal?.throwIfAborted()
 		this.equippedItems.push(item.name)
 		await this.equipGate
+		options?.signal?.throwIfAborted()
 		this.inventory.slots[this.getEquipmentDestSlot(destination)] = item
+	}
+	async unequip(destination: string, options?: { signal?: AbortSignal }) {
+		options?.signal?.throwIfAborted()
+		if (destination !== 'hand') throw new Error('Fixture only frees the hand')
+		const empty = this.inventory.slots.findIndex(
+			(item, slot) => slot >= 36 && slot < 45 && item === null
+		)
+		if (empty < 0) throw new Error('No empty hotbar slot in fixture')
+		this.setQuickBarSlot(empty - 36)
 	}
 	async dig(block: { position: Vec3 }) {
 		this.digCalls.push(block.position)

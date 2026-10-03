@@ -75,7 +75,13 @@ test('a bowl and arrows are not a ranged loadout and do not conceal the missing-
 		await flush()
 		bot.emit('physicsTick')
 	}
-	assert.ok(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' }))
+	assert.ok(
+		actor
+			.getSnapshot()
+			.matches({ MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' } })
+	)
+	assert.equal(bot.pvp.target?.id, enemy.id)
+	assert.equal(bot.heldItem, null)
 	assert.equal(bot.equippedItems.includes('bowl'), false)
 	assert.equal(bot.itemUses, 0)
 	assert.equal(
@@ -84,22 +90,32 @@ test('a bowl and arrows are not a ranged loadout and do not conceal the missing-
 	)
 })
 
-test('no weapon means no fight or retreat; notify once until rearmed, including explicit commands', async t => {
+test('no weapon allows real fist defense; notify once until rearmed, including explicit commands', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, enemy, observe, step } = createHarness()
 	t.after(() => actor.stop())
 	const armedInventory = bot.inventory.items
 	bot.inventory.items = () => []
+	actor.send({ type: 'START_COMBAT', target: enemy })
 	for (let i = 0; i < 20; i++) {
 		observe()
-		actor.send({ type: 'START_COMBAT', target: enemy })
 		t.mock.timers.tick(100)
 		await flush()
 		step()
-		assert.ok(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' }))
+		assert.ok(
+			actor
+				.getSnapshot()
+				.matches({ MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' } })
+		)
 	}
-	assert.equal(bot.attacks.length, 0)
-	assert.equal(bot.entity.position.x, 0)
+	assert.ok(bot.attacks.includes(enemy.id))
+	actor.send({ type: 'START_COMBAT', target: enemy })
+	actor.send({ type: 'START_COMBAT', target: enemy })
+	assert.equal(bot.heldItem, null)
+	assert.ok(
+		bot.entity.position.x >= 0,
+		'missing weapon must not initiate escape'
+	)
 	assert.equal(
 		bot.chatMessages.filter(message => /оружия нет/i.test(message)).length,
 		1
@@ -110,12 +126,19 @@ test('no weapon means no fight or retreat; notify once until rearmed, including 
 	t.mock.timers.tick(500)
 	await flush()
 	assert.equal(bot.pvp.target?.id, enemy.id)
+	assert.equal(bot.asBot().heldItem?.name, 'iron_sword')
+	bot.inventory.slots.fill(null)
 	bot.inventory.items = () => []
 	observe()
 	t.mock.timers.tick(500)
 	await flush()
-	assert.ok(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' }))
-	assert.equal(bot.pvp.target, undefined)
+	assert.ok(
+		actor
+			.getSnapshot()
+			.matches({ MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' } })
+	)
+	assert.equal(bot.pvp.target?.id, enemy.id)
+	assert.equal(bot.heldItem, null)
 	assert.equal(
 		bot.chatMessages.filter(message => /оружия нет/i.test(message)).length,
 		2

@@ -150,6 +150,21 @@ export const hasCombatWeapon = (context: MachineContext) =>
 	Boolean(context.bot?.utils.getMeleeWeapon()) ||
 	Boolean(context.bot?.utils.getRangeWeapon() && context.bot.utils.getArrow())
 
+/** An available ranged loadout is not permission to skip it with fists. */
+export const canUseMeleeLoadout = (context: MachineContext) => {
+	const bot = context.bot
+	if (!bot) return false
+	if (bot.utils.getMeleeWeapon()) return true
+	if (hasRangedLoadout(context)) return false
+	// Missing storage is a recoverable preparation wait, not a broken controller.
+	return (
+		!bot.heldItem ||
+		bot.inventory.slots.some(
+			(item, slot) => slot >= 9 && slot < 45 && item === null
+		)
+	)
+}
+
 export const forbidsMelee = (context: MachineContext) =>
 	context.threats.some(
 		threat =>
