@@ -11,6 +11,7 @@ import { createCombatActors } from '../../hsm/actors/combat.actors.js'
 import { context as defaultContext } from '../../hsm/context.js'
 import { canAttackEnemy } from '../../utils/combat/enemyVisibility.js'
 import { BotUtils } from '../../utils/minecraft/botUtils.js'
+import { BlockFactory, registry } from './fixtures/handoffBot.js'
 import { fixtureLogger as Logger } from './fixtures/services.js'
 
 const combatActors = createCombatActors(Logger)
@@ -97,7 +98,14 @@ class CombatServiceBot extends EventEmitter {
 	hsm = {
 		getContext: () => this.contextRef
 	}
-	blockAt = () => null
+	blockAt = (position: Vec3) => {
+		const block = BlockFactory.fromStateId(
+			registry.blocksByName.air.minStateId,
+			0
+		)
+		block.position = position.floored()
+		return block
+	}
 	getEquipmentDestSlot() {
 		return 36
 	}
@@ -113,6 +121,9 @@ const createCombatContext = (
 ) => ({
 	...defaultContext,
 	bot,
+	entities: [enemy],
+	enemies: [enemy],
+	threatObservationAt: Date.now(),
 	combatTarget: {
 		entity: enemy,
 		distance
@@ -197,11 +208,14 @@ test('regression: ranged service cleanup should stop active hawkEye attacks', as
 	}
 })
 
-const createOpaqueBlock = () => ({
-	boundingBox: 'block',
-	transparent: false,
-	material: 'stone'
-})
+const createOpaqueBlock = (position: Vec3) => {
+	const block = BlockFactory.fromStateId(
+		registry.blocksByName.stone.minStateId,
+		0
+	)
+	block.position = position.floored()
+	return block
+}
 
 const createPathfindingHarness = () => {
 	const registry = minecraftData('1.20.4')
@@ -225,7 +239,7 @@ const createPathfindingHarness = () => {
 			allowParkour: true,
 			allowSprinting: true
 		},
-		blockAt: () => createOpaqueBlock(),
+		blockAt: (position: Vec3) => createOpaqueBlock(position),
 		pathfinder: {
 			getPathFromTo: function* () {
 				getPathFromToCalls += 1

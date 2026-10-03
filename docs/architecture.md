@@ -33,7 +33,7 @@ That runtime must:
 - execute actions only through clear bot primitives
 - keep the bot state consistent through the HSM
 - remain resilient to failures, interruptions, and partial progress
-- survive a complete loss of AI: pause the active goal (not clear it), switch to autonomous survival (monitoring, tactical retreat, eating from inventory, self-defense with weapons, idle gaze)
+- survive a complete loss of AI: pause the active goal (not clear it), switch to autonomous survival (monitoring, tactical retreat, eating from inventory, self-defense, idle gaze)
 - allow the agent loop, tools, and primitives to evolve without rewriting the system around one-off cases
 - support a start toggle for AI (disabled mode as a first-class operational mode)
 
@@ -77,6 +77,7 @@ Current top-level states:
 - `MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_EATING`
 - `MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING`
 - `MAIN_ACTIVITY.COMBAT`
+- `MAIN_ACTIVITY.DEFENSIVE_RELOCATION`
 - `MAIN_ACTIVITY.TASKS`
 - `MONITORING`
 
@@ -114,7 +115,7 @@ Unavailable food or a recovery error releases the active task with a failure rea
 
 Callback services deliver synchronous and asynchronous failures as `ERROR`. They subscribe before startup, serialize each tick handler, clear timers/listeners on exit, and suppress results after cancellation. Breaking also cancels digging and inventory waits; a canceled actor cannot set or clear the next actor's movement goal. Navigation handles `path_update` failures and has a 30-second deadline, as does breaking. Placing, opening windows, and transfers have 15-second deadlines. Continuous `follow_entity` remains active until cancellation or target disappearance.
 
-Ranged equip failure disables ranged combat for the current encounter and falls back to melee. Combat async operations, including startup equip, have a 15-second deadline without limiting the duration of a healthy encounter. A combat service error exits combat and suppresses automatic re-entry. Fleeing uses the movement controller's terrain heuristics; its fallback yaw follows Mineflayer's forward-axis convention.
+Ranged equip failure disables ranged combat for the current encounter and falls back to melee. Combat async operations, including startup equip, have a 15-second deadline without limiting the duration of a healthy encounter. A combat controller failure stops combat in waiting; a target entering melee range does not clear that failure. Fleeing uses the movement controller's terrain heuristics; its fallback yaw follows Mineflayer's forward-axis convention.
 
 The shared policy in `packages/core/src/ai/goalExecution.ts` stops a goal after three consecutive rejections or execution failures, including different causes, or after 128 started actions. Success resets consecutive failures, not the total budget; combat/survival interruption preserves both counters. Invalid model actions produce `rejected` and may be corrected in the next turn; exhausted provider retries remain terminal `failed`. The global transition-rate guard resets its internal detection state after its 60-second cooldown.
 
@@ -155,12 +156,20 @@ Inventory, equipment, nearby blocks, entities, and interactables are NOT in the 
 ## Combat
 
 Combat is handled by dedicated actors, not by the AI loop.
-`MAIN_ACTIVITY.COMBAT` currently has two leaf states selected by `DECIDING`:
+Suitable weapons take priority. Without a melee weapon or usable ranged loadout, the bot frees its hand and defends itself with fists, including against an eligible nearby aggressive mob before its first hit. A bow without ammunition does not prevent fists. Broken weapons are replaced first; without a replacement the bot prepares an empty hand while preserving inventory. A completely full inventory makes it wait for space rather than discard an item. Players and bosses remain excluded targets; critical survival and dangerous creepers preempt self-defense.
+
+Ordinary self-defense selects the nearest eligible target. A confirmed attacking shooter takes priority and permits extended melee approach. Observation maintains that contact separately from the nearest threat; unknown-source damage does not blame the nearest mob.
+
+`MAIN_ACTIVITY.COMBAT` selects behavior through `DECIDING`:
 
 - `MELEE_ATTACKING`
 - `RANGED_SKIRMISHING`
+- `WAITING` — stopped combat after exhausted approach or controller failure
+- `RETREATING` — response to a dangerous creeper
 
-There are no `APPROACHING` / `FLEEING` states in the current machine. If the combat diagram shows them, the diagram is stale.
+The combat actor owns approach. It bounds failed routes and lack of actual progress while retaining the encounter budget across restarts. There is no total pursuit deadline. A current position permits navigation around a wall, but every hit requires reach and visibility. Losing the current position stops movement; remembered contact briefly retains the goal pause. Exhausted approach without ongoing fire retains waiting; continuing confirmed attack without an available response permits `DEFENSIVE_RELOCATION` at normal health.
+
+Defensive relocation prefers reachable cover from a known shooter, then increasing distance. Cover and brief visibility loss do not resume the goal while contact remains relevant. Returning after unknown-source damage requires actual departure, fresh safe observation, and a separate quiet period. The harness controls this independently of AI while preserving goal progress and budget. Visibility and reachability checks are shared by guards and monitoring.
 
 Visibility and reachability checks are shared with guards and monitoring logic.
 

@@ -240,8 +240,36 @@ for (const change of [
 			)
 			assert.equal(bot.pvp.target, enemy)
 		}
-		if (change === 'outside' || change === 'sight' || change === 'death') {
+		if (change === 'outside' || change === 'death') {
 			assert.ok(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' }))
+		}
+		if (change === 'sight') {
+			assert.ok(
+				actor
+					.getSnapshot()
+					.matches({ MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' } })
+			)
+			assert.equal(actor.getSnapshot().context.combatTarget.entity, enemy)
+			assert.equal(bot.pvp.target, enemy)
+			for (let i = 0; i < 5; i++) {
+				bot.emit('physicsTick')
+				bot.emit('physicTick')
+				await flush()
+			}
+			assert.deepEqual(
+				bot.attacks,
+				[],
+				'pursuit around a wall cannot authorize a blind hit'
+			)
+			bot.solidAt = position => position.y < 64
+			observe()
+			await flush()
+			assert.ok(
+				actor
+					.getSnapshot()
+					.matches({ MAIN_ACTIVITY: { COMBAT: 'RANGED_SKIRMISHING' } })
+			)
+			assert.equal(attack.mock.callCount(), 1)
 		}
 	})
 }

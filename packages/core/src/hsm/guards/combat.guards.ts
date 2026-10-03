@@ -8,13 +8,14 @@ import {
 } from '@/utils/combat/approachPolicy.js'
 import {
 	getMeleeExitRange,
+	hasCurrentCombatPosition,
 	hasRangedLoadout,
 	resolveCombatTarget
 } from '@/utils/combat/combatRange.js'
 import { canSeeEnemy } from '@/utils/combat/enemyVisibility.js'
 import {
+	canUseMeleeLoadout,
 	forbidsMelee,
-	hasCombatWeapon,
 	isDefensiveCandidate,
 	requiresAvoidance
 } from '@/utils/combat/selfDefense.js'
@@ -23,6 +24,7 @@ import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 const canUseRanged = ({ context }: MachineGuardParams): boolean => {
 	const target = resolveCombatTarget(context)
 	if (
+		!hasCurrentCombatPosition(context) ||
 		context.threatObservationProblem !== null ||
 		!target.entity ||
 		target.distance > context.preferences.rangedAttackRange ||
@@ -69,7 +71,6 @@ export const eventCanAutoEnterCombat = ({
 	isCombatTargetUpdateEvent(event) &&
 	context.preferences.autoDefend &&
 	!context.combatStopRequested &&
-	hasCombatWeapon(context) &&
 	isDefensiveCandidate(context, event.combatTarget.entity)
 
 export const eventEnemyInMeleeRange = ({
@@ -114,6 +115,7 @@ export const eventCanSkirmishRangedFromMelee = ({
 }
 
 const canMelee = ({ context }: MachineGuardParams) =>
+	hasCurrentCombatPosition(context) &&
 	context.combatTarget.entity !== null &&
 	context.threatObservationProblem === null &&
 	isFinitePosition(context.bot?.entity?.position) &&
@@ -121,19 +123,20 @@ const canMelee = ({ context }: MachineGuardParams) =>
 	!requiresAvoidance(context) &&
 	!forbidsMelee(context) &&
 	!approachIsBlocked(context) &&
-	Boolean(context.bot?.utils.getMeleeWeapon())
+	canUseMeleeLoadout(context)
 
 export default {
 	canAttack: (params: MachineGuardParams) =>
 		canMelee(params) || canSkirmishRanged(params),
 	canMelee,
 	canResumeApproach: ({ context }: MachineGuardParams) =>
+		hasCurrentCombatPosition(context) &&
 		context.threatObservationProblem === null &&
 		isFinitePosition(context.bot?.entity?.position) &&
 		canResumeApproach(context) &&
 		!requiresAvoidance(context) &&
 		!forbidsMelee(context) &&
-		Boolean(context.bot?.utils.getMeleeWeapon()),
+		canUseMeleeLoadout(context),
 	canSkirmishRanged,
 	isEnemyInMeleeRange
 }

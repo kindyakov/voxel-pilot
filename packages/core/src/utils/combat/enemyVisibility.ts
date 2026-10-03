@@ -5,6 +5,8 @@ import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import { GoalNear } from '@/modules/plugins/goals.js'
 
+import { traceLoadedSight } from './cover.js'
+
 const { Movements } = pathFinderPkg
 
 /**
@@ -44,35 +46,7 @@ export function canSeeEnemy(bot: Bot, enemy: Entity): boolean {
 	const targetHeight = enemy.height ? enemy.height / 2 : 0.9
 	const targetPos = enemy.position.offset(0, targetHeight, 0)
 
-	const distance = eyePos.distanceTo(targetPos)
-	const direction = targetPos.minus(eyePos).normalize()
-
-	// Raycast (проверка блоков на линии между ботом и врагом)
-	// Проверяем блоки на линии с шагом 0.5 блока
-	for (let i = 0.5; i < distance; i += 0.5) {
-		const checkPos = eyePos.offset(
-			direction.x * i,
-			direction.y * i,
-			direction.z * i
-		)
-		const blockAtPos = bot.blockAt(checkPos)
-
-		// Пропускаем пустые и прозрачные блоки
-		if (
-			!blockAtPos ||
-			blockAtPos.boundingBox === 'empty' ||
-			blockAtPos.transparent ||
-			!blockAtPos.material
-		) {
-			continue
-		}
-
-		// Нашли solid блок - видимость заблокирована
-		return false
-	}
-
-	// Нет solid блоков на линии → ВИДИМ
-	return true
+	return traceLoadedSight(bot, eyePos, targetPos) === 'clear'
 }
 
 /**

@@ -1,8 +1,22 @@
+diff --git a/lib/PVP.d.ts b/lib/PVP.d.ts
+index 2cd394b6bfd44183cead8c955b125bc0a00b39be..623c35673e1030e0d5f287a13f5cd93aabef6428 100644
+--- a/lib/PVP.d.ts
++++ b/lib/PVP.d.ts
+@@ -51,7 +51,8 @@ export declare class PVP {
+      *
+      * @param target - The target to attack.
+      */
+-    attack(target: Entity): Promise<void>;
++    /** Synchronous permission checked after aim; does not cancel following. */
++    attack(target: Entity, options?: { canAttack?: (target: Entity) => boolean }): Promise<void>;
+     /**
+      * Stops attacking the current entity.
+      */
 diff --git a/lib/PVP.js b/lib/PVP.js
-index 758c2b3..6a0ae60 100644
+index 758c2b3797824f70b843231b286c449ee7448dea..41751fd645a2ca2aecf812ef89a5f2b9401a9fcb 100644
 --- a/lib/PVP.js
 +++ b/lib/PVP.js
-@@ -26,6 +26,10 @@ class PVP {
+@@ -26,6 +26,11 @@ class PVP {
          this.timeToNextAttack = 0;
          this.wasInRange = false;
          this.blockingExplosion = false;
@@ -10,23 +24,34 @@ index 758c2b3..6a0ae60 100644
 +        this.pendingTimers = new Set();
 +        this.cancelPathWait = null;
 +        this.shieldRaised = false;
++        this.attackPermission = undefined;
          /**
           * How close the bot will attempt to get to the target when when pursuing it.
           */
-@@ -61,7 +65,11 @@ class PVP {
+@@ -57,12 +62,19 @@ class PVP {
+      *
+      * @param target - The target to attack.
+      */
+-    attack(target) {
++    attack(target, options = {}) {
          return __awaiter(this, void 0, void 0, function* () {
-             if (target === this.target)
-                 return;
--            yield this.stop();
+-            if (target === this.target)
++            if (target === this.target) {
++                this.attackPermission = options.canAttack;
++                return;
++            }
 +            const stopped = this.stop();
 +            const generation = this.operationGeneration;
 +            yield stopped;
 +            if (generation !== this.operationGeneration)
-+                return;
+                 return;
+-            yield this.stop();
              this.target = target;
++            this.attackPermission = options.canAttack;
              this.timeToNextAttack = 0;
              if (!this.target)
-@@ -79,6 +87,8 @@ class PVP {
+                 return;
+@@ -79,6 +91,8 @@ class PVP {
       */
      stop() {
          return __awaiter(this, void 0, void 0, function* () {
@@ -35,7 +60,7 @@ index 758c2b3..6a0ae60 100644
              if (this.target == null)
                  return;
              this.target = undefined;
-@@ -88,9 +98,12 @@ class PVP {
+@@ -88,9 +102,12 @@ class PVP {
                  yield this.onceWithTimeout('path_stop', 5000);
              }
              catch (err) {
@@ -49,7 +74,7 @@ index 758c2b3..6a0ae60 100644
              // @ts-expect-error
              this.bot.emit('stoppedAttacking');
          });
-@@ -108,6 +121,7 @@ class PVP {
+@@ -108,6 +125,7 @@ class PVP {
              const cleanup = () => {
                  clearTimeout(timeoutId);
                  this.bot.removeListener(eventName, callback);
@@ -57,7 +82,7 @@ index 758c2b3..6a0ae60 100644
              };
              return new Promise((resolve, reject) => {
                  callback = () => {
-@@ -115,6 +129,10 @@ class PVP {
+@@ -115,6 +133,10 @@ class PVP {
                      resolve();
                  };
                  this.bot.once(eventName, callback);
@@ -68,7 +93,7 @@ index 758c2b3..6a0ae60 100644
                  timeoutId = setTimeout(() => {
                      cleanup();
                      reject();
-@@ -127,7 +145,9 @@ class PVP {
+@@ -127,7 +149,9 @@ class PVP {
       * @returns void
       */
      forceStop() {
@@ -79,12 +104,13 @@ index 758c2b3..6a0ae60 100644
              return;
          this.target = undefined;
          const pathfinder = this.bot.pathfinder;
-@@ -135,6 +155,29 @@ class PVP {
+@@ -135,6 +159,30 @@ class PVP {
          // @ts-expect-error
          this.bot.emit('stoppedAttacking');
      }
 +    cancelOperations() {
 +        this.operationGeneration++;
++        this.attackPermission = undefined;
 +        if (this.cancelPathWait)
 +            this.cancelPathWait();
 +        for (const timer of this.pendingTimers)
@@ -109,7 +135,7 @@ index 758c2b3..6a0ae60 100644
      /**
       * Called each tick to update attack timers.
       */
-@@ -169,7 +212,7 @@ class PVP {
+@@ -169,7 +217,7 @@ class PVP {
       * Blocks a creeper explosion with a shield.
       */
      checkExplosion() {
@@ -118,7 +144,7 @@ index 758c2b3..6a0ae60 100644
              return;
          if (this.target.name &&
              this.target.name === 'creeper' &&
-@@ -180,7 +223,8 @@ class PVP {
+@@ -180,7 +228,8 @@ class PVP {
              this.bot.pathfinder.stop();
              this.bot.lookAt(this.target.position.offset(0, 1, 0), true);
              this.bot.activateItem(true);
@@ -128,7 +154,7 @@ index 758c2b3..6a0ae60 100644
                  this.blockingExplosion = false;
              }, 2000);
          }
-@@ -197,34 +241,40 @@ class PVP {
+@@ -197,34 +246,52 @@ class PVP {
          }
          const queue = new mineflayer_utils_1.TaskQueue();
          const target = this.target;
@@ -151,6 +177,18 @@ index 758c2b3..6a0ae60 100644
          });
          queue.addSync(() => {
 -            if (target !== this.target)
++            if (target !== this.target || generation !== this.operationGeneration)
++                throw 'Target changed!';
++            // Following is independent of permission to hit. Revalidate after
++            // asynchronous aim, immediately before sending the attack packet.
++            const position = target.position;
++            const ownPosition = this.bot.entity.position;
++            if (target.isValid === false || !position || !ownPosition ||
++                ![position.x, position.y, position.z, ownPosition.x, ownPosition.y, ownPosition.z].every(Number.isFinite) ||
++                position.distanceTo(ownPosition) > this.attackRange)
++                return;
++            if (this.attackPermission && this.attackPermission(target) !== true)
++                return;
 +            if (target !== this.target || generation !== this.operationGeneration)
                  throw 'Target changed!';
              this.bot.attack(this.target);

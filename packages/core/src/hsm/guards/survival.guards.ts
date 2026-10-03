@@ -42,6 +42,7 @@ export const canPreemptForHungerRecovery = ({
 	event
 }: MachineGuardParams) =>
 	event.type === 'UPDATE_FOOD' &&
+	!context.defensiveRelocation &&
 	isRecoverySafe(context) &&
 	canAttemptRecovery(context) &&
 	event.food < context.preferences.foodEmergency

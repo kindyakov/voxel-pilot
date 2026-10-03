@@ -14,7 +14,7 @@ import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
 import { fixtureLogger as Logger } from './fixtures/services.js'
 
 test('invalid observation interrupts ranged combat into a stopped observation wait', t => {
-	const { bot, actor, enemy } = createHarness()
+	const { bot, actor, enemy, observe } = createHarness()
 	t.after(() => actor.stop())
 	bot.inventory.items = () => [
 		new ItemFactory(registry.itemsByName.bow.id, 1),
@@ -33,6 +33,7 @@ test('invalid observation interrupts ranged combat into a stopped observation wa
 		}),
 		false
 	)
+	observe()
 	actor.send({ type: 'START_COMBAT', target: enemy })
 	assert.ok(
 		actor
