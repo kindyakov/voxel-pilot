@@ -10,6 +10,75 @@ import { canSeeEnemy } from '@/utils/combat/enemyVisibility.js'
 import { createHarness } from './fixtures/handoffBot.js'
 import { testHarnessDependencies } from './fixtures/services.js'
 
+for (const status of ['success', 'partial'] as const) {
+	test(`native ${status} route consumes more than 8192 away-going points through the real melee actor without resetting its encounter`, async t => {
+		t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
+		const { bot, actor, enemy, observe } = createHarness()
+		t.after(() => actor.stop())
+		enemy.position = new Vec3(7, 64, 0)
+		observe()
+		actor.send({
+			type: 'DAMAGE_OBSERVED',
+			sourceId: enemy.id,
+			sourcePosition: enemy.position.clone(),
+			ranged: true
+		})
+		observe()
+		await flush()
+		// Replace the expensive A* search at the native boundary. Native installation,
+		// suffix consumption, actor sampling and HSM policy remain real.
+		bot.solidAt = p => p.y < 64 || (Math.floor(p.x) === 2 && p.y < 69)
+		const path = Array.from({ length: 9001 }, (_, i) =>
+			Object.assign(new Vec3(0, 64, i + 1), {
+				cost: 1,
+				remainingBlocks: 0,
+				toBreak: [],
+				toPlace: [],
+				parkour: false,
+				hash: `0,64,${i + 1}`
+			})
+		)
+		t.mock.method(bot.pathfinder, 'getPathTo', () => ({
+			status: 'success',
+			path,
+			cost: 9001,
+			time: 0,
+			visitedNodes: 9001,
+			generatedNodes: 9001
+		}))
+		bot.prependListener('path_update', result => {
+			result.status = status
+		})
+		// Publish and install before confirming traversal.
+		bot.emit('physicsTick')
+		assert.equal(path.length, 9001)
+		for (let i = 1; i <= 9000; i++) {
+			bot.entity.position = new Vec3(0, 64, i)
+			observe()
+			t.mock.timers.tick(50)
+			await flush()
+			bot.emit('physicsTick')
+			assert.equal(path.length, 9001 - i, `native did not consume point ${i}`)
+			const attempt = actor.getSnapshot().context.approachAttempts[enemy.id]!
+			assert.equal(attempt.blocked, false, `point ${i}`)
+			assert.equal(
+				attempt.progress!.at,
+				Date.now(),
+				`point ${i} did not renew progress`
+			)
+		}
+		const attempt = actor.getSnapshot().context.approachAttempts[enemy.id]!
+		assert.equal(attempt.failedRoutes, 0)
+		assert.equal(attempt.resumes, 0)
+		assert.ok(JSON.stringify(attempt).length < 2000)
+		assert.ok(
+			actor
+				.getSnapshot()
+				.matches({ MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' } })
+		)
+	})
+}
+
 test('LOS loss and route exhaustion pause planning; missing position immediately stops movement until contact expires', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	let plans = 0

@@ -3,12 +3,15 @@ import test from 'node:test'
 
 import { Vec3 } from 'vec3'
 
-import { recordApproach } from '@/utils/combat/approachPolicy.js'
+import {
+	recordApproach,
+	resumeApproach
+} from '@/utils/combat/approachPolicy.js'
 import { AcceptedApproachRoute } from '@/utils/combat/approachRoute.js'
 
 import { createHarness } from './fixtures/handoffBot.js'
 
-test('the 8192-point encounter cap bounds detour credit while actual distance improvement remains available', t => {
+test('accepted detour traversal continues beyond 8192 points with bounded encounter memory', t => {
 	t.mock.timers.enable({ apis: ['Date'] })
 	const { bot, actor, enemy, observe } = createHarness()
 	t.after(() => actor.stop())
@@ -16,48 +19,109 @@ test('the 8192-point encounter cap bounds detour credit while actual distance im
 	observe()
 	let context = actor.getSnapshot().context
 	const initial = recordApproach(context, false)[enemy.id]!
-	context = {
-		...context,
-		approachAttempts: {
-			[enemy.id]: {
-				...initial,
-				routeVisited: Object.fromEntries(
-					Array.from({ length: 8191 }, (_, i) => [
-						`${i + 100},64,100`,
-						true as const
-					])
-				)
-			}
+	context = { ...context, approachAttempts: { [enemy.id]: initial } }
+	for (let i = 1; i <= 9000; i++) {
+		bot.entity.position = new Vec3(0, 64, i)
+		t.mock.timers.tick(1000)
+		context = {
+			...context,
+			approachAttempts: recordApproach(
+				context,
+				false,
+				bot.entity.position.clone()
+			)
 		}
-	}
-	bot.entity.position = new Vec3(0, 64, 1)
-	t.mock.timers.tick(1000)
-	context = {
-		...context,
-		approachAttempts: recordApproach(
-			context,
+		assert.equal(
+			context.approachAttempts[enemy.id]!.blocked,
 			false,
-			bot.entity.position.clone()
+			`point ${i}`
+		)
+		assert.equal(
+			context.approachAttempts[enemy.id]!.progress!.at,
+			Date.now(),
+			`point ${i} did not renew progress`
 		)
 	}
-	const atCap = context.approachAttempts[enemy.id]!
-	assert.equal(Object.keys(atCap.routeVisited).length, 8192)
-	assert.equal(atCap.progress!.at, 1000)
+	assert.ok(JSON.stringify(context.approachAttempts[enemy.id]).length < 2000)
+})
+
+test('native paths longer than 8192 points remain observable without copying their geometry', () => {
+	const route = new AcceptedApproachRoute()
+	const path = Array.from({ length: 9000 }, (_, i) => new Vec3(0, 64, i))
+	route.publish(path)
+	assert.equal(route.sample(path[0]!), undefined)
+	const first = path.shift()!
+	assert.deepEqual(route.sample(first), first)
+})
+
+test('a periodic accepted waypoint loop longer than 8192 points exhausts progress without evicting its evidence', t => {
+	t.mock.timers.enable({ apis: ['Date'] })
+	const { bot, actor, enemy, observe } = createHarness()
+	t.after(() => actor.stop())
+	enemy.position = new Vec3(7, 64, 0)
+	observe()
+	let context = actor.getSnapshot().context
+	context = { ...context, approachAttempts: recordApproach(context, false) }
+	// A large square returns to the same native integer waypoint sequence.
+	const side = 2100
+	const point = (i: number) => {
+		const offset = i % side
+		switch (Math.floor(i / side)) {
+			case 0:
+				return new Vec3(-offset, 64, 0)
+			case 1:
+				return new Vec3(-side, 64, offset)
+			case 2:
+				return new Vec3(-side + offset, 64, side)
+			default:
+				return new Vec3(0, 64, side - offset)
+		}
+	}
+	let samples = 0
+	for (
+		;
+		samples < side * 16 && !context.approachAttempts[enemy.id]!.blocked;
+		samples++
+	) {
+		bot.entity.position = point(samples % (side * 4))
+		t.mock.timers.tick(100)
+		context = {
+			...context,
+			approachAttempts: recordApproach(
+				context,
+				false,
+				bot.entity.position.clone()
+			)
+		}
+	}
+	assert.ok(samples > 8192, 'large first traversal should remain permitted')
+	const blocked = context.approachAttempts[enemy.id]!
+	assert.equal(blocked.blocked, true)
+	assert.equal(blocked.routeCycle.detected, true)
+	assert.ok(JSON.stringify(blocked).length < 2000)
+	const checkpoint = blocked.routeCycle.checkpoint
+	context = {
+		...context,
+		approachAttempts: { [enemy.id]: { ...blocked, worldChanged: true } }
+	}
+	context = { ...context, approachAttempts: resumeApproach(context) }
+	assert.equal(context.approachAttempts[enemy.id]!.resumes, blocked.resumes + 1)
+	assert.equal(
+		context.approachAttempts[enemy.id]!.routeCycle.checkpoint,
+		checkpoint
+	)
+	context = { ...context, approachAttempts: recordApproach(context, false) }
+	bot.entity.position = bot.entity.position.offset(-side * 2, 0, side * 2)
 	t.mock.timers.tick(context.preferences.approachNoProgressMs)
-	bot.entity.position = new Vec3(0, 64, 2)
-	const detour = recordApproach(context, false, bot.entity.position.clone())[
+	const resumed = recordApproach(context, false, bot.entity.position.clone())[
 		enemy.id
 	]!
-	assert.equal(detour.routeVisited, atCap.routeVisited)
-	assert.equal(detour.progress!.at, 1000)
-	assert.equal(detour.blocked, true)
-	bot.entity.position = new Vec3(2, 64, 0)
-	const closing = recordApproach(context, false, bot.entity.position.clone())[
-		enemy.id
-	]!
-	assert.equal(closing.routeVisited, atCap.routeVisited)
-	assert.equal(closing.progress!.at, Date.now())
-	assert.equal(closing.blocked, false)
+	assert.equal(
+		resumed.blocked,
+		false,
+		'new route after a meaningful world change is allowed'
+	)
+	assert.equal(resumed.progress!.at, Date.now())
 })
 
 test('route publication and shortened stationary partial plans do not prove accepted traversal; reset invalidates old arrays', () => {

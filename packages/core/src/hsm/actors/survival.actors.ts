@@ -47,7 +47,9 @@ export const createSurvivalActors = (logger: RuntimeLogger) => {
 					? 'TacticalRetreat'
 					: kind === 'health'
 						? 'EmergencyHealing'
-						: 'EmergencyEating',
+						: kind === 'defense'
+							? 'DefensiveRelocation'
+							: 'EmergencyEating',
 			tickInterval: 100,
 			asyncTickInterval: 100,
 			initialState: {

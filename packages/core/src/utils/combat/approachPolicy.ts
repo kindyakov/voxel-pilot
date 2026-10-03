@@ -7,7 +7,7 @@ import { type ProgressAnchor, observeProgress } from './movementProgress.js'
 
 export interface ApproachAttempt {
 	progress: ProgressAnchor | null
-	routeVisited: Record<string, true>
+	routeCycle: RouteCycle
 	failedRoutes: number
 	blocked: boolean
 	blockedReason: 'approach' | 'controller' | null
@@ -17,9 +17,42 @@ export interface ApproachAttempt {
 	lastObservedAt: number
 }
 
+interface RouteCycle {
+	last: string | null
+	checkpoint: string | null
+	power: number
+	length: number
+	detected: boolean
+}
+
+/** Brent's online cycle detector retains a checkpoint rather than a growing visit set. */
+const observeRouteCycle = (previous: RouteCycle, key: string): RouteCycle => {
+	if (previous.detected || previous.last === key) return previous
+	if (previous.checkpoint === null)
+		return { last: key, checkpoint: key, power: 1, length: 0, detected: false }
+	if (previous.checkpoint === key)
+		return { ...previous, last: key, detected: true }
+	const length = previous.length + 1
+	return length === previous.power
+		? {
+				last: key,
+				checkpoint: key,
+				power: previous.power * 2,
+				length: 0,
+				detected: false
+			}
+		: { ...previous, last: key, length }
+}
+
 const freshAttempt = (): ApproachAttempt => ({
 	progress: null,
-	routeVisited: {},
+	routeCycle: {
+		last: null,
+		checkpoint: null,
+		power: 1,
+		length: 0,
+		detected: false
+	},
 	failedRoutes: 0,
 	blocked: false,
 	blockedReason: null,
@@ -89,30 +122,31 @@ export const recordApproach = (
 					context.preferences.approachNoProgressMs,
 					context.preferences.movementProgressDistance
 				)
-	let routeVisited = previous.routeVisited
+	let routeCycle = previous.routeCycle
 	const key = waypoint ? `${waypoint.x},${waypoint.y},${waypoint.z}` : null
 	if (
 		key &&
 		waypoint &&
 		previous.progress &&
-		!routeVisited[key] &&
-		Object.keys(routeVisited).length < 8192 &&
+		!routeCycle.detected &&
+		routeCycle.last !== key &&
 		bot.entity.position.distanceTo(waypoint) <= 1.25 &&
 		Math.hypot(
 			bot.entity.position.x - previous.progress.x,
 			bot.entity.position.z - previous.progress.z
 		) >= context.preferences.movementProgressDistance
 	) {
-		routeVisited = { ...routeVisited, [key]: true }
-		result = {
-			anchor: {
-				x: bot.entity.position.x,
-				z: bot.entity.position.z,
-				remaining: Math.min(previous.progress.remaining, remaining),
-				at: Date.now()
-			},
-			progressing: true
-		}
+		routeCycle = observeRouteCycle(routeCycle, key)
+		if (!routeCycle.detected)
+			result = {
+				anchor: {
+					x: bot.entity.position.x,
+					z: bot.entity.position.z,
+					remaining: Math.min(previous.progress.remaining, remaining),
+					at: Date.now()
+				},
+				progressing: true
+			}
 	}
 	const failedRoutes = previous.failedRoutes + (routeFailed ? 1 : 0)
 	const blocked =
@@ -123,7 +157,7 @@ export const recordApproach = (
 		[target.id]: {
 			...previous,
 			progress: result.anchor,
-			routeVisited,
+			routeCycle,
 			failedRoutes,
 			blocked,
 			blockedReason: blocked ? 'approach' : null,
@@ -184,7 +218,9 @@ export const resumeApproach = (
 		...context.approachAttempts,
 		[id]: {
 			...freshAttempt(),
-			routeVisited: attempt.routeVisited,
+			// A meaningful changed condition permits trying a new segment. Keep the
+			// checkpoint and replay evidence, but do not poison all future detours.
+			routeCycle: { ...attempt.routeCycle, detected: false },
 			resumes: attempt.resumes + 1
 		}
 	}
