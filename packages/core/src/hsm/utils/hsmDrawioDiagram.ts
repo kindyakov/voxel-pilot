@@ -74,6 +74,16 @@ export type HsmDrawioDiagram = {
 
 const outputStateLayouts: StateLayout[] = [
 	{
+		path: 'MAIN_ACTIVITY.DEFENSIVE_RELOCATION',
+		x: 90,
+		y: 420,
+		width: 250,
+		height: 80,
+		kind: 'leaf',
+		summary:
+			'Healthy damage response. Walkable cover or distance; pause until actual departure and fresh safety.'
+	},
+	{
 		path: 'MAIN_ACTIVITY.OBSERVATION_WAIT',
 		x: 90,
 		y: 305,

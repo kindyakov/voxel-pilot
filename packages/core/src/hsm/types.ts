@@ -14,6 +14,7 @@ export type HealthEvents =
 			type: 'DAMAGE_OBSERVED'
 			sourceId: number | null
 			sourcePosition: Vec3 | null
+			ranged?: boolean
 	  }
 	| { type: 'UPDATE_HEALTH'; health: number }
 	| { type: 'UPDATE_FOOD'; food: number }
@@ -29,6 +30,7 @@ export type HealthEvents =
 	| { type: 'START_URGENT_NEEDS'; need: 'food' | 'health' }
 
 export type CombatEvents =
+	| { type: 'DEFENSIVE_SAFE' }
 	| { type: 'APPROACH_SAMPLE' }
 	| { type: 'APPROACH_ROUTE_FAILED' }
 	| { type: 'PASSABILITY_CHANGED'; position: Vec3 }
@@ -91,7 +93,8 @@ export type PrimitiveEvents =
 	| { type: 'FOLLOWING_FAILED'; reason: string }
 
 export type SystemEvents =
-	{ type: 'ERROR'; error: string } | { type: 'IDLE_GAZE_FAILED'; error: string }
+	| { type: 'ERROR'; error: string }
+	| { type: 'IDLE_GAZE_FAILED'; error: string }
 
 export type MachineEvent =
 	| HealthEvents

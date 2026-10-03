@@ -47,8 +47,9 @@ const assessMobWithReason = (
 		return { kind: 'uncertain', reason: 'invalid_entity_position' }
 	const attackedAt = context.aggressionByEntity[entity.id]
 	if (
-		attackedAt !== undefined &&
-		Date.now() - attackedAt < context.preferences.aggressionRetentionMs
+		(attackedAt !== undefined &&
+			Date.now() - attackedAt < context.preferences.aggressionRetentionMs) ||
+		context.attackContacts[entity.id]?.entity === entity
 	)
 		return { kind: 'hostile', reason: 'confirmed_attack_on_bot' }
 	if (policy === 'slime_size') {
@@ -189,6 +190,9 @@ const defensiveCandidateReason = (
 	const assessment = assessMobWithReason(context, entity)
 	if (assessment.kind !== 'hostile') return assessment.reason
 	const distance = context.bot.entity.position.distanceTo(entity.position)
+	const confirmedShooter =
+		context.attackContacts[entity.id]?.ranged === true &&
+		context.attackContacts[entity.id]?.entity === entity
 	const continuingEncounter =
 		entity.id === context.combatTarget.entity?.id ||
 		context.threats.some(
@@ -204,7 +208,8 @@ const defensiveCandidateReason = (
 					vanillaFollowRange[entity.name ?? ''] ??
 						context.preferences.selfDefenseDistance
 				)
-	if (!(distance <= range)) return 'outside_engagement_range'
+	if (!confirmedShooter && !(distance <= range))
+		return 'outside_engagement_range'
 	if (
 		context.threats.some(
 			threat => threat.entityId === entity.id && threat.creeper?.disengaged
@@ -215,7 +220,10 @@ const defensiveCandidateReason = (
 			distance <= context.preferences.creeperDangerDistance)
 	)
 		return 'creeper_melee_disengaged'
-	return canSeeEnemy(context.bot, entity) ? 'eligible' : 'no_line_of_sight'
+	// Confirmed fire permits navigation around cover, never a blind hit.
+	return confirmedShooter || canSeeEnemy(context.bot, entity)
+		? 'eligible'
+		: 'no_line_of_sight'
 }
 
 export const selectCombatDecision = (context: MachineContext) => {
@@ -232,6 +240,8 @@ export const selectCombatDecision = (context: MachineContext) => {
 	const entity =
 		candidates.sort(
 			(a, b) =>
+				Number(context.attackContacts[b.id]?.ranged === true) -
+					Number(context.attackContacts[a.id]?.ranged === true) ||
 				position.distanceTo(a.position) - position.distanceTo(b.position) ||
 				a.id - b.id
 		)[0] ?? null

@@ -8,12 +8,39 @@ import {
 	recordApproach,
 	resumeApproach
 } from '@/utils/combat/approachPolicy.js'
+import { hasAvailableDefense } from '@/utils/combat/defensiveResponse.js'
 import {
 	planRecoveryRelocation,
 	refreshRecoveryRelocation
 } from '@/utils/combat/recoveryRelocation.js'
+import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 export const safetyActions = {
+	startDefensiveRelocation: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>(({ context }) => ({
+		defensiveRelocation: context.defensiveRelocation ?? {
+			from: isFinitePosition(context.bot?.entity?.position)
+				? context.bot!.entity.position.clone()
+				: null,
+			sourceId: context.lastDamage.sourceId,
+			sourcePosition: context.lastDamage.sourcePosition?.clone() ?? null
+		}
+	})),
+	finishDefensiveRelocation: assign<
+		MachineContext,
+		MachineEvent,
+		undefined,
+		MachineEvent,
+		never
+	>(({ context }) => ({
+		defensiveRelocation: null,
+		defensiveDamageHandled: context.lastDamage.sequence
+	})),
 	refreshRecoveryPosition: assign<
 		MachineContext,
 		MachineEvent,
@@ -95,6 +122,42 @@ export const safetyActions = {
 			)
 		return {
 			recoveryRelocation,
+			// A new hit revokes previous departure/safety proof, including during retreat.
+			defensiveRelocation: context.defensiveRelocation
+				? {
+						from: isFinitePosition(bot?.entity?.position)
+							? bot!.entity.position.clone()
+							: null,
+						sourceId: event.sourceId,
+						sourcePosition: event.sourcePosition?.clone() ?? null
+					}
+				: null,
+			defensiveDamageHandled:
+				event.sourceId === null && hasAvailableDefense(context, true)
+					? context.lastDamage.sequence + 1
+					: context.defensiveDamageHandled,
+			attackContacts:
+				event.sourceId === null
+					? context.attackContacts
+					: {
+							...context.attackContacts,
+							[event.sourceId]: {
+								entity:
+									bot?.entities[event.sourceId] ??
+									context.entities.find(
+										entity => entity.id === event.sourceId
+									) ??
+									context.enemies.find(
+										entity => entity.id === event.sourceId
+									) ??
+									null,
+								ranged:
+									event.ranged === true ||
+									context.attackContacts[event.sourceId]?.ranged === true,
+								lastObservedAt: Date.now(),
+								position: event.sourcePosition?.clone() ?? null
+							}
+						},
 			aggressionByEntity:
 				event.sourceId === null
 					? context.aggressionByEntity
