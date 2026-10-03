@@ -20,6 +20,136 @@ import { testHarnessDependencies } from './fixtures/services.js'
 
 const require = createRequire(import.meta.url)
 
+for (const knownSource of [true, false]) {
+	test(`${knownSource ? 'known excluded boss' : 'unknown source with another immediate boss danger'} interrupts available melee with actual protective movement`, async t => {
+		t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
+		const { bot, actor, enemy, step } = createHarness(true)
+		t.after(() => actor.stop())
+		const boss = createEntityFixture({
+			...enemy,
+			id: 2,
+			name: 'warden',
+			position: new Vec3(6, 64, 0)
+		})
+		bot.entities = { 1: enemy, 2: boss }
+		for (let i = 0; i < 4; i++) {
+			t.mock.timers.tick(100)
+			await flush()
+			step()
+		}
+		assert.equal(bot.pvp.target, enemy)
+		const origin = bot.entity.position.clone()
+		const attacks = bot.attacks.length
+		bot.emit('entityHurt', bot.entity, knownSource ? boss : undefined)
+		assert.ok(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'DEFENSIVE_RELOCATION' })
+		)
+		assert.equal(bot.pvp.target, undefined)
+		assert.equal(actor.getSnapshot().context.defensiveDamageHandled, 0)
+		for (let i = 0; i < 50; i++) {
+			t.mock.timers.tick(50)
+			await flush()
+			step()
+		}
+		assert.ok(bot.entity.position.distanceTo(origin) > 3)
+		assert.equal(bot.attacks.length, attacks)
+		assert.equal(actor.getSnapshot().context.health, 20)
+		assert.ok(
+			actor.getSnapshot().matches({ MAIN_ACTIVITY: 'DEFENSIVE_RELOCATION' })
+		)
+		assert.equal(bot.digCalls.length, 0)
+		assert.equal(bot.placeCalls.length, 0)
+	})
+}
+
+test('a native unloaded shooter later loaded outside ordinary scan radius binds once and authorizes continuing actual pursuit', async t => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
+	const { bot, actor, enemy, step } = createHarness(true)
+	t.after(() => actor.stop())
+	const shooter = createEntityFixture({
+		...enemy,
+		id: 37,
+		name: 'skeleton',
+		position: new Vec3(60, 64, 0)
+	})
+	const arrow = createEntityFixture({
+		id: 8,
+		name: 'arrow',
+		type: 'projectile',
+		position: new Vec3(0, 65, 0),
+		isValid: true
+	})
+	require('mineflayer/lib/plugins/entities')(bot)
+	Object.assign(bot.entities, {
+		1: enemy,
+		8: arrow,
+		[bot.entity.id]: bot.entity
+	})
+	for (let i = 0; i < 3; i++) {
+		t.mock.timers.tick(100)
+		await flush()
+	}
+	bot._client.emit('damage_event', {
+		entityId: bot.entity.id,
+		sourceTypeId: 0,
+		sourceCauseId: shooter.id + 1,
+		sourceDirectId: arrow.id + 1,
+		sourcePosition: shooter.position
+	})
+	assert.equal(
+		actor.getSnapshot().context.attackContacts[shooter.id]?.entity,
+		null
+	)
+	assert.ok(
+		actor.getSnapshot().matches({ MAIN_ACTIVITY: 'DEFENSIVE_RELOCATION' })
+	)
+	bot.entities[shooter.id] = shooter
+	const origin = bot.entity.position.clone()
+	for (let i = 0; i < 60; i++) {
+		t.mock.timers.tick(50)
+		await flush()
+		step()
+	}
+	assert.equal(
+		actor.getSnapshot().context.attackContacts[shooter.id]?.entity,
+		shooter
+	)
+	assert.equal(
+		actor.getSnapshot().context.attackContacts[shooter.id]?.ranged,
+		true
+	)
+	assert.equal(actor.getSnapshot().context.combatTarget.entity, shooter)
+	assert.equal(bot.pvp.target, shooter)
+	assert.ok(bot.entity.position.x > origin.x + 2)
+	assert.equal(actor.getSnapshot().context.lastDamage.sequence, 1)
+	const recycled = createEntityFixture({
+		...shooter,
+		position: bot.entity.position.offset(60, 0, 0)
+	})
+	shooter.isValid = false
+	bot.entities[shooter.id] = recycled
+	actor.send({ type: 'REMOVE_ENTITY', entity: shooter })
+	for (let i = 0; i < 3; i++) {
+		t.mock.timers.tick(100)
+		await flush()
+	}
+	assert.equal(
+		actor.getSnapshot().context.attackContacts[shooter.id]?.entity,
+		shooter
+	)
+	assert.equal(actor.getSnapshot().context.enemies.includes(recycled), false)
+	assert.equal(bot.pvp.target, undefined)
+	for (let i = 0; i < 22; i++) {
+		t.mock.timers.tick(100)
+		await flush()
+	}
+	assert.equal(
+		actor.getSnapshot().context.attackContacts[shooter.id],
+		undefined
+	)
+	assert.notEqual(actor.getSnapshot().context.combatTarget.entity, recycled)
+})
+
 test('confirmed shooter replaces nearest melee mob and admits extended real melee approach without AI', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, enemy, step } = createHarness(
@@ -667,7 +797,12 @@ test('native modern damage packet promotes the distant projectile cause into the
 		isValid: true
 	})
 	require('mineflayer/lib/plugins/entities')(bot)
-	Object.assign(bot.entities, { 1: enemy, 7: shooter, 8: arrow, [bot.entity.id]: bot.entity })
+	Object.assign(bot.entities, {
+		1: enemy,
+		7: shooter,
+		8: arrow,
+		[bot.entity.id]: bot.entity
+	})
 	for (let i = 0; i < 3; i++) {
 		t.mock.timers.tick(100)
 		await flush()

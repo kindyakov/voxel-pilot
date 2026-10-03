@@ -1193,6 +1193,7 @@ export const createBotMachine = (
 							({ context }) =>
 								context.health > 0 &&
 								context.food < context.preferences.foodEmergency &&
+								!context.defensiveRelocation &&
 								canAttemptRecovery(context) &&
 								isRecoverySafe(context)
 						]),

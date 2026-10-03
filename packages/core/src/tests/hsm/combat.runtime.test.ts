@@ -283,7 +283,9 @@ test('a rejected ranged equip falls back once and stays in melee for this encoun
 		)
 		assert.equal(actor.getSnapshot().context.rangedUnavailable, true)
 		actor.send({ type: 'STOP_COMBAT' })
-		actor.send({ type: 'START_COMBAT', target: createEnemy(8) as any })
+		const nextEnemy = createEnemy(8)
+		await enterCombat(actor, nextEnemy)
+		actor.send({ type: 'START_COMBAT', target: nextEnemy as any })
 		await delay(20)
 		assert.equal(bot.equipCalls.filter(name => name === 'bow').length, 2)
 	} finally {

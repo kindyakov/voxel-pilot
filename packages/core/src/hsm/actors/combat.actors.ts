@@ -55,6 +55,17 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 	const isPvpTargetActive = (bot: Bot, enemy: Entity) =>
 		bot.pvp?.target?.id === enemy.id
 
+	const hasPreparedMeleeLoadout = (context: MachineContext, armed: boolean) => {
+		const bot = context.bot
+		if (!bot) return false
+		const weapon = bot.utils.getMeleeWeapon()
+		return (
+			canUseMeleeLoadout(context) &&
+			Boolean(weapon) === armed &&
+			(weapon ? bot.heldItem?.type === weapon.type : bot.heldItem === null)
+		)
+	}
+
 	const issueMeleeAttack = (
 		api: ServiceAPI<MeleeAttackState>,
 		enemy: Entity
@@ -65,7 +76,6 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		const attackResult = bot.pvp.attack(enemy, {
 			canAttack: target => {
 				const context = api.getContext()
-				const weapon = bot.utils.getMeleeWeapon()
 				return (
 					!api.abortSignal.aborted &&
 					api.state.ready &&
@@ -74,11 +84,7 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 					context.enemies.includes(target) &&
 					hasFreshThreatObservation(context) &&
 					isDefensiveCandidate(context, target) &&
-					canUseMeleeLoadout(context) &&
-					Boolean(weapon) === api.state.armed &&
-					(weapon
-						? bot.heldItem?.type === weapon.type
-						: bot.heldItem === null) &&
+					hasPreparedMeleeLoadout(context, api.state.armed) &&
 					canSeeEnemy(bot, target)
 				)
 			}
@@ -162,12 +168,7 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 	const updateMelee = (api: ServiceAPI<MeleeAttackState>) => {
 		const { context, state, bot, sendBack, setState, abortSignal } = api
 		if (!state.ready || abortSignal.aborted) return
-		const weapon = bot.utils.getMeleeWeapon()
-		if (
-			!canUseMeleeLoadout(context) ||
-			Boolean(weapon) !== state.armed ||
-			(weapon ? bot.heldItem?.type !== weapon.type : bot.heldItem !== null)
-		) {
+		if (!hasPreparedMeleeLoadout(context, state.armed)) {
 			// Inventory availability is not permission to skip weapon preparation.
 			// Re-enter through the HSM so the old controller stops before rearming.
 			sendBack({ type: 'WEAPON_BROKEN' })

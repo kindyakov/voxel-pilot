@@ -7,7 +7,11 @@ import { hasFreshThreatObservation } from '@/hsm/guards/survival.guards.js'
 import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 import { canSeeEnemy } from './enemyVisibility.js'
-import { requiresAvoidance, selectCombatTarget } from './selfDefense.js'
+import {
+	isDefensiveCandidate,
+	requiresAvoidance,
+	selectCombatTarget
+} from './selfDefense.js'
 
 export const refreshAttackContacts = (
 	context: MachineContext,
@@ -49,11 +53,19 @@ export const hasAvailableDefense = (
 ) => {
 	const target = selectCombatTarget(context)
 	if (!target.entity || !context.bot || requiresAvoidance(context)) return false
+	const targetId = target.entity.id
 	const selected = { ...context, combatTarget: target }
 	if (
 		closeOnly &&
 		(target.distance > context.bot.pvp.attackRange ||
-			!canSeeEnemy(context.bot, target.entity))
+			!canSeeEnemy(context.bot, target.entity) ||
+			context.threats.some(
+				threat =>
+					threat.observed &&
+					threat.entityId !== targetId &&
+					threat.kind !== 'hostile' &&
+					threat.distance <= context.preferences.selfDefenseDistance
+			))
 	)
 		return false
 	return combatGuards.canAttack({
@@ -89,6 +101,8 @@ export const canAnswerDefensiveDamage = (context: MachineContext) => {
 		context.defensiveRelocation?.sourceId ?? context.lastDamage.sourceId
 	if (sourceId === null) return hasAvailableDefense(context, true)
 	const contact = context.attackContacts[sourceId]
+	if (!contact?.entity || !isDefensiveCandidate(context, contact.entity))
+		return false
 	const selected = selectCombatTarget(context).entity
 	if (
 		contact?.ranged &&

@@ -121,6 +121,9 @@ const createCombatContext = (
 ) => ({
 	...defaultContext,
 	bot,
+	entities: [enemy],
+	enemies: [enemy],
+	threatObservationAt: Date.now(),
 	combatTarget: {
 		entity: enemy,
 		distance

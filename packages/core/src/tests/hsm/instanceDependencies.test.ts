@@ -213,6 +213,12 @@ test('an explicit disabled pilot pauses commands and preserves physical self def
 	hsm.resumePausedGoal()
 	await flush()
 	assert.equal(turns, 1, 'the disabled flag prevents resuming the paused pilot')
+	hsm.send({
+		type: 'UPDATE_ENTITIES',
+		entities: [enemy],
+		enemies: [enemy],
+		players: []
+	})
 	hsm.send({ type: 'START_COMBAT', target: enemy })
 	await flush()
 	bot.emit('physicsTick')
