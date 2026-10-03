@@ -138,7 +138,11 @@ export const createSurvivalActors = (logger: RuntimeLogger) => {
 							? null
 							: context.attackContacts[obligation.sourceId]
 					const source = contact?.position ?? obligation.sourcePosition
-					const rangedSource = contact?.ranged ? source : null
+					const sourceHeight = contact?.entity?.height
+					const rangedSource =
+						contact?.ranged && sourceHeight && Number.isFinite(sourceHeight)
+							? source
+							: null
 					const departed =
 						obligation.from &&
 						Math.hypot(
@@ -146,7 +150,10 @@ export const createSurvivalActors = (logger: RuntimeLogger) => {
 							position.z - obligation.from.z
 						) >=
 							context.preferences.fleeTargetDistance - 1
-					if (rangedSource && isCoveredFrom(bot, position, rangedSource)) {
+					if (
+						rangedSource &&
+						isCoveredFrom(bot, position, rangedSource, sourceHeight)
+					) {
 						escape.stop()
 						setMode('IDLE', 'covered_contact_still_dangerous')
 						return
@@ -170,7 +177,8 @@ export const createSurvivalActors = (logger: RuntimeLogger) => {
 						threat,
 						context.threats,
 						relocation.status === 'planned' ? relocation.goal : null,
-						rangedSource
+						rangedSource,
+						sourceHeight
 					)
 					setMode(
 						owner === 'NONE' ? 'IDLE' : owner,

@@ -10,6 +10,7 @@ const createOpaqueBlock = () => ({
 	boundingBox: 'block',
 	transparent: false,
 	material: 'rock',
+	shapes: [[0, 0, 0, 1, 1, 1]],
 	name: 'stone'
 })
 

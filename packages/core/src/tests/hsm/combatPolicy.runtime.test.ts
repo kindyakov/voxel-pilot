@@ -192,7 +192,7 @@ test('nearest hostile replaces the previous target and a target gap does not sta
 })
 
 for (const name of ['wither', 'ender_dragon', 'warden', 'unknown_mob']) {
-	test(`${name}: neither attack nor flee at normal health, still escape at critical health`, async t => {
+	test(`${name}: confirmed damage permits ordinary defense or protective relocation; critical health still preempts`, async t => {
 		t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 		const { bot, actor, enemy, observe, step } = createHarness()
 		t.after(() => actor.stop())
@@ -203,15 +203,30 @@ for (const name of ['wither', 'ender_dragon', 'warden', 'unknown_mob']) {
 			sourceId: enemy.id,
 			sourcePosition: enemy.position
 		})
-		// Boss exclusions also survive confirmed damage; unknown mobs can defend after damage.
-		if (name !== 'unknown_mob') observe()
+		// A confirmed attack resolves unknown aggression, but never removes boss exclusions.
+		observe()
 		for (let i = 0; i < 10; i++) {
 			t.mock.timers.tick(100)
 			await flush()
+			step()
 		}
-		assert.ok(actor.getSnapshot().matches({ MAIN_ACTIVITY: 'IDLE' }))
-		assert.equal(bot.attacks.length, 0)
-		assert.equal(bot.controlState.forward, false)
+		if (name === 'unknown_mob') {
+			assert.ok(
+				actor
+					.getSnapshot()
+					.matches({ MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' } })
+			)
+			assert.ok(bot.attacks.includes(enemy.id))
+		} else {
+			assert.ok(
+				actor.getSnapshot().matches({ MAIN_ACTIVITY: 'DEFENSIVE_RELOCATION' })
+			)
+			assert.equal(bot.attacks.length, 0)
+			assert.ok(
+				bot.entity.position.x < -1,
+				'excluded attacker causes actual healthy protection'
+			)
+		}
 		actor.send({ type: 'UPDATE_HEALTH', health: 8 })
 		for (let i = 0; i < 30; i++) {
 			t.mock.timers.tick(50)

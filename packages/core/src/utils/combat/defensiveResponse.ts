@@ -64,22 +64,41 @@ export const hasAvailableDefense = (
 
 /** Recently continuing fire escalates an exhausted/unanswerable response, without a total pursuit deadline. */
 export const needsDefensiveRelocation = (context: MachineContext) => {
-	if (context.defensiveRelocation) return true
+	if (context.defensiveRelocation) return !canAnswerDefensiveDamage(context)
 	if (
 		context.lastDamage.sequence <= context.defensiveDamageHandled ||
 		Date.now() - context.lastDamage.observedAt >=
 			context.preferences.aggressionRetentionMs
 	)
 		return false
-	if (context.lastDamage.sourceId !== null) {
-		if (!hasFreshThreatObservation(context)) return false
-		const contact = context.attackContacts[context.lastDamage.sourceId]
-		if (contact?.ranged && !contact.entity) return true
-	}
-	return context.lastDamage.sourceId === null
-		? !hasAvailableDefense(context, true)
-		: Boolean(context.attackContacts[context.lastDamage.sourceId]) &&
-				!hasAvailableDefense(context)
+	if (
+		context.lastDamage.sourceId !== null &&
+		!hasFreshThreatObservation(context)
+	)
+		return false
+	return (
+		(context.lastDamage.sourceId === null ||
+			Boolean(context.attackContacts[context.lastDamage.sourceId])) &&
+		!canAnswerDefensiveDamage(context)
+	)
+}
+
+/** A new usable response returns to combat, retaining any unresolved relocation obligation. */
+export const canAnswerDefensiveDamage = (context: MachineContext) => {
+	const sourceId =
+		context.defensiveRelocation?.sourceId ?? context.lastDamage.sourceId
+	if (sourceId === null) return hasAvailableDefense(context, true)
+	const contact = context.attackContacts[sourceId]
+	const selected = selectCombatTarget(context).entity
+	if (
+		contact?.ranged &&
+		(!contact.entity ||
+			!selected ||
+			context.attackContacts[selected.id]?.ranged !== true ||
+			context.attackContacts[selected.id]?.entity !== selected)
+	)
+		return false
+	return hasAvailableDefense(context)
 }
 
 export const defensiveRelocationSafe = (context: MachineContext) => {

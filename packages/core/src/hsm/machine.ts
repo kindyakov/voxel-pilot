@@ -72,6 +72,7 @@ import { parseExecution } from '@/ai/tools/executionDefinitions.js'
 
 import { refreshApproaches } from '@/utils/combat/approachPolicy.js'
 import {
+	canAnswerDefensiveDamage,
 	defensiveRelocationSafe,
 	hasDangerousAttackContact,
 	needsDefensiveRelocation,
@@ -1243,12 +1244,24 @@ export const createBotMachine = (
 					DEFENSIVE_RELOCATION: {
 						entry: ['closeActiveWindowSession', 'ownMovementNone'],
 						exit: ['ownMovementNone'],
-						invoke: {
-							src: 'serviceDefensiveRelocation',
-							input: ({ context }: { context: MachineContext }) => ({
-								bot: context.bot!,
-								options: {}
-							})
+						initial: 'RUNNING',
+						always: {
+							guard: ({ context }) => canAnswerDefensiveDamage(context),
+							target: 'COMBAT',
+							actions: 'updateCombatTarget'
+						},
+						states: {
+							RUNNING: {
+								invoke: {
+									src: 'serviceDefensiveRelocation',
+									input: ({ context }: { context: MachineContext }) => ({
+										bot: context.bot!,
+										options: {}
+									}),
+									onError: 'RETRYING'
+								}
+							},
+							RETRYING: { after: { recoveryRetry: 'RUNNING' } }
 						},
 						on: {
 							DEFENSIVE_SAFE: {
@@ -1261,7 +1274,8 @@ export const createBotMachine = (
 							START_COMBAT: {},
 							STOP_COMBAT: {},
 							UPDATE_COMBAT_TARGET: { actions: 'updateCombatTarget' },
-							SURVIVAL_MODE_CHANGED: { actions: 'syncSurvivalModeOwner' }
+							SURVIVAL_MODE_CHANGED: { actions: 'syncSurvivalModeOwner' },
+							ERROR: { target: '.RETRYING', actions: 'recordCombatFailure' }
 						}
 					},
 					OBSERVATION_WAIT: {
@@ -1490,6 +1504,12 @@ export const createBotMachine = (
 							}
 						],
 						on: {
+							USER_COMMAND: { actions: 'setGoalFromUserCommand' },
+							STOP_CURRENT_GOAL: { actions: 'clearGoal' },
+							RESUME_PAUSED_GOAL: {
+								guard: 'canResumePausedGoal',
+								actions: 'resumePausedGoal'
+							},
 							RANGED_UNAVAILABLE: {
 								target: '.DECIDING',
 								actions: ['disableRanged', 'updateCombatTarget']

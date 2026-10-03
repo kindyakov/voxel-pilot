@@ -240,8 +240,14 @@ export const selectCombatDecision = (context: MachineContext) => {
 	const entity =
 		candidates.sort(
 			(a, b) =>
-				Number(context.attackContacts[b.id]?.ranged === true) -
-					Number(context.attackContacts[a.id]?.ranged === true) ||
+				Number(
+					context.attackContacts[b.id]?.ranged === true &&
+						context.attackContacts[b.id]?.entity === b
+				) -
+					Number(
+						context.attackContacts[a.id]?.ranged === true &&
+							context.attackContacts[a.id]?.entity === a
+					) ||
 				position.distanceTo(a.position) - position.distanceTo(b.position) ||
 				a.id - b.id
 		)[0] ?? null

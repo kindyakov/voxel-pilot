@@ -48,7 +48,16 @@ export const safetyActions = {
 		MachineEvent,
 		never
 	>(({ context }) => ({
-		recoveryRelocation: refreshRecoveryRelocation(context)
+		recoveryRelocation: refreshRecoveryRelocation(context),
+		defensiveRelocation:
+			context.defensiveRelocation &&
+			!context.defensiveRelocation.from &&
+			isFinitePosition(context.bot?.entity?.position)
+				? {
+						...context.defensiveRelocation,
+						from: context.bot!.entity.position.clone()
+					}
+				: context.defensiveRelocation
 	})),
 	blockCombatApproach: assign<
 		MachineContext,

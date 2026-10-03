@@ -47,6 +47,7 @@ export class EscapeRuntime {
 	private threats: ThreatObservation[] = []
 	private routeSafety: EscapeSafety | null = null
 	private coverSource: Vec3 | null = null
+	private coverSourceHeight = 1.8
 
 	constructor(
 		private readonly bot: Bot,
@@ -171,9 +172,11 @@ export class EscapeRuntime {
 		threat: ThreatObservation | null,
 		threats: ThreatObservation[],
 		relocation: Vec3 | null,
-		coverSource: Vec3 | null = null
+		coverSource: Vec3 | null = null,
+		coverSourceHeight = 1.8
 	): EscapeMode {
 		this.coverSource = coverSource
+		this.coverSourceHeight = coverSourceHeight
 		this.threats = threats
 		const position: Vec3 = this.bot.entity.position
 		if (
@@ -299,7 +302,8 @@ export class EscapeRuntime {
 					...coverCandidates(
 						this.bot,
 						coverSource,
-						this.preferences.fleeTargetDistance
+						this.preferences.fleeTargetDistance,
+						this.coverSourceHeight
 					)
 				)
 		}
@@ -368,7 +372,8 @@ export class EscapeRuntime {
 					isCoveredFrom(
 						this.bot,
 						new Vec3(position.x, position.y, position.z),
-						source
+						source,
+						this.coverSourceHeight
 					)
 			: undefined
 	}

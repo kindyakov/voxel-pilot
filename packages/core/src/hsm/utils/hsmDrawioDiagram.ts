@@ -79,9 +79,27 @@ const outputStateLayouts: StateLayout[] = [
 		y: 420,
 		width: 250,
 		height: 80,
-		kind: 'leaf',
+		kind: 'compound',
 		summary:
 			'Healthy damage response. Walkable cover or distance; pause until actual departure and fresh safety.'
+	},
+	{
+		path: 'MAIN_ACTIVITY.DEFENSIVE_RELOCATION.RUNNING',
+		x: 10,
+		y: 35,
+		width: 100,
+		height: 40,
+		kind: 'leaf',
+		summary: 'Observe / cover / flee'
+	},
+	{
+		path: 'MAIN_ACTIVITY.DEFENSIVE_RELOCATION.RETRYING',
+		x: 125,
+		y: 35,
+		width: 100,
+		height: 40,
+		kind: 'leaf',
+		summary: 'Retry preserves obligation'
 	},
 	{
 		path: 'MAIN_ACTIVITY.OBSERVATION_WAIT',

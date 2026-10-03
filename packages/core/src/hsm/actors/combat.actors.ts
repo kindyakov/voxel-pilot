@@ -31,6 +31,8 @@ interface MeleeAttackState extends BaseServiceState {
 	currentTarget: Entity | null
 	ready: boolean
 	armed: boolean
+	attackStarting: boolean
+	attackGeneration: number
 }
 
 interface RangedSkirmishState extends BaseServiceState {
@@ -55,6 +57,8 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		enemy: Entity
 	) => {
 		const { bot, sendBack } = api
+		const attackGeneration = api.state.attackGeneration + 1
+		api.setState({ attackStarting: true, attackGeneration })
 		const attackResult = bot.pvp.attack(enemy, {
 			canAttack: target => {
 				const context = api.getContext()
@@ -78,19 +82,27 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		})
 
 		if (attackResult instanceof Promise) {
-			void attackResult.catch((error: unknown) => {
-				logger.error('[COMBAT] melee_attack_failed', {
-					error:
-						error instanceof Error
-							? (error.stack ?? error.message)
-							: String(error)
+			void attackResult
+				.catch((error: unknown) => {
+					logger.error('[COMBAT] melee_attack_failed', {
+						error:
+							error instanceof Error
+								? (error.stack ?? error.message)
+								: String(error)
+					})
+					sendBack({
+						type: 'ERROR',
+						error: error instanceof Error ? error.message : String(error)
+					})
 				})
-				sendBack({
-					type: 'ERROR',
-					error: error instanceof Error ? error.message : String(error)
+				.finally(() => {
+					if (
+						!api.abortSignal.aborted &&
+						api.state.attackGeneration === attackGeneration
+					)
+						api.setState({ attackStarting: false })
 				})
-			})
-		}
+		} else api.setState({ attackStarting: false })
 	}
 
 	const getWeaponType = (weaponName: string): Weapons => {
@@ -184,7 +196,7 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 			return
 		}
 
-		if (!isPvpTargetActive(bot, enemy)) {
+		if (!state.attackStarting && !isPvpTargetActive(bot, enemy)) {
 			issueMeleeAttack(api, enemy)
 			logCombatRuntime('melee_attack_issued', {
 				enemyId: enemy.id,
@@ -199,7 +211,13 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		name: 'MeleeAttack',
 		operationTimeoutMs: 15_000,
 		tickInterval: 500,
-		initialState: { currentTarget: null, ready: false, armed: false },
+		initialState: {
+			currentTarget: null,
+			ready: false,
+			armed: false,
+			attackStarting: false,
+			attackGeneration: 0
+		},
 		onStart: async api => {
 			const { bot, abortSignal, setState } = api
 			bot.utils.stopEating?.()

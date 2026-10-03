@@ -8,6 +8,7 @@ import { createActor, fromPromise } from 'xstate'
 
 import type { HarnessDependencies } from '@/hsm/dependencies.js'
 import { createBotMachine } from '@/hsm/machine.js'
+import type { MachineFactoryOptions } from '@/hsm/machine.js'
 
 import { loadMovement } from '@/modules/plugins/movement.js'
 import { loadPvp } from '@/modules/plugins/pvp.js'
@@ -237,7 +238,8 @@ export class HandoffBot extends EventEmitter {
 export const createHarness = (
 	backgroundTracking = false,
 	version = '1.20.4',
-	dependencies: HarnessDependencies = testHarnessDependencies()
+	dependencies: HarnessDependencies = testHarnessDependencies(),
+	options: MachineFactoryOptions = {}
 ) => {
 	const bot = new HandoffBot(version)
 	const VersionItem = require('prismarine-item')(version)
@@ -252,9 +254,13 @@ export const createHarness = (
 	bot.pathfinder.setMovements(bot.movements)
 	const actor = createActor(
 		createBotMachine(dependencies, {
-			actors: backgroundTracking
-				? {}
-				: { serviceEntitiesTracking: fromPromise(async () => {}) }
+			...options,
+			actors: {
+				...options.actors,
+				...(backgroundTracking
+					? {}
+					: { serviceEntitiesTracking: fromPromise(async () => {}) })
+			}
 		}),
 		{ input: { bot: bot.asBot() } }
 	)
