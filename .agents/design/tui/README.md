@@ -10,4 +10,4 @@
 
 При реализации задач TUI открой само изображение. Сравнение выполняй на искусственной телеметрии: реальные значения, гарнитура и число видимых строк зависят от терминала.
 
-Задачи TUI: [запуск и завершение #31](https://github.com/kindyakov/voxel-pilot/issues/31), [просмотр журнала #32](https://github.com/kindyakov/voxel-pilot/issues/32), [панель состояния #33](https://github.com/kindyakov/voxel-pilot/issues/33), [адаптивное отображение #34](https://github.com/kindyakov/voxel-pilot/issues/34). Полная последовательность реализации спецификации — задачи #21–#34; текущая первая доступная задача — [переход на pnpm #21](https://github.com/kindyakov/voxel-pilot/issues/21).
+Задачи TUI: [запуск и завершение #31](https://github.com/kindyakov/voxel-pilot/issues/31), [просмотр журнала #32](https://github.com/kindyakov/voxel-pilot/issues/32), [панель состояния #33](https://github.com/kindyakov/voxel-pilot/issues/33), [адаптивное отображение #34](https://github.com/kindyakov/voxel-pilot/issues/34).

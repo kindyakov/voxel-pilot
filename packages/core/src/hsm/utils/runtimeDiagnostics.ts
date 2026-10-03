@@ -1,9 +1,9 @@
 import type { ActorRefFrom, StateValue } from 'xstate'
 
-import Logger from '@/config/logger.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import type { MachineContext } from '@/hsm/context.js'
-import type { machine } from '@/hsm/machine.js'
+import type { createBotMachine } from '@/hsm/machine.js'
 
 import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
@@ -53,7 +53,8 @@ const facts = (context: MachineContext) => ({
 
 /** Read-only observer. Never logs event payloads, prompts, credentials or full entities. */
 export const attachHsmDiagnostics = (
-	actor: ActorRefFrom<typeof machine>,
+	actor: ActorRefFrom<ReturnType<typeof createBotMachine>>,
+	logger: RuntimeLogger,
 	configuredVersion?: string
 ) => {
 	let previousState = ''
@@ -71,7 +72,7 @@ export const attachHsmDiagnostics = (
 		const snapshot = actor.getSnapshot()
 		if (snapshot.context.lastDamage.sequence !== damageSequence) {
 			damageSequence = snapshot.context.lastDamage.sequence
-			Logger.info('[HSM] damage', {
+			logger.info('[HSM] damage', {
 				sourceId: snapshot.context.lastDamage.sourceId,
 				sourcePosition: coordinates(
 					snapshot.context.lastDamage.sourcePosition ?? undefined
@@ -81,7 +82,7 @@ export const attachHsmDiagnostics = (
 		}
 		const state = statePaths(snapshot.value).join(' | ')
 		if (state === previousState) return
-		Logger.info('[HSM] transition', {
+		logger.info('[HSM] transition', {
 			event: lastEvent,
 			from: previousState || null,
 			to: state,
@@ -114,7 +115,7 @@ export const attachHsmDiagnostics = (
 						position.z - sampledPosition.z
 					)
 				: null
-		Logger.info('[HSM] heartbeat', {
+		logger.info('[HSM] heartbeat', {
 			state: statePaths(snapshot.value),
 			status: snapshot.status,
 			stateMs: Date.now() - stateSince,
@@ -134,11 +135,11 @@ export const attachHsmDiagnostics = (
 		stopped = true
 		clearInterval(timer)
 		inspection.unsubscribe()
-		Logger.info('[HSM] diagnostics_stopped', { state: previousState })
+		logger.info('[HSM] diagnostics_stopped', { state: previousState })
 	}
 	const subscription = actor.subscribe({ complete: dispose, error: dispose })
 	const context = actor.getSnapshot().context
-	Logger.info('[HSM] runtime', {
+	logger.info('[HSM] runtime', {
 		configuredMinecraftVersion: configuredVersion ?? null,
 		registryVersion: context.bot?.registry?.version?.minecraftVersion ?? null,
 		selfDefenseDistance: context.preferences.selfDefenseDistance,

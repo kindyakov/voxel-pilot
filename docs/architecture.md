@@ -5,10 +5,17 @@ Language versions: [English](architecture.md) | [Русский](architecture.ru
 This bot is a Mineflayer runtime wrapped in an XState machine.
 The current design is small and explicit:
 
-- `apps/cli/src/index.ts` loads dotenv and starts the bot.
+- `packages/application/` owns the explicit settings/path policy and runtime composition shared by CLI and TUI. Each application owns its renderer, signals and bounded shutdown around the portable runtime stop and caller-owned logger.
+- `apps/tui/` renders the connection, safe bounded log history and public measured status through React/Ink. Its separate display clock advances the MAIN_ACTIVITY timer without sending HSM events; unknown, stale and paused facts remain distinct. TTY validation runs before settings or runtime allocation; resizing keeps the same runtime and subscriptions. `apps/cli/` remains the headless entrypoint.
+- `packages/contracts/` defines portable runtime interfaces and serializable snapshots/results.
+- `packages/presentation/` exports a contracts-only log model for INFO+/DEBUG filtering, LIVE/paused navigation, source-ID anchors and cumulative arrival counts. It keeps the current bounded projection; source history remains in core and terminal widths/keys remain in TUI.
+- `packages/core/src/core/runtime.ts` provides the frozen start/stop/telemetry facade. Subscribers immediately receive a cached complete snapshot; unmeasured values are unknown.
+- `packages/core/src/core/telemetry/logJournal.ts` owns the bounded safe source history and separate log stream, with stable IDs, byte/count limits and observable losses. Logger live-record observation owns no history; consumers filter the shared source for display. See [configuration](configuration.md#runtime-log-history) for limits and output policies.
+- `packages/core/src/core/telemetry/` projects measured health, max health, food and position from the current native session, plus compact facts from its real HSM. Disconnect preserves stale measurements; a new session starts with unknown measurements. The behavior timer follows MAIN_ACTIVITY separately from monitoring; an active or paused goal remains visible during autonomous behavior.
 - `packages/core/src/core/bot.ts` handles connect, reconnect, and shutdown.
 - `packages/core/src/core/CommandHandler.ts` converts chat into HSM events.
-- `packages/core/src/core/hsm.ts` wires the state machine to the bot runtime.
+- `packages/core/src/core/harness.ts` wires the state machine to the bot runtime with explicit instance dependencies.
+- Optional native XState inspection is composed through the runtime's `inspection` option and trusted adapter types from `@voxel-pilot/core/inspection`. The harness attaches it before actor construction and releases it before persistence. Closing or failing an observer leaves bot ownership with the application; native events stay separate from portable telemetry and general logs. Its bounded queue reports dropped events and does not establish a complete future inspector trace or viewer.
 - `packages/core/src/ai/loop.ts` runs the agent loop.
 - `packages/core/src/ai/snapshot.ts` builds the model snapshot.
 - `packages/core/src/core/memory/` owns persistent storage.

@@ -7,7 +7,7 @@ import type { Block, Bot } from '@/types/index.js'
 import { Vec3 } from 'vec3'
 import { createActor, setup } from 'xstate'
 
-import { primitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive.js'
+import { createPrimitiveBreaking } from '@/hsm/actors/primitives/primitiveBreaking.primitive.js'
 import {
 	type MiningResource,
 	resolveMiningResource
@@ -15,6 +15,9 @@ import {
 import type { MachineEvent } from '@/hsm/types.js'
 
 import { BlockFactory, ItemFactory, registry } from './fixtures/handoffBot.js'
+import { fixtureLogger as Logger } from './fixtures/services.js'
+
+const primitiveBreaking = createPrimitiveBreaking(Logger)
 
 type BreakingEvent =
 	| { type: 'BROKEN' }

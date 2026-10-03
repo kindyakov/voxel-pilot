@@ -1,19 +1,16 @@
-import OpenAI from 'openai'
 import type { Responses } from 'openai/resources/responses/responses'
 
-import defaultConfig from '@/config/config.js'
-import Logger from '@/config/logger.js'
-
 import type {
+	AgentClientOptions,
 	AgentModelClient,
 	AgentResponseRequest,
 	CreateResponseResult,
 	OpenAIResponsesSdkLike
 } from '../contracts/agentClient.js'
+import { createOpenAISdk } from './openaiSdk.js'
 import { mapParsedToolCalls } from './parsers.js'
 import {
 	buildResponsesRequestDebugMarkdown,
-	shouldWriteRequestDebugDump,
 	writeRequestDebugDump
 } from './requestDebugDump.js'
 import { withApiRetry } from './retry.js'
@@ -24,24 +21,20 @@ export class OpenAIResponsesClient implements AgentModelClient {
 	private readonly timeoutMs: number
 	private readonly maxOutputTokens: number
 
-	constructor(options?: {
-		apiKey?: string
-		client?: OpenAIResponsesSdkLike
-		model?: string
-		timeoutMs?: number
-		maxOutputTokens?: number
-		baseUrl?: string
-	}) {
+	private readonly logger: AgentClientOptions['logger']
+	private readonly debugDump: AgentClientOptions['debugDump']
+
+	constructor(
+		options: AgentClientOptions & { client?: OpenAIResponsesSdkLike }
+	) {
 		this.client =
-			options?.client ??
-			(new OpenAI({
-				apiKey: options?.apiKey ?? defaultConfig.ai.apiKey,
-				baseURL: options?.baseUrl ?? defaultConfig.ai.baseUrl
-			}) as unknown as OpenAIResponsesSdkLike)
-		this.model = options?.model ?? defaultConfig.ai.model
-		this.timeoutMs = options?.timeoutMs ?? defaultConfig.ai.timeout
-		this.maxOutputTokens =
-			options?.maxOutputTokens ?? defaultConfig.ai.maxTokens
+			options.client ??
+			(createOpenAISdk(options) as unknown as OpenAIResponsesSdkLike)
+		this.model = options.model
+		this.timeoutMs = options.timeoutMs
+		this.maxOutputTokens = options.maxOutputTokens
+		this.logger = options.logger
+		this.debugDump = Object.freeze({ ...options.debugDump })
 	}
 
 	async createResponse(
@@ -57,8 +50,9 @@ export class OpenAIResponsesClient implements AgentModelClient {
 			max_output_tokens: this.maxOutputTokens,
 			tool_choice: 'auto' as const
 		}
-		if (shouldWriteRequestDebugDump()) {
+		if (this.debugDump.enabled) {
 			const requestDumpPath = await writeRequestDebugDump({
+				directory: this.debugDump.directory,
 				filePrefix: 'responses-request',
 				markdown: buildResponsesRequestDebugMarkdown({
 					model: requestBody.model,
@@ -72,20 +66,17 @@ export class OpenAIResponsesClient implements AgentModelClient {
 					toolChoice: requestBody.tool_choice
 				})
 			})
-			Logger.debug('[AI] model_request_dump', {
+			this.logger.debug('[AI] model_request_dump', {
 				path: requestDumpPath
 			})
 		}
 
 		const response = await withApiRetry(
 			() =>
-				this.client.responses.create(
-					requestBody,
-					{
-						timeout: this.timeoutMs,
-						signal: request.signal
-					}
-				),
+				this.client.responses.create(requestBody, {
+					timeout: this.timeoutMs,
+					signal: request.signal
+				}),
 			{ signal: request.signal }
 		)
 

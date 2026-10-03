@@ -6,10 +6,10 @@
 
 ## Перед открытием PR
 
-1. Прочитайте релевантные docs в `docs/`.
+1. Прочитайте `AGENTS.md`, `ARCHITECTURE.md`, реализацию, вызывающий код и тесты подсистемы. Публичные docs в `docs/` дают пользовательский контекст.
 2. Запустите `pnpm run type-check`.
 3. Запустите `pnpm run build`.
-4. Запустите focused tests для затронутой подсистемы.
+4. Запустите `pnpm run check:imports` и focused tests затронутой подсистемы. Используйте версию pnpm из `packageManager` в `package.json`.
 
 ## Ожидания
 
@@ -21,8 +21,11 @@
 
 ## Структура репозитория
 
-- Runtime code: `src/`
-- Tests: `src/tests/`
+- Runtime и native tests: `packages/core/src/`, `packages/core/src/tests/`
+- Переносимые contracts и presentation: `packages/contracts/`, `packages/presentation/`
+- Общая явная application composition: `packages/application/`
+- Headless CLI и дашборд: `apps/cli/`, `apps/tui/` (тесты в их `src/tests/`)
+- Workspace/import/browser checks: `tests/`
 - Documentation: `docs/`
 - Runtime memory: `data/`
 - Logs: `logs/`

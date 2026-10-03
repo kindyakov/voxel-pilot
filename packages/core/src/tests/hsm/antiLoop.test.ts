@@ -2,12 +2,15 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate as flush } from 'node:timers/promises'
 
-import Logger from '../../config/logger.js'
-import BotStateMachine from '../../core/hsm.js'
+import BotStateMachine from '../../core/harness.js'
 import { MemoryManager } from '../../core/memory/index.js'
 import { ProfileMemoryStore } from '../../core/profile/index.js'
 import { AntiLoopGuard } from '../../hsm/utils/antiLoop.js'
 import { createHarness } from './fixtures/handoffBot.js'
+import {
+	fixtureLogger as Logger,
+	testHarnessDependencies
+} from './fixtures/services.js'
 
 test('HSM observer resets the guard after its cooldown', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
@@ -24,7 +27,7 @@ test('HSM observer resets the guard after its cooldown', async t => {
 	t.mock.method(memory, 'close', () => {})
 	t.mock.method(profile, 'load', async () => {})
 	t.mock.method(profile, 'close', () => {})
-	const hsm = new BotStateMachine(bot.asBot())
+	const hsm = new BotStateMachine(bot.asBot(), testHarnessDependencies())
 	t.after(() => hsm.stop())
 	assert.equal(await hsm.ready, true)
 	hsm.send({ type: 'UPDATE_ENTITIES', entities: [], enemies: [], players: [] })
@@ -54,11 +57,14 @@ test('HSM observer resets the guard after its cooldown', async t => {
 })
 
 test('AntiLoopGuard ignores repeated updates with the same state signature', () => {
-	const guard = new AntiLoopGuard({
-		maxTransitionsPerSecond: 2,
-		emergencyStopAfter: 100,
-		windowMs: 1000
-	})
+	const guard = new AntiLoopGuard(
+		{
+			maxTransitionsPerSecond: 2,
+			emergencyStopAfter: 100,
+			windowMs: 1000
+		},
+		Logger
+	)
 
 	assert.equal(guard.recordUpdate('TASKS.THINKING'), true)
 	assert.equal(guard.recordUpdate('TASKS.THINKING'), true)
@@ -74,11 +80,14 @@ test('AntiLoopGuard trips on update flood and recovers after reset', () => {
 	const originalLoggerError = Logger.error
 	Logger.error = () => {}
 	try {
-		const guard = new AntiLoopGuard({
-			maxTransitionsPerSecond: 2,
-			emergencyStopAfter: 100,
-			windowMs: 60_000
-		})
+		const guard = new AntiLoopGuard(
+			{
+				maxTransitionsPerSecond: 2,
+				emergencyStopAfter: 100,
+				windowMs: 60_000
+			},
+			Logger
+		)
 
 		assert.equal(guard.recordUpdate('STATE_A'), true)
 		assert.equal(guard.recordUpdate('STATE_B'), true)

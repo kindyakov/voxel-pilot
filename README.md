@@ -54,6 +54,20 @@ VoxelPilot is an autonomous Minecraft bot harness with an optional AI pilot. Bui
    pnpm start
    ```
 
+## Terminal dashboard
+
+After configuring the same `.env` and running `pnpm run build`, use `pnpm run tui` in an interactive terminal. The dashboard starts one bot, shows connection state and an INFO+ journal, and keeps a final connection failure visible until exit. DEBUG is collected from startup; console logging is disabled while file logging keeps its own configured level. CLI and TUI use the same repository data and log paths when run sequentially.
+
+The status panel shows measured health/maxHealth, food, coordinates, MAIN_ACTIVITY and its elapsed time, current action, independent monitoring and the active or paused goal. Unknown values appear as `—`; real zero stays zero. Stale measurements are marked, including the time since entry into the last known state. A new session clears old measurements until fresh observations arrive; monitoring and log updates do not reset the main-state timer.
+
+Press `d` to show retained DEBUG records. Up/Down and PgUp/PgDn browse records; scrolling up pauses the view while a badge counts new matching events. `End` or scrolling down to the latest record returns to LIVE. Filtering and resizing keep the paused source anchor; eviction shows a loss notice and the earliest retained matching record. Journal eviction and source truncation remain visible, and shortened display text uses an ellipsis.
+
+Use `q` or Ctrl+C to stop and await persistence. Signals and application failures join the same bounded shutdown; a deadline or failed save exits nonzero. The terminal needs interactive input/output and raw input support. Unsupported terminals are rejected before settings/resource allocation; use `pnpm start` for the headless CLI. `pnpm run dev:tui` provides the development watcher.
+
+At 120 columns or more, the journal and status use approximately 65/35 of the content width. With enough height, status separates vitals, position, HSM and goal into blocks; shorter windows use compact status. Narrower windows stack compact status above the journal; insufficient space shows an enlargement notice while input and the bot keep running. Page keys use the number of displayed records. Resizing preserves the filter, pause anchor and elapsed main-state time. Long text is clipped by terminal cells; `[усечено]` (or `[!]`/`!`) marks source truncation separately from display shortening.
+
+Display styling follows TTY color capabilities and terminal hints. `NO_COLOR` or `FORCE_COLOR=0` disables colors; `TERM=dumb`, `TERM=linux` or an explicitly non-UTF8 locale simplifies decorative symbols to ASCII. Limited displays keep textual levels, unknown/stale values and paused goals; shortened text uses `~`. CLI remains the headless Docker default.
+
 ## Docker
 
 One bot per container. Build once, then run with your `.env` and persistent volumes:
@@ -69,26 +83,26 @@ docker compose up -d --build
 
 Required variables:
 
-| Variable | Purpose |
-| --- | --- |
-| `MINECRAFT_HOST` | Minecraft server host |
-| `MINECRAFT_PORT` | Minecraft server port |
-| `MINECRAFT_USERNAME` | Bot username |
-| `MINECRAFT_VERSION` | Minecraft protocol version |
-| `AI_PROVIDER` | Provider name: `openai`, `routerai`, `openrouter`, `openai_compatible`, `local`, or `disabled` |
-| `AI_MODEL` | Model name used by the selected provider |
+| Variable             | Purpose                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------- |
+| `MINECRAFT_HOST`     | Minecraft server host                                                                          |
+| `MINECRAFT_PORT`     | Minecraft server port                                                                          |
+| `MINECRAFT_USERNAME` | Bot username                                                                                   |
+| `MINECRAFT_VERSION`  | Minecraft protocol version                                                                     |
+| `AI_PROVIDER`        | Provider name: `openai`, `routerai`, `openrouter`, `openai_compatible`, `local`, or `disabled` |
+| `AI_MODEL`           | Model name used by the selected provider                                                       |
 
 Common optional variables:
 
-| Variable | Purpose |
-| --- | --- |
-| `AI_BASE_URL` | Base URL for OpenAI-compatible providers |
-| `AI_API_KEY` | API key for the selected provider |
-| `AI_TIMEOUT_MS` | Request timeout in milliseconds |
-| `AI_MAX_TOKENS` | Maximum completion tokens |
-| `LOG_LEVEL` | Logging level, defaults to `info` |
-| `LOG_FILE` | Log file path, defaults to `logs/bot.log` |
-| `MINECRAFT_VIEWER_PORT` | Port for the optional viewer plugin |
+| Variable                       | Purpose                                    |
+| ------------------------------ | ------------------------------------------ |
+| `AI_BASE_URL`                  | Base URL for OpenAI-compatible providers   |
+| `AI_API_KEY`                   | API key for the selected provider          |
+| `AI_TIMEOUT_MS`                | Request timeout in milliseconds            |
+| `AI_MAX_TOKENS`                | Maximum completion tokens                  |
+| `LOG_LEVEL`                    | Logging level, defaults to `info`          |
+| `LOG_FILE`                     | Log file path, defaults to `logs/bot.log`  |
+| `MINECRAFT_VIEWER_PORT`        | Port for the optional viewer plugin        |
 | `MINECRAFT_WEB_INVENTORY_PORT` | Port for the optional web inventory plugin |
 
 ## Architecture

@@ -1,5 +1,7 @@
 import type { Block } from '@/types/index.js'
 
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
+
 import {
 	type BaseServiceState,
 	createStatefulService
@@ -14,6 +16,18 @@ import {
 	selectBestBlocks
 } from '@/hsm/utils/blockAnalysis.js'
 
+export interface SearchBlockOptions {
+	blockName: string
+	blockNames?: string[]
+	excludedPositions?: string[]
+	maxDistance?: number
+	count?: number
+	mode?: 'simple' | 'mining'
+	maxYDiffAbove?: number
+	maxYDiffBelow?: number
+	prioritizeSafety?: boolean
+}
+
 interface SearchBlockState extends BaseServiceState {
 	blockName: string
 	maxDistance: number
@@ -27,184 +41,181 @@ interface SearchBlockState extends BaseServiceState {
 	prioritizeSafety: boolean
 }
 
-export interface SearchBlockOptions {
-	blockName: string
-	blockNames?: string[]
-	excludedPositions?: string[]
-	maxDistance?: number
-	count?: number
-	mode?: 'simple' | 'mining'
-	maxYDiffAbove?: number
-	maxYDiffBelow?: number
-	prioritizeSafety?: boolean
-}
+export const createPrimitiveSearchBlock = (logger: RuntimeLogger) => {
+	const DEFAULT_MAX_DISTANCE = 32
+	const DEFAULT_COUNT = 1
+	const DEFAULT_MODE = 'simple'
+	const DEFAULT_MINING_MAX_Y_DIFF_ABOVE = 6
+	const DEFAULT_MINING_MAX_Y_DIFF_BELOW = 2
+	const SEARCH_TICK_INTERVAL_MS = 50
 
-const DEFAULT_MAX_DISTANCE = 32
-const DEFAULT_COUNT = 1
-const DEFAULT_MODE = 'simple'
-const DEFAULT_MINING_MAX_Y_DIFF_ABOVE = 6
-const DEFAULT_MINING_MAX_Y_DIFF_BELOW = 2
-const SEARCH_TICK_INTERVAL_MS = 50
-
-const emitNotFound = (
-	sendBack: (event: { type: 'NOT_FOUND'; reason: string }) => void,
-	setState: (updates: Partial<SearchBlockState>) => void,
-	reason: string
-) => {
-	setState({ searching: false })
-	sendBack({
-		type: 'NOT_FOUND',
-		reason
-	})
-}
-
-const emitFound = (
-	sendBack: (event: { type: 'BLOCKS_FOUND'; blocks: Block[] }) => void,
-	setState: (updates: Partial<SearchBlockState>) => void,
-	blocks: Block[]
-) => {
-	setState({ searching: false })
-	sendBack({
-		type: 'BLOCKS_FOUND',
-		blocks
-	})
-}
-
-const getNearestBlock = (blocks: AnalyzedBlock[]): AnalyzedBlock | null =>
-	[...blocks].sort((a, b) => a.distanceTotal - b.distanceTotal)[0] ?? null
-
-export const primitiveSearchBlock = createStatefulService<
-	SearchBlockState,
-	SearchBlockOptions
->({
-	name: 'primitiveSearchBlock',
-	tickInterval: SEARCH_TICK_INTERVAL_MS,
-	initialState: {
-		blockName: '',
-		maxDistance: DEFAULT_MAX_DISTANCE,
-		count: DEFAULT_COUNT,
-		mode: DEFAULT_MODE,
-		blockId: null,
-		blockIds: [],
-		excludedPositions: [],
-		searching: false,
-		prioritizeSafety: false
-	},
-
-	onStart: ({ input, bot, setState, sendBack }) => {
-		const {
-			blockName,
-			maxDistance = DEFAULT_MAX_DISTANCE,
-			count = DEFAULT_COUNT,
-			mode = DEFAULT_MODE,
-			maxYDiffAbove,
-			maxYDiffBelow,
-			prioritizeSafety = false
-		} = input
-
-		if (!blockName) {
-			emitNotFound(sendBack, setState, 'Missing required parameter: blockName')
-			return
-		}
-
-		const blockData = bot.registry.blocksByName[blockName]
-		if (!blockData) {
-			emitNotFound(sendBack, setState, `Unknown block type: ${blockName}`)
-			return
-		}
-
-		setState({
-			blockName,
-			maxDistance,
-			count,
-			mode,
-			blockId: blockData.id,
-			blockIds: (input.blockNames ?? [blockName]).map(
-				name => bot.registry.blocksByName[name]!.id
-			),
-			excludedPositions: input.excludedPositions ?? [],
-			searching: true,
-			yRange:
-				mode === 'mining'
-					? {
-							above: maxYDiffAbove ?? DEFAULT_MINING_MAX_Y_DIFF_ABOVE,
-							below: maxYDiffBelow ?? DEFAULT_MINING_MAX_Y_DIFF_BELOW
-						}
-					: undefined,
-			prioritizeSafety
+	const emitNotFound = (
+		sendBack: (event: { type: 'NOT_FOUND'; reason: string }) => void,
+		setState: (updates: Partial<SearchBlockState>) => void,
+		reason: string
+	) => {
+		setState({ searching: false })
+		sendBack({
+			type: 'NOT_FOUND',
+			reason
 		})
-	},
+	}
 
-	onTick: ({ state, bot, setState, sendBack }) => {
-		const {
-			blockName,
-			maxDistance,
-			count,
-			mode,
-			blockId,
-			searching,
-			yRange,
-			prioritizeSafety
-		} = state
-
-		if (!searching || blockId === null) {
-			return
-		}
-
-		const positions = bot.findBlocks({
-			matching: state.blockIds,
-			maxDistance,
-			count: Math.max(count * 10, 100)
+	const emitFound = (
+		sendBack: (event: { type: 'BLOCKS_FOUND'; blocks: Block[] }) => void,
+		setState: (updates: Partial<SearchBlockState>) => void,
+		blocks: Block[]
+	) => {
+		setState({ searching: false })
+		sendBack({
+			type: 'BLOCKS_FOUND',
+			blocks
 		})
+	}
 
-		const analyzedBlocks = positions
-			.filter(
-				position => !state.excludedPositions.includes(positionKey(position))
-			)
-			.map(position => analyzeBlock(position, bot))
-			.filter((block): block is AnalyzedBlock => block !== null)
+	const getNearestBlock = (blocks: AnalyzedBlock[]): AnalyzedBlock | null =>
+		[...blocks].sort((a, b) => a.distanceTotal - b.distanceTotal)[0] ?? null
 
-		if (analyzedBlocks.length === 0) {
-			emitNotFound(
-				sendBack,
-				setState,
-				`No ${blockName} found within ${maxDistance}m`
-			)
-			return
-		}
+	const primitiveSearchBlock = createStatefulService<
+		SearchBlockState,
+		SearchBlockOptions
+	>({
+		logger,
+		name: 'primitiveSearchBlock',
+		tickInterval: SEARCH_TICK_INTERVAL_MS,
+		initialState: {
+			blockName: '',
+			maxDistance: DEFAULT_MAX_DISTANCE,
+			count: DEFAULT_COUNT,
+			mode: DEFAULT_MODE,
+			blockId: null,
+			blockIds: [],
+			excludedPositions: [],
+			searching: false,
+			prioritizeSafety: false
+		},
 
-		if (mode === 'simple') {
-			const nearestBlock = getNearestBlock(analyzedBlocks)
-			if (!nearestBlock) {
-				emitNotFound(sendBack, setState, `No ${blockName} blocks found`)
+		onStart: ({ input, bot, setState, sendBack }) => {
+			const {
+				blockName,
+				maxDistance = DEFAULT_MAX_DISTANCE,
+				count = DEFAULT_COUNT,
+				mode = DEFAULT_MODE,
+				maxYDiffAbove,
+				maxYDiffBelow,
+				prioritizeSafety = false
+			} = input
+
+			if (!blockName) {
+				emitNotFound(
+					sendBack,
+					setState,
+					'Missing required parameter: blockName'
+				)
 				return
 			}
 
-			emitFound(sendBack, setState, [nearestBlock.block])
-			return
-		}
+			const blockData = bot.registry.blocksByName[blockName]
+			if (!blockData) {
+				emitNotFound(sendBack, setState, `Unknown block type: ${blockName}`)
+				return
+			}
 
-		let candidates = yRange
-			? filterByYRange(analyzedBlocks, bot.entity.position.y, yRange)
-			: analyzedBlocks
+			setState({
+				blockName,
+				maxDistance,
+				count,
+				mode,
+				blockId: blockData.id,
+				blockIds: (input.blockNames ?? [blockName]).map(
+					name => bot.registry.blocksByName[name]!.id
+				),
+				excludedPositions: input.excludedPositions ?? [],
+				searching: true,
+				yRange:
+					mode === 'mining'
+						? {
+								above: maxYDiffAbove ?? DEFAULT_MINING_MAX_Y_DIFF_ABOVE,
+								below: maxYDiffBelow ?? DEFAULT_MINING_MAX_Y_DIFF_BELOW
+							}
+						: undefined,
+				prioritizeSafety
+			})
+		},
 
-		if (prioritizeSafety) {
-			candidates = filterSafeBlocks(candidates, bot)
-		}
+		onTick: ({ state, bot, setState, sendBack }) => {
+			const {
+				blockName,
+				maxDistance,
+				count,
+				mode,
+				blockId,
+				searching,
+				yRange,
+				prioritizeSafety
+			} = state
 
-		if (candidates.length === 0) {
-			emitNotFound(
+			if (!searching || blockId === null) {
+				return
+			}
+
+			const positions = bot.findBlocks({
+				matching: state.blockIds,
+				maxDistance,
+				count: Math.max(count * 10, 100)
+			})
+
+			const analyzedBlocks = positions
+				.filter(
+					position => !state.excludedPositions.includes(positionKey(position))
+				)
+				.map(position => analyzeBlock(position, bot))
+				.filter((block): block is AnalyzedBlock => block !== null)
+
+			if (analyzedBlocks.length === 0) {
+				emitNotFound(
+					sendBack,
+					setState,
+					`No ${blockName} found within ${maxDistance}m`
+				)
+				return
+			}
+
+			if (mode === 'simple') {
+				const nearestBlock = getNearestBlock(analyzedBlocks)
+				if (!nearestBlock) {
+					emitNotFound(sendBack, setState, `No ${blockName} blocks found`)
+					return
+				}
+
+				emitFound(sendBack, setState, [nearestBlock.block])
+				return
+			}
+
+			let candidates = yRange
+				? filterByYRange(analyzedBlocks, bot.entity.position.y, yRange)
+				: analyzedBlocks
+
+			if (prioritizeSafety) {
+				candidates = filterSafeBlocks(candidates, bot)
+			}
+
+			if (candidates.length === 0) {
+				emitNotFound(
+					sendBack,
+					setState,
+					`No ${blockName} blocks found after filtering`
+				)
+				return
+			}
+
+			emitFound(
 				sendBack,
 				setState,
-				`No ${blockName} blocks found after filtering`
+				selectBestBlocks(candidates, count).map(block => block.block)
 			)
-			return
 		}
+	})
 
-		emitFound(
-			sendBack,
-			setState,
-			selectBestBlocks(candidates, count).map(block => block.block)
-		)
-	}
-})
+	return primitiveSearchBlock
+}

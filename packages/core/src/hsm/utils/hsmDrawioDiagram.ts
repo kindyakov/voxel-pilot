@@ -1,4 +1,32 @@
-import { machine } from '@/hsm/machine.js'
+import { createBotMachine } from '@/hsm/machine.js'
+
+// Diagram generation reads the real definition but must never execute behavior.
+const machineForDiagram = () => {
+	const unavailable = (): never => {
+		throw new Error('Diagram behavior cannot execute')
+	}
+	return createBotMachine({
+		logger: {
+			correlationId: null,
+			subscribeRecords: unavailable,
+			setCorrelationId: unavailable,
+			clearCorrelationId: unavailable,
+			log: unavailable,
+			debug: unavailable,
+			info: unavailable,
+			warn: unavailable,
+			error: unavailable,
+			botAction: unavailable,
+			playerCommand: unavailable,
+			aiCall: unavailable,
+			exception: unavailable
+		},
+		runAgentTurn: unavailable,
+		aiPilotEnabled: false,
+		minecraftVersion: 'diagram',
+		diagnosticsEnabled: false
+	})
+}
 
 type StateKind = 'compound' | 'leaf' | 'history' | 'parallel'
 
@@ -1413,7 +1441,7 @@ const validateLayoutCoverage = (actualPaths: string[]) => {
 }
 
 export const buildHsmDrawioDiagram = (): HsmDrawioDiagram => {
-	const statePaths = collectStatePaths(machine.config.states)
+	const statePaths = collectStatePaths(machineForDiagram().config.states)
 	validateLayoutCoverage(statePaths)
 
 	const cells: string[] = ['<mxCell id="0"/>', '<mxCell id="1" parent="0"/>']

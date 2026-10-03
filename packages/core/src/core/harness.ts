@@ -1,19 +1,34 @@
 import type { Bot, Entity } from '@/types/index.js'
+import type { HarnessSummary, StopIssue } from '@voxel-pilot/contracts'
 import type { BotEvents } from 'mineflayer'
 import { type ActorRefFrom, createActor } from 'xstate'
 
-import Config from '@/config/config.js'
-import Logger from '@/config/logger.js'
-
 import type { MachineContext } from '@/hsm/context.js'
-import { machine } from '@/hsm/machine.js'
+import type { HarnessDependencies } from '@/hsm/dependencies.js'
+import type { NativeInspectionOptions } from '@/hsm/inspection/index.js'
+import {
+	type CapturedInspectionOptions,
+	type NativeInspectionSource,
+	captureInspectionOptions,
+	createNativeInspectionSource
+} from '@/hsm/inspection/source.js'
+import { createBotMachine } from '@/hsm/machine.js'
 import type { MachineEvent } from '@/hsm/types.js'
 import { AntiLoopGuard } from '@/hsm/utils/antiLoop.js'
 import { attachHsmDiagnostics } from '@/hsm/utils/runtimeDiagnostics.js'
 
-import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
+import {
+	cleanupPathfindCache,
+	clearPathfindCache
+} from '@/utils/combat/enemyVisibility.js'
 
-import { cleanupPathfindCache } from '@/utils/combat/enemyVisibility.js'
+import {
+	type FinalizationReport,
+	freezeReport,
+	stopIssue
+} from './finalization.js'
+import { deliver } from './telemetry/facts.js'
+import { createHarnessProjection } from './telemetry/harnessFacts.js'
 
 interface StoreLifecycle {
 	started: boolean
@@ -21,15 +36,17 @@ interface StoreLifecycle {
 	closed: boolean
 }
 
-interface BotStateMachineOptions {
+export interface BotStateMachineOptions {
 	pausedGoal?: string | null
+	inspection?: NativeInspectionOptions
 }
 
-class BotStateMachine {
+export class BotStateMachine {
+	private readonly dependencies: HarnessDependencies
 	private readonly bot: Bot
 	private readonly memory: Bot['memory']
 	private readonly profileMemory: Bot['profileMemory']
-	private actor: ActorRefFrom<typeof machine> | null = null
+	private actor: ActorRefFrom<ReturnType<typeof createBotMachine>> | null = null
 	private readonly antiLoopGuard: AntiLoopGuard
 	private pathfindCacheCleanupInterval?: NodeJS.Timeout
 	private readonly pendingEvents: MachineEvent[] = []
@@ -37,10 +54,19 @@ class BotStateMachine {
 	private antiLoopTripped = false
 	private antiLoopCooldown?: NodeJS.Timeout
 	private stopDiagnostics?: () => void
+	private inspection: NativeInspectionSource | null = null
+	private readonly inspectionOptions?: CapturedInspectionOptions
 	private readonly subscriptions: Array<() => void> = []
+	private readonly factObservers = new Set<(summary: HarnessSummary) => void>()
+	private summary: HarnessSummary | null = null
 	private stopped = false
 	private stopPromise: Promise<void> | null = null
 	private saving: Promise<void> | null = null
+	private saveFailed = false
+	private readonly initialization: Promise<boolean>
+	private finalization: Promise<FinalizationReport> | null = null
+	private readonly issues: StopIssue[] = []
+	private persistence: FinalizationReport['persistence'] = 'not-required'
 	private cancelReady!: (ready: false) => void
 	private readonly memoryLifecycle: StoreLifecycle = {
 		started: false,
@@ -54,20 +80,30 @@ class BotStateMachine {
 	}
 	readonly ready: Promise<boolean>
 
-	constructor(bot: Bot, options: BotStateMachineOptions = {}) {
+	constructor(
+		bot: Bot,
+		dependencies: HarnessDependencies,
+		options: BotStateMachineOptions = {}
+	) {
+		this.dependencies = Object.freeze({ ...dependencies })
+		this.inspectionOptions = captureInspectionOptions(options.inspection)
 		this.bot = bot
 		this.memory = bot.memory
 		this.profileMemory = bot.profileMemory
-		this.antiLoopGuard = new AntiLoopGuard({
-			maxTransitionsPerSecond: 20,
-			emergencyStopAfter: 100,
-			windowMs: 1000
-		})
+		this.antiLoopGuard = new AntiLoopGuard(
+			{
+				maxTransitionsPerSecond: 20,
+				emergencyStopAfter: 100,
+				windowMs: 1000
+			},
+			this.dependencies.logger
+		)
 
 		const cancelled = new Promise<false>(resolve => {
 			this.cancelReady = resolve
 		})
-		this.ready = Promise.race([this.init(options.pausedGoal), cancelled])
+		this.initialization = this.init(options.pausedGoal)
+		this.ready = Promise.race([this.initialization, cancelled])
 	}
 
 	private async init(pausedGoal: string | null | undefined): Promise<boolean> {
@@ -84,34 +120,80 @@ class BotStateMachine {
 			// A recovery failure fails initialization like any store failure.
 			const recovered = this.memory.normalizeTasksOnBoot()
 			if (recovered > 0) {
-				Logger.info('[HSM] recovered suspended tasks', {
+				this.dependencies.logger.info('[HSM] recovered suspended tasks', {
 					count: recovered
 				})
 			}
+			if (this.stopped) return false
 			// Construction reads current vitals; no stale pre-load health events are replayed.
-			this.actor = createActor(machine, {
+			if (this.inspectionOptions) {
+				this.inspection = createNativeInspectionSource(
+					this.inspectionOptions,
+					this.dependencies.logger
+				)
+			}
+			if (this.stopped) {
+				this.releaseRuntime()
+				return false
+			}
+			this.actor = createActor(createBotMachine(this.dependencies), {
+				...(this.inspection ? { inspect: this.inspection.inspect } : {}),
 				input: {
 					bot: this.bot,
 					pausedGoal,
-					aiPilotEnabled: !isAiPilotDisabled(Config.ai.provider)
+					aiPilotEnabled: this.dependencies.aiPilotEnabled
 				}
 			})
+			if (this.stopped) {
+				this.releaseRuntime()
+				return false
+			}
 			this.bot.hsm = this
-			this.stopDiagnostics = attachHsmDiagnostics(
-				this.actor,
-				Config.minecraft.version
-			)
+			const project = createHarnessProjection()
+			const facts = this.actor.subscribe(snapshot => {
+				if (this.stopped) return
+				const summary = project(snapshot.value, snapshot.context)
+				if (this.summary === summary) return
+				this.summary = summary
+				for (const listener of [...this.factObservers]) {
+					if (this.stopped || this.summary !== summary) break
+					if (this.factObservers.has(listener)) deliver(listener, summary)
+				}
+			})
+			this.subscriptions.push(() => facts.unsubscribe())
+			if (this.dependencies.diagnosticsEnabled) {
+				this.stopDiagnostics = attachHsmDiagnostics(
+					this.actor,
+					this.dependencies.logger,
+					this.dependencies.minecraftVersion
+				)
+			}
+			if (this.stopped) {
+				this.releaseRuntime()
+				return false
+			}
 			this.setupBotEvents()
 			this.actor.start()
+			if (this.stopped) return false
 			this.isReady = true
 			this.flushPendingEvents()
+			if (this.stopped) return false
 			this.setupAntiLoopObserver()
 			this.pathfindCacheCleanupInterval = setInterval(() => {
-				cleanupPathfindCache(10000)
+				cleanupPathfindCache(this.bot, this.dependencies.logger, 10000)
 			}, 15000)
 			return true
 		} catch (error) {
-			Logger.error('[HSM] initialization failed', { error: String(error) })
+			this.issues.push(
+				stopIssue(
+					'cleanup',
+					'harness-initialization-failed',
+					'Harness initialization failed.'
+				)
+			)
+			this.dependencies.logger.error('[HSM] initialization failed', {
+				error: String(error)
+			})
 			this.stopped = true
 			this.cancelReady(false)
 			this.releaseRuntime()
@@ -183,6 +265,16 @@ class BotStateMachine {
 	getContext(): MachineContext {
 		if (!this.actor) throw new Error('HSM is not initialized')
 		return this.actor.getSnapshot().context
+	}
+
+	/** Internal compact projection; the native owner redacts goal text before publication. */
+	subscribeFacts(listener: (summary: HarnessSummary) => void): () => void {
+		if (this.stopped) return () => {}
+		this.factObservers.add(listener)
+		if (this.summary) deliver(listener, this.summary)
+		return () => {
+			this.factObservers.delete(listener)
+		}
 	}
 
 	getReconnectGoal(): string | null {
@@ -275,10 +367,27 @@ class BotStateMachine {
 
 	private saveMemory(): Promise<void> {
 		if (this.saving) return this.saving
+		this.saveFailed = false
 		this.saving = Promise.resolve()
 			.then(() => this.memory.save())
+			.then(() => {
+				if (this.stopped) this.persistence = 'saved'
+			})
 			.catch(error => {
-				Logger.error('[HSM] memory save failed', { error: String(error) })
+				this.saveFailed = true
+				if (this.stopped) {
+					this.persistence = 'failed'
+					this.issues.push(
+						stopIssue(
+							'save',
+							'memory-save-failed',
+							'Required memory save failed.'
+						)
+					)
+				}
+				this.dependencies.logger.error('[HSM] memory save failed', {
+					error: String(error)
+				})
 			})
 			.finally(() => {
 				this.saving = null
@@ -286,17 +395,27 @@ class BotStateMachine {
 		return this.saving
 	}
 
-	private cleanup(action: () => void): void {
+	private cleanup(action: () => void, code = 'harness-cleanup-failed'): void {
 		try {
 			action()
 		} catch (error) {
-			Logger.error('[HSM] cleanup failed', { error: String(error) })
+			this.issues.push(
+				stopIssue('cleanup', code, 'Harness resource cleanup failed.')
+			)
+			this.dependencies.logger.error('[HSM] cleanup failed', {
+				error: String(error)
+			})
 		}
 	}
 
 	private releaseRuntime(): void {
 		this.isReady = false
+		this.factObservers.clear()
 		this.pendingEvents.length = 0
+		// Constructor inspection stays an inactive dispatcher until system release.
+		const inspection = this.inspection
+		this.inspection = null
+		inspection?.dispose()
 		this.cleanup(() => this.stopDiagnostics?.())
 		this.stopDiagnostics = undefined
 		if (this.antiLoopCooldown) clearTimeout(this.antiLoopCooldown)
@@ -306,6 +425,7 @@ class BotStateMachine {
 
 		for (const dispose of this.subscriptions.splice(0)) this.cleanup(dispose)
 		this.cleanup(() => this.actor?.stop())
+		clearPathfindCache(this.bot)
 	}
 
 	private closeStore(
@@ -314,7 +434,12 @@ class BotStateMachine {
 	): void {
 		if (!lifecycle.started || lifecycle.loading || lifecycle.closed) return
 		lifecycle.closed = true
-		this.cleanup(() => store.close())
+		this.cleanup(
+			() => store.close(),
+			lifecycle === this.memoryLifecycle
+				? 'memory-close-failed'
+				: 'profile-close-failed'
+		)
 	}
 
 	private closeStores(): void {
@@ -333,9 +458,37 @@ class BotStateMachine {
 			this.closeStores()
 			this.stopPromise = Promise.resolve()
 		} else {
+			this.persistence = this.saving && this.saveFailed ? 'failed' : 'saved'
+			if (
+				this.persistence === 'failed' &&
+				!this.issues.some(issue => issue.code === 'memory-save-failed')
+			) {
+				this.issues.push(
+					stopIssue(
+						'save',
+						'memory-save-failed',
+						'Required memory save failed.'
+					)
+				)
+			}
 			this.stopPromise = this.saveMemory().finally(() => this.closeStores())
 		}
 		return this.stopPromise
+	}
+
+	/** Already observed errors, even while a load or save is still pending. */
+	getFinalizationIssues(): readonly StopIssue[] {
+		return Object.freeze([...this.issues])
+	}
+
+	/** Low-level cancellation stays immediate; this joins all late store finalization. */
+	finalize(): Promise<FinalizationReport> {
+		if (this.finalization) return this.finalization
+		const stopped = this.stop()
+		this.finalization = Promise.all([stopped, this.initialization]).then(() =>
+			freezeReport(this.persistence, this.issues)
+		)
+		return this.finalization
 	}
 }
 

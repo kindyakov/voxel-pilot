@@ -9,10 +9,15 @@
 			"development": "./src/index.ts",
 			"import": "./dist/index.js"
 		},
-		"./legacy-logger": {
-			"types": "./dist/config/logger.d.ts",
-			"development": "./src/config/logger.ts",
-			"import": "./dist/config/logger.js"
+		"./services": {
+			"types": "./dist/config/services.d.ts",
+			"development": "./src/config/services.ts",
+			"import": "./dist/config/services.js"
+		},
+		"./inspection": {
+			"types": "./dist/hsm/inspection/index.d.ts",
+			"development": "./src/hsm/inspection/index.ts",
+			"import": "./dist/hsm/inspection/index.js"
 		},
 		"./paths": {
 			"types": "./dist/runtimePaths.d.ts",
@@ -42,10 +47,10 @@
 		"clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
 	},
 	"dependencies": {
+		"@voxel-pilot/contracts": "workspace:*",
 		"@openai/agents": "^0.18.0",
 		"ajv": "^8.17.1",
 		"chalk": "^4.1.2",
-		"dotenv": "^17.2.1",
 		"minecrafthawkeye": "1.3.9",
 		"mineflayer": "4.39.0",
 		"mineflayer-armor-manager": "^2.0.1",

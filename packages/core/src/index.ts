@@ -1,2 +1,6 @@
-// Phase 1 compatibility surface; explicit runtime services follow in #23–#26.
+// Import and construction are inert; callers supply services and explicitly start.
 export { default as MinecraftBot } from './core/bot.js'
+export type { ConnectionDependencies, MinecraftBotOptions } from './core/bot.js'
+export { createBotRuntime } from './core/runtime.js'
+export type { BotRuntimeOptions } from './core/runtime.js'
+export type { LogHistoryOptions } from './core/telemetry/logJournal.js'

@@ -35,10 +35,13 @@ const schema = {
 	]
 }
 
-export function validateEnv() {
+export function validateEnvironmentValues(
+	values: Readonly<Record<string, string | undefined>>
+): Record<string, string | undefined> {
+	const snapshot = { ...values }
 	const ajv = new Ajv({ allErrors: true, useDefaults: true })
 	const validate = ajv.compile(schema)
-	const valid = validate(process.env)
+	const valid = validate(snapshot)
 
 	if (!valid) {
 		const errors = validate.errors
@@ -47,5 +50,5 @@ export function validateEnv() {
 		throw new Error(`\n❌ Invalid environment variables:\n${errors}\n`)
 	}
 
-	return process.env as Record<string, string>
+	return snapshot
 }

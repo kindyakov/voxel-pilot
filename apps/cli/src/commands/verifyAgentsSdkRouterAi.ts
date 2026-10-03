@@ -7,13 +7,10 @@ import {
 	type AgentSdkTool,
 	createAgentsSdkPilot
 } from '@voxel-pilot/core/agents-sdk-pilot'
-import { defaultSettingsFile } from '@voxel-pilot/core/paths'
-import dotenv from 'dotenv'
 
-dotenv.config({
-	path: process.env.DOTENV_CONFIG_PATH ?? defaultSettingsFile,
-	quiet: true
-})
+import { loadSettings } from '../settings.js'
+
+const { values: settings } = loadSettings(process.env)
 
 interface StreamMetrics {
 	eventCount: number
@@ -153,12 +150,12 @@ const abortStream = async (
 }
 
 const main = async (): Promise<number> => {
-	const apiKey = process.env.ROUTERAI_API_KEY ?? process.env.AI_API_KEY
+	const apiKey = settings.ROUTERAI_API_KEY ?? settings.AI_API_KEY
 	const baseUrl =
-		process.env.ROUTERAI_BASE_URL ||
-		process.env.AI_BASE_URL ||
+		settings.ROUTERAI_BASE_URL ||
+		settings.AI_BASE_URL ||
 		'https://routerai.ru/api/v1'
-	const model = process.env.ROUTERAI_MODEL ?? process.env.AI_MODEL
+	const model = settings.ROUTERAI_MODEL ?? settings.AI_MODEL
 
 	if (!apiKey || !model) {
 		console.error(
@@ -173,8 +170,8 @@ const main = async (): Promise<number> => {
 		model,
 		instructions:
 			'You are running an integration check. For the first request, call agents_sdk_probe before answering. Keep responses concise.',
-		timeoutMs: parsePositiveInteger(process.env.AI_TIMEOUT_MS),
-		maxTokens: parsePositiveInteger(process.env.AI_MAX_TOKENS),
+		timeoutMs: parsePositiveInteger(settings.AI_TIMEOUT_MS),
+		maxTokens: parsePositiveInteger(settings.AI_MAX_TOKENS),
 		maxTurns: 4,
 		tools: [probeTool]
 	})

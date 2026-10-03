@@ -1,6 +1,20 @@
 import type { Responses } from 'openai/resources/responses/responses'
 
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
+
 import type { AgentPromptAssembly } from '@/ai/prompt.js'
+
+import type { RequestDebugDumpOptions } from '../client/requestDebugDump.js'
+
+export interface AgentClientOptions {
+	readonly apiKey?: string
+	readonly baseUrl?: string
+	readonly model: string
+	readonly timeoutMs: number
+	readonly maxOutputTokens: number
+	readonly logger: RuntimeLogger
+	readonly debugDump: RequestDebugDumpOptions
+}
 
 export interface ParsedToolCall {
 	callId: string

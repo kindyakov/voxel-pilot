@@ -1,12 +1,13 @@
-import Config, { type Config as ConfigInstance } from '@/config/config.js'
-import logger from '@/config/logger.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import type { UserEvents } from '@/hsm/types.js'
 
-import {
-	AI_PILOT_UNAVAILABLE_COMMAND_MESSAGE,
-	isAiPilotDisabled
-} from '@/ai/pilotAvailability.js'
+import { AI_PILOT_UNAVAILABLE_COMMAND_MESSAGE } from '@/ai/pilotAvailability.js'
+
+interface CommandDependencies {
+	readonly logger: RuntimeLogger
+	readonly aiPilotEnabled: boolean
+}
 
 interface CommandBot {
 	username: string
@@ -35,8 +36,9 @@ export default class CommandHandler {
 	constructor(
 		bot: CommandBot,
 		hsm: CommandEventTarget,
-		private readonly config: Pick<ConfigInstance, 'ai'> = Config
+		private readonly dependencies: CommandDependencies
 	) {
+		this.dependencies = Object.freeze({ ...dependencies })
 		this.bot = bot
 		this.hsm = hsm
 		this.init()
@@ -65,19 +67,19 @@ export default class CommandHandler {
 		if (!commandText) return
 
 		if (commandText === 'stop') {
-			logger.playerCommand(username, 'stop', [])
+			this.dependencies.logger.playerCommand(username, 'stop', [])
 			this.hsm.send({
 				type: 'STOP_CURRENT_GOAL',
 				username
 			})
 			return
 		}
-		if (isAiPilotDisabled(this.config.ai.provider)) {
+		if (!this.dependencies.aiPilotEnabled) {
 			this.bot.chat(AI_PILOT_UNAVAILABLE_COMMAND_MESSAGE)
 			return
 		}
 
-		logger.playerCommand(username, 'goal', [commandText])
+		this.dependencies.logger.playerCommand(username, 'goal', [commandText])
 		this.hsm.send({
 			type: 'USER_COMMAND',
 			username,

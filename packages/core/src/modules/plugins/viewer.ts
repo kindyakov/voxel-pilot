@@ -1,12 +1,9 @@
-import { mineflayer as mineFlayerViewer } from 'prismarine-viewer'
-
 import type { Bot } from '@/types/index.js'
 
-import Config from '@/config/config.js'
-
-export const initViewer = (bot: Bot): void => {
+export const initViewer = async (bot: Bot, port: number): Promise<void> => {
+	const { mineflayer: mineFlayerViewer } = await import('prismarine-viewer')
 	mineFlayerViewer(bot, {
-		port: Config.diagnostics.viewerPort,
+		port,
 		firstPerson: true
 	})
 }

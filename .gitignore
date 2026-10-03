@@ -1,5 +1,6 @@
 data/
 logs/
+!apps/tui/src/features/logs/
 markdown/
 dist/
 .tsbuildinfo

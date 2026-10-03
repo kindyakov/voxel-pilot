@@ -6,10 +6,14 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { Vec3 } from 'vec3'
 import { createActor, setup } from 'xstate'
 
-import { primitiveBreaking } from '../../hsm/actors/primitives/primitiveBreaking.primitive.js'
-import { primitiveNavigating } from '../../hsm/actors/primitives/primitiveNavigating.primitive.js'
+import { createPrimitiveBreaking } from '../../hsm/actors/primitives/primitiveBreaking.primitive.js'
+import { createPrimitiveNavigating } from '../../hsm/actors/primitives/primitiveNavigating.primitive.js'
 import { context } from '../../hsm/context.js'
 import { createStatefulService } from '../../hsm/helpers/createStatefulService.js'
+import { fixtureLogger as Logger } from './fixtures/services.js'
+
+const primitiveBreaking = createPrimitiveBreaking(Logger)
+const primitiveNavigating = createPrimitiveNavigating(Logger)
 
 const runService = (service: any, bot: any, options: unknown = {}) => {
 	const events: any[] = []
@@ -50,6 +54,7 @@ for (const status of ['noPath', 'timeout']) {
 
 test('service reports synchronous startup errors instead of hanging', () => {
 	const service = createStatefulService({
+		logger: Logger,
 		name: 'startupFailure',
 		onStart() {
 			throw new Error('startup failed')
@@ -86,6 +91,7 @@ test('a navigation without pathfinder results reaches its deadline', t => {
 test('a continuous service bounds a hanging startup operation', t => {
 	t.mock.timers.enable({ apis: ['setTimeout'] })
 	const service = createStatefulService({
+		logger: Logger,
 		name: 'hangingEquip',
 		operationTimeoutMs: 15_000,
 		onStart: () => new Promise<void>(() => {})
@@ -105,6 +111,7 @@ test('a stopped service removes listeners and ignores late rejected operations',
 	let rejectOperation: (error: Error) => void = () => {}
 	const bot = new EventEmitter()
 	const service = createStatefulService({
+		logger: Logger,
 		name: 'cancelOperation',
 		onStart: () =>
 			new Promise<void>((_resolve, reject) => {

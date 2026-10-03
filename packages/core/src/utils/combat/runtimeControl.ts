@@ -1,10 +1,11 @@
 import type { Bot } from '@/types/index.js'
 
-import Logger from '@/config/logger.js'
+import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 export const stopMeleeAttack = (
 	bot: Bot,
 	reason: string,
+	logger: RuntimeLogger,
 	log?: (event: string, payload: Record<string, unknown>) => void
 ) => {
 	if (typeof (bot as any).pvp?.forceStop === 'function') {
@@ -16,7 +17,7 @@ export const stopMeleeAttack = (
 	const stopResult = (bot as any).pvp?.stop?.()
 	if (stopResult instanceof Promise) {
 		void stopResult.catch((error: unknown) => {
-			Logger.error('[COMBAT] melee_stop_failed', {
+			logger.error('[COMBAT] melee_stop_failed', {
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined
 			})
