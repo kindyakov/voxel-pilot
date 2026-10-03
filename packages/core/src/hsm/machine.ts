@@ -1222,7 +1222,11 @@ export const createBotMachine = (
 					},
 					{
 						guard: and([
-							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS')),
+							not(
+								stateIn(
+									'#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING'
+								)
+							),
 							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.RETREATING')),
 							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.DEFENSIVE_RELOCATION')),
 							({ context }) =>

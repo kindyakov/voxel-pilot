@@ -8,6 +8,58 @@ import { loadAutoEat } from '@/modules/plugins/autoEat.js'
 
 import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
 
+test('unknown damage before a healthy hunger meal starts cancels preparation and requires actual safe relocation', async t => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
+	const { bot, actor, step } = createHarness(true)
+	t.after(() => actor.stop())
+	loadAutoEat(bot.asBot())
+	const bread = new ItemFactory(registry.itemsByName.bread.id, 16)
+	bread.slot = 36
+	bot.inventory.items = () => [bread]
+	for (let i = 0; i < 2; i++) {
+		t.mock.timers.tick(100)
+		await flush()
+	}
+	bot.food = 5
+	actor.send({ type: 'UPDATE_FOOD', food: 5 })
+	assert.ok(
+		actor
+			.getSnapshot()
+			.matches({ MAIN_ACTIVITY: { URGENT_NEEDS: 'EMERGENCY_EATING' } })
+	)
+	assert.equal(bot.autoEat.isEating, false)
+	const origin = bot.entity.position.clone()
+	const damagedAt = Date.now()
+	bot.emit('entityHurt', bot.entity)
+	assert.ok(
+		actor.getSnapshot().matches({ MAIN_ACTIVITY: 'DEFENSIVE_RELOCATION' })
+	)
+	assert.equal(bot.usingItem, false)
+	for (let i = 0; i < 20; i++) {
+		t.mock.timers.tick(50)
+		await flush()
+		step()
+		assert.equal(bot.usingItem, false)
+	}
+	assert.ok(bot.entity.position.distanceTo(origin) > 0.25)
+	for (let i = 0; i < 240 && !bot.usingItem; i++) {
+		t.mock.timers.tick(50)
+		await flush()
+		step()
+	}
+	assert.equal(bot.usingItem, true)
+	assert.ok(
+		bot.entity.position.distanceTo(origin) >=
+			actor.getSnapshot().context.preferences.fleeTargetDistance - 1
+	)
+	assert.ok(
+		Date.now() - damagedAt >=
+			actor.getSnapshot().context.preferences.defensiveQuietMs
+	)
+	assert.equal(actor.getSnapshot().context.defensiveRelocation, null)
+	assert.equal(actor.getSnapshot().context.health, 20)
+})
+
 test('an active hunger meal continues inside the 30/20 band and stops at 20 without fleeing', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, enemy, observe } = createHarness()

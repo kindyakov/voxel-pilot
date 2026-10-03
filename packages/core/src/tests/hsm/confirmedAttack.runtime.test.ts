@@ -626,12 +626,20 @@ test('an aimed melee continuation cannot hit after healthy unknown-source protec
 	bot.aimGate = new Promise<void>(resolve => {
 		release = resolve
 	})
+	let aimStarted = false
+	const lookAt = bot.lookAt.bind(bot)
+	bot.lookAt = position => {
+		aimStarted = true
+		return lookAt(position)
+	}
 	bot.entities = { 1: enemy }
-	for (let i = 0; i < 4; i++) {
+	for (let i = 0; i < 20 && !aimStarted; i++) {
 		t.mock.timers.tick(100)
 		await flush()
 		step()
 	}
+	assert.ok(aimStarted, 'the native melee aim is actually pending')
+	assert.equal(bot.attacks.length, 0)
 	// The target's current position is now beyond any actual close response.
 	enemy.position.x = 18
 	actor.send({ type: 'DAMAGE_OBSERVED', sourceId: null, sourcePosition: null })
@@ -640,6 +648,23 @@ test('an aimed melee continuation cannot hit after healthy unknown-source protec
 	)
 	release()
 	await flush()
+	// Native search uses wall time; readiness precedes the measured physics frames.
+	const routeDeadline =
+		performance.now() +
+		actor.getSnapshot().context.preferences.escapeRouteTimeoutMs +
+		bot.pathfinder.thinkTimeout
+	while (!bot.pathfinder.isMoving() || !bot.controlState.forward) {
+		assert.ok(
+			performance.now() < routeDeadline,
+			'the real safety route starts within the native search deadlines'
+		)
+		t.mock.timers.tick(50)
+		await flush()
+		step()
+		assert.equal(bot.attacks.length, 0, 'old aim stays cancelled during search')
+	}
+	assert.equal(actor.getSnapshot().context.movementOwner, 'PATHFINDER')
+	const movementStart = bot.entity.position.x
 	for (let i = 0; i < 40; i++) {
 		t.mock.timers.tick(50)
 		await flush()
@@ -647,7 +672,7 @@ test('an aimed melee continuation cannot hit after healthy unknown-source protec
 	}
 	assert.equal(bot.attacks.length, 0)
 	assert.ok(
-		bot.entity.position.x < -3,
+		bot.entity.position.x < -3 && bot.entity.position.x < movementStart - 3,
 		'new safety controller can move despite late old aim'
 	)
 })

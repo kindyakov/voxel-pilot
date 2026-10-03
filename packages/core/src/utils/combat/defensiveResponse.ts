@@ -8,7 +8,7 @@ import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
 import { canSeeEnemy } from './enemyVisibility.js'
 import {
-	isDefensiveCandidate,
+	assessMob,
 	requiresAvoidance,
 	selectCombatTarget
 } from './selfDefense.js'
@@ -101,7 +101,14 @@ export const canAnswerDefensiveDamage = (context: MachineContext) => {
 		context.defensiveRelocation?.sourceId ?? context.lastDamage.sourceId
 	if (sourceId === null) return hasAvailableDefense(context, true)
 	const contact = context.attackContacts[sourceId]
-	if (!contact?.entity || !isDefensiveCandidate(context, contact.entity))
+	// Source eligibility excludes avoid-only species; ordinary response range
+	// belongs to the selected nearest target, not to the latest damage source.
+	if (
+		!contact?.entity ||
+		contact.entity.isValid === false ||
+		context.deadEntities.has(contact.entity) ||
+		assessMob(context, contact.entity) !== 'hostile'
+	)
 		return false
 	const selected = selectCombatTarget(context).entity
 	if (
