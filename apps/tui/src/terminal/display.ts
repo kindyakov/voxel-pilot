@@ -51,6 +51,27 @@ export function compactDisplayText(
 	})
 }
 
+/** Fixed safe cell rows, preserving the full prefix before final display shortening. */
+export function boundedDisplayLines(
+	value: string,
+	columns: number,
+	rows: number,
+	unicode = true
+): readonly string[] {
+	let remaining = displayText(value, unicode)
+	return Array.from({ length: rows }, (_value, index) => {
+		if (index === rows - 1)
+			return cliTruncate(remaining, Math.max(0, columns), {
+				truncationCharacter: unicode ? '…' : '~'
+			})
+		const line = cliTruncate(remaining, Math.max(0, columns), {
+			truncationCharacter: ''
+		})
+		remaining = remaining.slice(line.length).trimStart()
+		return line
+	})
+}
+
 export interface DisplayClock {
 	formatTimestamp(timestamp: number): string
 }

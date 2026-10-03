@@ -4,9 +4,10 @@ import { terminalLayout } from './layout.js'
 export function logPageSize(
 	rows: number,
 	columns = 100,
-	failure = false
+	failure = false,
+	routineReady = false
 ): number {
-	return terminalLayout(columns, rows, failure).logRows
+	return terminalLayout(columns, rows, failure, routineReady).logRows
 }
 
 export interface LogNavigation {

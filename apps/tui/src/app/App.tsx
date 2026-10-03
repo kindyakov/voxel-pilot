@@ -16,7 +16,7 @@ import {
 	asciiBorder
 } from '../terminal/capabilities.js'
 import type { DisplayClock } from '../terminal/display.js'
-import { compactDisplayText } from '../terminal/display.js'
+import { boundedDisplayLines, compactDisplayText } from '../terminal/display.js'
 import { type TerminalLayout, terminalLayout } from '../terminal/layout.js'
 import { FailureBoundary } from '../ui/FailureBoundary.js'
 import { Header } from '../ui/Header.js'
@@ -59,6 +59,23 @@ export function Dashboard({
 	const border = rows >= 3 && columns >= 5
 	const tinyRows = Math.max(1, rows - (border ? 2 : 0))
 	const exitColumns = border ? width : columns
+	const tinyHeader = tinyRows >= 3 && (!application.failure || tinyRows >= 4)
+	const tinyFailure = tinyRows >= 3 && application.failure !== null
+	const tinyNotice = tinyRows >= 2
+	const tinyMessageRows =
+		application.phase === 'stopping'
+			? Math.min(
+					2,
+					Math.max(
+						0,
+						tinyRows -
+							Number(tinyHeader) -
+							Number(tinyFailure) -
+							Number(tinyNotice) -
+							1
+					)
+				)
+			: 0
 	const tinyExit =
 		exitColumns === 1
 			? 'q'
@@ -90,6 +107,7 @@ export function Dashboard({
 				clock={statusClock}
 				columns={layout.statusColumns}
 				capabilities={capabilities}
+				expanded={layout.expandedStatus}
 			/>
 		</FailureBoundary>
 	)
@@ -100,12 +118,12 @@ export function Dashboard({
 			height={rows}
 			borderStyle={border ? (unicode ? 'single' : asciiBorder) : undefined}
 			borderColor={color ? 'gray' : undefined}
-			paddingX={border ? 1 : 0}
+			paddingX={border && layout.mode === 'tiny' ? 1 : 0}
 			overflow='hidden'
 		>
 			{layout.mode === 'tiny' ? (
 				<Box flexDirection='column' flexGrow={1} overflow='hidden'>
-					{tinyRows >= 3 && (!application.failure || tinyRows >= 4) && (
+					{tinyHeader && (
 						<Header
 							status={status}
 							columns={width}
@@ -114,10 +132,24 @@ export function Dashboard({
 							unicode={unicode}
 						/>
 					)}
-					{tinyRows >= 3 && application.failure && (
+					{tinyFailure && application.failure && (
 						<Text wrap='truncate-end'>{clip(application.failure.message)}</Text>
 					)}
-					{tinyRows >= 2 && (
+					{boundedDisplayLines(
+						application.message,
+						exitColumns,
+						tinyMessageRows,
+						unicode
+					).map((line, index) => (
+						<Text
+							key={index}
+							color={color ? 'yellow' : undefined}
+							wrap='truncate-end'
+						>
+							{line || ' '}
+						</Text>
+					))}
+					{tinyNotice && (
 						<Text wrap='truncate-end'>{clip('Увеличьте окно терминала')}</Text>
 					)}
 					<Box flexGrow={1} />
@@ -127,31 +159,48 @@ export function Dashboard({
 				</Box>
 			) : (
 				<>
-					<Header
-						status={status}
-						columns={width}
-						color={color}
-						statusColor={statusColor}
-						unicode={unicode}
-						right={clip(`ЛОГИ · ${logView.mode.toUpperCase()}`)}
-					/>
-					<Text
-						wrap='truncate-end'
-						color={
-							color && application.phase === 'stopping' ? 'yellow' : undefined
-						}
-					>
-						{clip(application.message)}
-					</Text>
-					<FailureBoundary fallback={<Text>Connection view unavailable</Text>}>
-						<ConnectionPanel
-							connection={telemetry.snapshot.connection}
-							failure={application.failure}
+					<Box paddingX={1} flexDirection='column' flexShrink={0}>
+						<Header
+							status={status}
 							columns={width}
-							capabilities={capabilities}
+							color={color}
+							statusColor={statusColor}
+							unicode={unicode}
+							right={clip(`ЛОГИ · ${logView.mode.toUpperCase()}`)}
 						/>
-					</FailureBoundary>
+					</Box>
+					{layout.mode === 'wide' && (
+						<Text dimColor={color}>
+							{(unicode ? '─' : '-').repeat(columns - 2)}
+						</Text>
+					)}
+					{layout.showContext && (
+						<Box paddingX={1} flexDirection='column' flexShrink={0}>
+							<Text
+								wrap='truncate-end'
+								color={
+									color && application.phase === 'stopping'
+										? 'yellow'
+										: undefined
+								}
+							>
+								{clip(application.message)}
+							</Text>
+							<FailureBoundary
+								fallback={<Text>Connection view unavailable</Text>}
+							>
+								<ConnectionPanel
+									connection={telemetry.snapshot.connection}
+									failure={application.failure}
+									columns={width}
+									capabilities={capabilities}
+								/>
+							</FailureBoundary>
+						</Box>
+					)}
 					<Box
+						marginX={1}
+						width={width}
 						height={layout.contentRows}
 						flexShrink={0}
 						flexDirection={layout.mode === 'wide' ? 'row' : 'column'}
@@ -185,9 +234,16 @@ export function Dashboard({
 							</>
 						)}
 					</Box>
-					<Text dimColor={color} wrap='truncate-end'>
-						{footer}
-					</Text>
+					{layout.mode === 'wide' && (
+						<Text dimColor={color}>
+							{(unicode ? '─' : '-').repeat(columns - 2)}
+						</Text>
+					)}
+					<Box paddingX={1} flexShrink={0}>
+						<Text dimColor={color} wrap='truncate-end'>
+							{footer}
+						</Text>
+					</Box>
 				</>
 			)}
 		</Box>
@@ -220,7 +276,17 @@ export function App({
 		application.getSnapshot
 	)
 	const { columns, rows } = useWindowSize()
-	const layout = terminalLayout(columns, rows, state.failure !== null)
+	const routineReady =
+		state.phase === 'running' &&
+		current.snapshot.connection.state === 'ready' &&
+		current.snapshot.connection.retryAttempt === 0 &&
+		state.failure === null
+	const layout = terminalLayout(
+		columns,
+		rows,
+		state.failure !== null,
+		routineReady
+	)
 	return (
 		<>
 			<ExitInput

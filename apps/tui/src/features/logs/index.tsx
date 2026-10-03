@@ -44,7 +44,7 @@ export function LogPanel({
 				{clip(loss)}
 			</Text>
 			<Text dimColor={color} wrap='truncate-end'>
-				{clip('  Время    Level Источник    Сообщение')}
+				{clip('  Время    Уров. Источник    Сообщение')}
 			</Text>
 			{visible.map(entry => (
 				<Box key={entry.id} flexShrink={0}>
@@ -78,7 +78,12 @@ export function LogPanel({
 						</Text>
 					</Box>
 					<Box width={12}>
-						<Text wrap='truncate-end'>{clip(entry.source, 11)}</Text>
+						<Text
+							color={color && entry.source === 'HSM' ? 'magenta' : undefined}
+							wrap='truncate-end'
+						>
+							{clip(entry.source, 11)}
+						</Text>
 					</Box>
 					<Box flexGrow={1} flexShrink={1}>
 						<Text wrap='truncate-end'>

@@ -11,11 +11,15 @@ import {
 	type TerminalCapabilities,
 	terminalCapabilities
 } from '../terminal/capabilities.js'
-import { compactDisplayText, compactLogMessage } from '../terminal/display.js'
+import {
+	boundedDisplayLines,
+	compactDisplayText,
+	compactLogMessage
+} from '../terminal/display.js'
 import { terminalLayout } from '../terminal/layout.js'
 import { logPageSize } from '../terminal/logNavigation.js'
 import { ManualClock } from './fixtures/clock.js'
-import { publicRuntime } from './fixtures/runtime.js'
+import { deferred, publicRuntime, saved } from './fixtures/runtime.js'
 import { ManualStatusClock } from './fixtures/statusClock.js'
 import { Input, Output } from './fixtures/terminal.js'
 
@@ -137,6 +141,12 @@ test('cell clipping handles Cyrillic, combining characters, emoji, controls and 
 		for (const unicode of [true, false]) {
 			const plain = compactDisplayText(text, columns, unicode)
 			const truncated = compactLogMessage(text, columns, true, unicode)
+			const bounded = boundedDisplayLines(text, columns, 2, unicode)
+			assert.equal(bounded.length, 2)
+			for (const line of bounded) {
+				assert.ok(stringWidth(line) <= columns)
+				assert.doesNotMatch(line, /[\u0000-\u001f\u007f-\u009f]/)
+			}
 			assert.ok(
 				stringWidth(plain) <= columns,
 				`display must fit ${columns} cells`
@@ -273,7 +283,7 @@ test('real same-App wide/narrow/tiny/restored geometry retains opaque pause/filt
 	assert.equal(f.props().layout.mode, 'wide')
 	const headings = initial.split('\n').find(line => line.includes('ЖУРНАЛ'))!
 	assert.ok(
-		headings.indexOf('СТАТУС') > headings.indexOf('ЖУРНАЛ'),
+		headings.indexOf('HP') > headings.indexOf('ЖУРНАЛ'),
 		'wide panes share their actual heading row'
 	)
 	await f.update(() => f.stdin.send('d'))
@@ -440,4 +450,220 @@ test('very small native frames reserve available cells for exit and restore the 
 	f.stdin.send('\u0003')
 	assert.equal((await f.app.done).exitCode, 0)
 	assert.equal(f.stdin.isRaw, false)
+})
+
+test('native expanded wide status follows the separated mockup hierarchy and bounded short-wide fallback', async t => {
+	const f = fixture(t)
+	await f.app.ready
+	const path = 'TASKS.EXECUTING.MINING.BREAKING'
+	const screen = await f.update(() => {
+		f.publish({
+			health: { value: 18, updatedAt: 1, stale: false },
+			maxHealth: { value: 30, updatedAt: 1, stale: false },
+			food: { value: 16, updatedAt: 1, stale: false },
+			position: {
+				value: { x: -124.25, y: 68, z: 317.5 },
+				updatedAt: 1,
+				stale: false
+			},
+			harness: {
+				value: {
+					mainActivity: path,
+					enteredAt: 10000,
+					action: 'mine_resource',
+					monitoring: ['survival.safe', 'environment.day'],
+					goal: { status: 'active', text: 'Добудь 20 блоков камня' }
+				},
+				updatedAt: 1,
+				stale: false
+			}
+		})
+		f.append('Actual native hierarchy record')
+	})
+	const lines = screen.split('\n')
+	const hp = lines.findIndex(line => /HP\s+18\/30/.test(line))
+	const food = lines.findIndex(line => /Сытость\s+16\/20/.test(line))
+	assert.ok(
+		hp >= 0,
+		'wide HP label and actual numerator/maximum share a separate header'
+	)
+	assert.match(lines[hp + 1]!, /\[######----\]/)
+	assert.ok(food >= hp + 3, 'vitals have breathing space')
+	assert.match(lines[food + 1]!, /\[########--\]/)
+	const position = lines.findIndex(line => /ПОЗИЦИЯ\s*│/.test(line))
+	const hsm = lines.findIndex(line => /HSM\s*│/.test(line))
+	const goal = lines.findIndex(line => /ЦЕЛЬ\s*│/.test(line))
+	assert.ok(position > food + 1 && hsm > position + 1 && goal > hsm + 5)
+	assert.match(lines[position + 1]!, /X -124\.25 · Y 68 · Z 317\.5/)
+	assert.match(screen, /TASKS > EXECUTING > MINING > BREAKING/)
+	assert.match(screen, /Время состояния: 00:25/)
+	assert.match(screen, /Действие: mine_resource/)
+	assert.match(screen, /Мониторинг: survival > safe/)
+	assert.match(screen, /environment > day/)
+	assert.match(lines[goal + 1]!, /Добудь 20 блоков камня/)
+	assert.match(screen, /В работе/)
+	assert.ok(
+		lines.filter(line => /─{30}/.test(line)).length >= 5,
+		'header, footer and status sections have actual rules'
+	)
+	const labelStart = lines[hp]!.indexOf('HP')
+	assert.equal(
+		lines[hp]!.indexOf('18/30') + 5,
+		labelStart + f.props().layout.statusColumns
+	)
+	const short = await f.update(() => f.stdout.resize(120, 24))
+	assert.match(short, /HP: 18 \/ 30/)
+	assert.match(short, /ЦЕЛЬ: В работе/)
+	assert.equal(f.counts().snapshotSubscriptions, 1)
+	assert.equal(f.counts().logSubscriptions, 1)
+	assert.equal(f.compositions(), 1)
+	f.stdin.send('q')
+	assert.equal((await f.app.done).exitCode, 0)
+})
+
+test('expanded native status retains full two-row paths and separate stale/paused/unknown facts', async t => {
+	const f = fixture(t, { color: false, unicode: false })
+	await f.app.ready
+	const mainActivity = 'TASKS.EXECUTING.MINING.BREAKING'
+	await f.update(() => f.stdout.resize(120, 36))
+	const stale = await f.update(() =>
+		f.publish({
+			health: { value: 0, updatedAt: 1, stale: true },
+			maxHealth: { value: 30, updatedAt: 1, stale: true },
+			harness: {
+				value: {
+					mainActivity,
+					enteredAt: 10000,
+					action: 'safe action\nwith controls\u001b]0;not-executed\u0007',
+					monitoring: ['survival.combat', 'environment.night'],
+					goal: { status: 'paused', text: 'Сохранённая цель' }
+				},
+				updatedAt: 1,
+				stale: true
+			}
+		})
+	)
+	assert.match(stale, /HP\s+0 \(устарело\)\/30 \(устарело\)/)
+	assert.match(stale, /\[----------\]/)
+	assert.match(stale, /Последний вход: 00:25 \| устарело/)
+	assert.match(stale, /На паузе \| устарело/)
+	assert.doesNotMatch(stale, /[┌┐└┘│─›↵…]/)
+	assert.doesNotMatch(
+		f.stdout.chunks.join(''),
+		/\u001b\[[\d;]*m|\u001b\]0;not-executed/
+	)
+	const right = stale
+		.split('\n')
+		.filter(line => line.split('|').length >= 4)
+		.map(line =>
+			line
+				.slice(
+					line.indexOf('|', line.indexOf('|') + 1) + 1,
+					line.lastIndexOf('|')
+				)
+				.trim()
+		)
+	assert.match(right.join(''), /TASKS > EXECUTING > MINING > BREAKING/)
+	assert.equal(
+		f.runtime.telemetry.getSnapshot().harness.value!.mainActivity,
+		mainActivity
+	)
+	const unknown = await f.update(() =>
+		f.publish({
+			health: { value: null, updatedAt: null, stale: false },
+			maxHealth: { value: null, updatedAt: null, stale: false },
+			harness: { value: null, updatedAt: null, stale: false }
+		})
+	)
+	assert.match(unknown, /HP\s+—\/—/)
+	assert.match(unknown, /Время состояния: —/)
+	assert.equal(f.compositions(), 1)
+	f.stdin.send('\u0003')
+	assert.equal((await f.app.done).exitCode, 0)
+	assert.equal(f.stdin.isRaw, false)
+})
+
+test('routine READY reclaims two native rows while real reconnect and STOPPING context remain visible', async t => {
+	const f = fixture(t)
+	await f.app.ready
+	const beforeReady = f.props().layout.logRows
+	const ready = await f.update(() => {
+		f.connection('ready')
+		for (let i = 0; i < 32; i++) f.append(`ready capacity ${i}`)
+	})
+	assert.doesNotMatch(ready, /Runtime running|READY · attempt 0/)
+	const lines = ready.split('\n')
+	const header = lines.findIndex(line => line.includes('VoxelPilot'))
+	assert.match(lines[header + 1]!, /─{30}/)
+	assert.match(lines[header + 2]!, /ЖУРНАЛ/)
+	assert.equal(f.props().layout.logRows, beforeReady + 2)
+	for (const [columns, rows] of [
+		[140, 36],
+		[100, 24]
+	]) {
+		const screen = await f.update(() => {
+			f.stdin.send('\u001b[F')
+			f.stdout.resize(columns!, rows!)
+		})
+		const capacity = f.props().layout.logRows
+		assert.equal((screen.match(/ready capacity \d+/g) ?? []).length, capacity)
+		assert.equal(capacity, logPageSize(rows!, columns!, false, true))
+		const history = f.runtime.telemetry.getLogHistory()
+		await f.update(() => f.stdin.send('\u001b[5~'))
+		assert.equal(
+			f.props().logView.anchorId,
+			history.entries.at(-1 - capacity)!.id
+		)
+	}
+	const reconnect = await f.update(() => f.connection('reconnecting'))
+	assert.match(reconnect, /RECONNECTING · attempt 0/)
+	assert.equal(f.props().layout.logRows, logPageSize(24, 100))
+	await f.update(() => f.connection('ready'))
+	const save = deferred<typeof saved>()
+	f.holdStop(save.promise)
+	const stopping = await f.update(() => {
+		void f.app.shutdown()
+	})
+	assert.match(stopping, /STOPPING/)
+	assert.match(stopping, /Stopping.*awaiting persistence/)
+	assert.equal(f.counts().stopCalls, 1)
+	save.resolve(saved)
+	assert.equal((await f.app.done).exitCode, 0)
+	assert.equal(f.stdin.isRaw, false)
+	assert.equal(f.compositions(), 1)
+	assert.equal(f.counts().snapshotSubscriptions, 1)
+	assert.equal(f.counts().logSubscriptions, 1)
+})
+
+test('tiny native STOPPING shows the trusted save/deadline message when rows fit and retains both exits', async t => {
+	const f = fixture(t)
+	await f.app.ready
+	const save = deferred<typeof saved>()
+	f.holdStop(save.promise)
+	await f.update(() => f.stdout.resize(45, 12))
+	const stopping = await f.update(() => {
+		void f.app.shutdown()
+	})
+	assert.match(stopping, /STOPPING/)
+	assert.match(stopping, /awaiting persistence/)
+	assert.match(stopping, /deadline/)
+	assert.match(stopping, /\b1s\b/)
+	assert.match(stopping, /q \/ Ctrl\+C/)
+	assert.equal(f.stdin.isRaw, true)
+	const tiny = await f.update(() => f.stdout.resize(1, 1))
+	assert.equal(tiny.trim(), 'q')
+	const restored = await f.update(() => f.stdout.resize(45, 12))
+	assert.match(restored, /awaiting persistence/)
+	assert.match(restored, /deadline/)
+	await f.update(() => {
+		f.stdin.send('q')
+		f.stdin.send('\u0003')
+	})
+	assert.equal(f.counts().stopCalls, 1)
+	assert.equal(f.closes(), 0)
+	save.resolve(saved)
+	assert.equal((await f.app.done).exitCode, 0)
+	assert.equal(f.stdin.isRaw, false)
+	assert.equal(f.closes(), 1)
+	assert.equal(f.compositions(), 1)
 })
