@@ -251,6 +251,10 @@ test('AST checker enforces TUI ownership across static/type/export/dynamic impor
 			'apps/tui/src/app/status.ts',
 			"import type {StatusClock} from '../features/status/index.js';"
 		)
+		await write(
+			'apps/tui/src/app/layout.ts',
+			"import {useWindowSize} from 'ink'; void useWindowSize;"
+		)
 		const check = () =>
 			spawnSync(process.execPath, ['./scripts/check-imports.mjs'], {
 				cwd: directory,
@@ -259,6 +263,21 @@ test('AST checker enforces TUI ownership across static/type/export/dynamic impor
 			})
 		assert.equal(check().status, 0)
 		for (const [file, source, expected] of [
+			[
+				'apps/tui/src/features/status/probe.ts',
+				"import {useWindowSize as size} from 'ink';",
+				/window geometry is owned by app composition/
+			],
+			[
+				'apps/tui/src/terminal/probe.ts',
+				"import * as terminal from 'ink'; terminal.useWindowSize();",
+				/window geometry is owned by app composition/
+			],
+			[
+				'apps/tui/src/ui/probe.tsx',
+				"export {useWindowSize} from 'ink';",
+				/window geometry is owned by app composition/
+			],
 			[
 				'apps/tui/src/features/status/probe.ts',
 				"import type {DeadlineClock} from '../../app/clock.js';",

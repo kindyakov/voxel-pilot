@@ -31,6 +31,7 @@ function fixture(
 		signals: source.signals,
 		clock: deadlineClock,
 		statusClock: clock,
+		capabilities: { color: false, unicode: true },
 		compose: () => {
 			compositions++
 			return { runtime: source.runtime, loggerHandle: { async close() {} } }

@@ -1,7 +1,13 @@
 /** Terminal capacity is measured in displayed record rows, separate from model history. */
-export function logPageSize(rows: number): number {
-	// The current stacked Dashboard reserves its status, journal headings and chrome.
-	return Math.max(2, rows - 22)
+import { terminalLayout } from './layout.js'
+
+export function logPageSize(
+	rows: number,
+	columns = 100,
+	failure = false,
+	routineReady = false
+): number {
+	return terminalLayout(columns, rows, failure, routineReady).logRows
 }
 
 export interface LogNavigation {

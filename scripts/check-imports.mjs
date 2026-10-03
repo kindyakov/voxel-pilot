@@ -221,6 +221,14 @@ for (const owner of owners) {
 		}
 		const visit = node => {
 			if (
+				productionTui &&
+				local[0] !== 'app' &&
+				ts.isIdentifier(node) &&
+				node.text === 'useWindowSize'
+			) {
+				fail('TUI window geometry is owned by app composition')
+			}
+			if (
 				presentation &&
 				ts.isIdentifier(node) &&
 				['process', 'Buffer', 'require', '__dirname', '__filename'].includes(

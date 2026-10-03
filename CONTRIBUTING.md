@@ -6,10 +6,10 @@ This repository is public, but it is not a dumping ground for ad hoc changes. Ke
 
 ## Before You Open a PR
 
-1. Read the relevant docs under `docs/` for the subsystem you are touching.
+1. Read `AGENTS.md`, `ARCHITECTURE.md` and the implementation/callers/tests for the subsystem you are touching. Public docs under `docs/` provide user context.
 2. Run `pnpm run type-check`.
 3. Run `pnpm run build`.
-4. Run the focused tests for the subsystem you changed.
+4. Run `pnpm run check:imports` and the focused tests for the subsystem you changed. Use the pnpm version pinned by `packageManager` in `package.json`.
 
 ## Expectations
 
@@ -21,8 +21,11 @@ This repository is public, but it is not a dumping ground for ad hoc changes. Ke
 
 ## Repository Layout
 
-- Runtime code: `src/`
-- Tests: `src/tests/`
+- Runtime and native tests: `packages/core/src/`, `packages/core/src/tests/`
+- Portable contracts and presentation: `packages/contracts/`, `packages/presentation/`
+- Shared explicit application composition: `packages/application/`
+- Headless CLI and terminal dashboard: `apps/cli/`, `apps/tui/` (tests under each `src/tests/`)
+- Workspace/import/browser checks: `tests/`
 - Documentation: `docs/`
 - Runtime memory: `data/`
 - Logs: `logs/`

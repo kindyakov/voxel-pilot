@@ -9,11 +9,19 @@ export function safeDisplayText(value: string): string {
 	})
 }
 
+function displayText(value: string, unicode: boolean): string {
+	const text = safeDisplayText(value)
+	return unicode
+		? text
+		: text.replaceAll(' · ', ' | ').replaceAll(' ↵ ', ' \\n ')
+}
+
 /** Display ellipsis and source truncation are separate, visible facts. */
 export function compactLogMessage(
 	message: string,
 	columns: number,
-	sourceTruncated: boolean
+	sourceTruncated: boolean,
+	unicode = true
 ): string {
 	const marker = !sourceTruncated
 		? ''
@@ -26,14 +34,49 @@ export function compactLogMessage(
 					: ''
 	return (
 		cliTruncate(
-			safeDisplayText(message),
-			Math.max(0, columns - marker.length)
+			displayText(message, unicode),
+			Math.max(0, columns - marker.length),
+			{ truncationCharacter: unicode ? '…' : '~' }
 		) + marker
 	)
 }
 
-export function compactDisplayText(value: string, columns: number): string {
-	return cliTruncate(safeDisplayText(value), Math.max(0, columns))
+export function compactDisplayText(
+	value: string,
+	columns: number,
+	unicode = true
+): string {
+	return cliTruncate(displayText(value, unicode), Math.max(0, columns), {
+		truncationCharacter: unicode ? '…' : '~'
+	})
+}
+
+/** Fixed safe cell rows, wrapping whole words and falling back for long tokens. */
+export function boundedDisplayLines(
+	value: string,
+	columns: number,
+	rows: number,
+	unicode = true
+): readonly string[] {
+	let remaining = displayText(value, unicode)
+	return Array.from({ length: rows }, (_value, index) => {
+		if (index === rows - 1)
+			return cliTruncate(remaining, Math.max(0, columns), {
+				truncationCharacter: unicode ? '…' : '~'
+			})
+		const prefix = cliTruncate(remaining, Math.max(0, columns), {
+			truncationCharacter: ''
+		})
+		const boundary = prefix.lastIndexOf(' ')
+		const line =
+			prefix.length < remaining.length &&
+			remaining[prefix.length] !== ' ' &&
+			boundary > 0
+				? prefix.slice(0, boundary)
+				: prefix.trimEnd()
+		remaining = remaining.slice(line.length).trimStart()
+		return line
+	})
 }
 
 export interface DisplayClock {

@@ -7,6 +7,10 @@ import type { ComponentType } from 'react'
 
 import type { StatusClock } from '../features/status/index.js'
 import { createTelemetryStore } from '../runtime/telemetryStore.js'
+import {
+	type TerminalCapabilities,
+	terminalCapabilities
+} from '../terminal/capabilities.js'
 import { type DisplayClock, defaultDisplayClock } from '../terminal/display.js'
 import {
 	type TerminalStreams,
@@ -19,6 +23,7 @@ import { type DeadlineClock, defaultDeadlineClock } from './clock.js'
 import { createApplicationState } from './state.js'
 
 export type { StatusClock } from '../features/status/index.js'
+export type { TerminalCapabilities } from '../terminal/capabilities.js'
 
 interface Signals {
 	on(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown
@@ -40,6 +45,8 @@ export interface TuiApplicationOptions {
 	readonly clock?: DeadlineClock
 	readonly displayClock?: DisplayClock
 	readonly statusClock?: StatusClock
+	/** Deterministic display policy for safe hosts; no runtime/settings effect. */
+	readonly capabilities?: TerminalCapabilities
 	readonly view?: ComponentType<DashboardProps>
 }
 
@@ -65,6 +72,18 @@ export function startTuiApplication(options: TuiApplicationOptions = {}) {
 		stderr: process.stderr
 	}
 	assertInteractiveTerminal(streams)
+	const capabilities = Object.freeze({
+		...(options.capabilities ??
+			terminalCapabilities(streams.stdout, {
+				TERM: process.env.TERM,
+				COLORTERM: process.env.COLORTERM,
+				NO_COLOR: process.env.NO_COLOR,
+				FORCE_COLOR: process.env.FORCE_COLOR,
+				LANG: process.env.LANG,
+				LC_ALL: process.env.LC_ALL,
+				LC_CTYPE: process.env.LC_CTYPE
+			}))
+	})
 	const signals = options.signals ?? process
 	const clock = options.clock ?? defaultDeadlineClock
 	const resources = (
@@ -228,6 +247,7 @@ export function startTuiApplication(options: TuiApplicationOptions = {}) {
 				application={state}
 				displayClock={options.displayClock ?? defaultDisplayClock}
 				statusClock={options.statusClock}
+				capabilities={capabilities}
 				onExit={() => {
 					void shutdown()
 				}}

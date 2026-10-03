@@ -335,6 +335,11 @@ test('actual CLI/TUI development scripts watch core and shared composition witho
 			let child: ReturnType<typeof spawn> | undefined
 			let finished = false
 			let watchdog: ReturnType<typeof setTimeout> | undefined
+			let primaryError: unknown
+			let exited = false,
+				closed = false
+			let exitObservation: Promise<void> | undefined
+			let closeObservation: Promise<void> | undefined
 			try {
 				const folders = [
 					'packages/contracts',
@@ -396,6 +401,19 @@ test('actual CLI/TUI development scripts watch core and shared composition witho
 						detached: process.platform !== 'win32',
 						stdio: ['ignore', 'pipe', 'pipe']
 					}
+				)
+				// Observe before termination: an already delivered exit must remain observable.
+				exitObservation = new Promise(resolveExit =>
+					child!.once('exit', () => {
+						exited = true
+						resolveExit()
+					})
+				)
+				closeObservation = new Promise(resolveClose =>
+					child!.once('close', () => {
+						closed = true
+						resolveClose()
+					})
 				)
 				await new Promise<void>((resolveProbe, reject) => {
 					let stdout = '',
@@ -484,22 +502,94 @@ test('actual CLI/TUI development scripts watch core and shared composition witho
 						}
 					})
 				})
+			} catch (error) {
+				primaryError = error
 			} finally {
+				const milestoneComplete = finished
 				finished = true
 				if (watchdog) clearTimeout(watchdog)
-				if (child?.pid && child.exitCode === null) {
-					if (process.platform === 'win32')
-						execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
-							stdio: 'ignore'
-						})
-					else process.kill(-child.pid, 'SIGTERM')
-					await new Promise<void>(resolveExit =>
-						child!.once('exit', () => resolveExit())
-					)
+				const cleanupErrors: unknown[] = []
+				const native = {
+					pid: child?.pid,
+					milestoneComplete,
+					killStatus: null as number | null,
+					stdout: '',
+					stderr: '',
+					stdoutBase64: '',
+					stderrBase64: ''
 				}
-				assert.equal(dirname(resolve(temporary)), resolve(tmpdir()))
-				assert.ok(temporary.includes('voxel-pilot-watch-'))
-				await rm(temporary, { recursive: true, force: true })
+				if (child?.pid && child.exitCode === null) {
+					try {
+						if (process.platform === 'win32') {
+							const output = execFileSync(
+								'taskkill',
+								['/PID', String(child.pid), '/T', '/F'],
+								{ stdio: 'pipe', timeout: 10000, windowsHide: true }
+							)
+							native.killStatus = 0
+							native.stdout = output.toString('utf8')
+							native.stdoutBase64 = output.toString('base64')
+						} else process.kill(-child.pid, 'SIGTERM')
+					} catch (error) {
+						// Native nonzero remains a failure even if some owned processes exited.
+						cleanupErrors.push(error)
+						if (error && typeof error === 'object') {
+							if ('status' in error && typeof error.status === 'number')
+								native.killStatus = error.status
+							for (const channel of ['stdout', 'stderr'] as const) {
+								if (channel in error) {
+									const value = Reflect.get(error, channel)
+									if (Buffer.isBuffer(value)) {
+										native[channel] = value.toString('utf8')
+										native[`${channel}Base64`] = value.toString('base64')
+									}
+								}
+							}
+						}
+					}
+				}
+				if (child?.pid && !closed) {
+					let cleanupDeadline: ReturnType<typeof setTimeout> | undefined
+					try {
+						await Promise.race([
+							Promise.all([exitObservation, closeObservation]),
+							new Promise<never>((_resolve, reject) => {
+								cleanupDeadline = setTimeout(
+									() =>
+										reject(
+											new Error(
+												'Owned watcher exit/close was not observed within cleanup deadline'
+											)
+										),
+									5000
+								)
+							})
+						])
+					} catch (error) {
+						cleanupErrors.push(error)
+					} finally {
+						if (cleanupDeadline) clearTimeout(cleanupDeadline)
+					}
+				}
+				try {
+					assert.equal(dirname(resolve(temporary)), resolve(tmpdir()))
+					assert.ok(temporary.includes('voxel-pilot-watch-'))
+					if (!child?.pid || closed)
+						await rm(temporary, { recursive: true, force: true })
+				} catch (error) {
+					cleanupErrors.push(error)
+				}
+				t.diagnostic(
+					`Owned ${appName} watcher teardown: ${JSON.stringify({ ...native, exited, closed, exitCode: child?.exitCode, signalCode: child?.signalCode, descendantAbsence: 'not independently measured' })}`
+				)
+				if (cleanupErrors.length)
+					throw new AggregateError(
+						primaryError === undefined
+							? cleanupErrors
+							: [primaryError, ...cleanupErrors],
+						`Watcher ${appName} probe/cleanup failed; native teardown evidence above`
+					)
+				if (primaryError !== undefined) throw primaryError
 			}
 		})
 })

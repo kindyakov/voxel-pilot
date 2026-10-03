@@ -30,6 +30,7 @@ function fixture(
 		streams: { stdin, stdout, stderr },
 		signals: source.signals,
 		clock,
+		capabilities: { color: false, unicode: true },
 		displayClock: { formatTimestamp: () => '12:34:56' },
 		shutdownTimeoutMs: 100,
 		compose: () => ({
