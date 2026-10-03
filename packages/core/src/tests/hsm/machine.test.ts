@@ -483,33 +483,19 @@ test('disabled AI leaves autonomous healing and armed combat operational', async
 	}
 })
 
-const createVec3 = (x: number, y: number, z: number) => ({
-	x,
-	y,
-	z,
-	distanceTo(other: { x: number; y: number; z: number }) {
-		const dx = x - other.x
-		const dy = y - other.y
-		const dz = z - other.z
-		return Math.sqrt(dx * dx + dy * dy + dz * dz)
-	},
-	offset(dx: number, dy: number, dz: number) {
-		return createVec3(x + dx, y + dy, z + dz)
-	},
-	minus(other: { x: number; y: number; z: number }) {
-		return {
-			x: x - other.x,
-			y: y - other.y,
-			z: z - other.z,
-			normalize() {
-				const length = Math.sqrt(
-					this.x * this.x + this.y * this.y + this.z * this.z
-				)
-				return createVec3(this.x / length, this.y / length, this.z / length)
-			}
-		}
-	}
-})
+const createVec3 = (x: number, y: number, z: number) => new Vec3(x, y, z)
+
+const loadedBlock = (
+	name: 'air' | 'furnace',
+	position: { x: number; y: number; z: number }
+) => {
+	const block = BlockFactory.fromStateId(
+		registry.blocksByName[name].minStateId,
+		0
+	)
+	block.position = new Vec3(position.x, position.y, position.z).floored()
+	return block
+}
 
 // Match Mineflayer's local window acquisition/release, including close failures.
 const trackWindow = (
@@ -541,6 +527,7 @@ type FakeTaskMemory = Pick<
 >
 
 class FakeBot extends EventEmitter {
+	_client = new EventEmitter()
 	username = 'Bot'
 	entity = { id: 999, position: createVec3(0, 64, 0), height: 1.8 }
 	entities = {}
@@ -703,8 +690,8 @@ class FakeBot extends EventEmitter {
 		return []
 	}
 	async sleep() {}
-	blockAt() {
-		return null
+	blockAt(position: { x: number; y: number; z: number }) {
+		return loadedBlock('air', position)
 	}
 	findBlocks() {
 		return []
@@ -2819,12 +2806,12 @@ test('START_COMBAT closes an active window before entering combat', async () => 
 
 	const bot = new FakeBot() as any
 	bot.blockAt = (position: { x: number; y: number; z: number }) =>
-		position.x === 1 && position.y === 64 && position.z === 1
-			? {
-					name: 'furnace',
-					position: createVec3(1, 64, 1)
-				}
-			: null
+		loadedBlock(
+			position.x === 1 && position.y === 64 && position.z === 1
+				? 'furnace'
+				: 'air',
+			position
+		)
 	bot.openFurnace = async () =>
 		trackWindow(
 			bot,
@@ -2917,12 +2904,12 @@ test('UPDATE_ENTITIES closes an active window before auto-combat preemption', as
 
 	const bot = new FakeBot() as any
 	bot.blockAt = (position: { x: number; y: number; z: number }) =>
-		position.x === 1 && position.y === 64 && position.z === 1
-			? {
-					name: 'furnace',
-					position: createVec3(1, 64, 1)
-				}
-			: null
+		loadedBlock(
+			position.x === 1 && position.y === 64 && position.z === 1
+				? 'furnace'
+				: 'air',
+			position
+		)
 	bot.openFurnace = async () =>
 		trackWindow(
 			bot,
@@ -3441,12 +3428,12 @@ test('open_window abort after open preserves the session when close fails', asyn
 
 	const bot = new FakeBot() as any
 	bot.blockAt = (position: { x: number; y: number; z: number }) =>
-		position.x === 1 && position.y === 64 && position.z === 1
-			? {
-					name: 'furnace',
-					position: createVec3(1, 64, 1)
-				}
-			: null
+		loadedBlock(
+			position.x === 1 && position.y === 64 && position.z === 1
+				? 'furnace'
+				: 'air',
+			position
+		)
 	bot.openFurnace = async () =>
 		trackWindow(
 			bot,
