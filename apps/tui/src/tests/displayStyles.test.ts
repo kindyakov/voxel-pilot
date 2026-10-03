@@ -9,6 +9,7 @@ test('native Ink emits the soft palette and complete selected row only with colo
 		NODE_ENV: 'test',
 		FORCE_COLOR: '3',
 		TERM: 'xterm-256color',
+		COLORTERM: 'truecolor',
 		LANG: 'C.UTF-8'
 	}
 	delete environment.NO_COLOR
@@ -25,6 +26,8 @@ test('native Ink emits the soft palette and complete selected row only with colo
 			],
 			{ env: environment, timeout: 10000 }
 		)
-		assert.equal(result.stderr, '')
+		assert.equal(result.stdout, '')
+		// restore-cursor's exit hook writes this exact sequence to process.stderr.
+		assert.ok(result.stderr === '' || result.stderr === '\u001b[?25h')
 	}
 })

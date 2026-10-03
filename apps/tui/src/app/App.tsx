@@ -120,6 +120,7 @@ export function Dashboard({
 			borderStyle={border ? (unicode ? 'single' : asciiBorder) : undefined}
 			borderColor={color ? palette.border : undefined}
 			backgroundColor={color ? palette.background : undefined}
+			borderBackgroundColor={color ? palette.background : undefined}
 			paddingX={border && layout.mode === 'tiny' ? 1 : 0}
 			overflow='hidden'
 		>
