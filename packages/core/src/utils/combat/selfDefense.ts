@@ -221,7 +221,9 @@ const defensiveCandidateReason = (
 	)
 		return 'creeper_melee_disengaged'
 	// Confirmed fire permits navigation around cover, never a blind hit.
-	return confirmedShooter || canSeeEnemy(context.bot, entity)
+	return confirmedShooter ||
+		continuingEncounter ||
+		canSeeEnemy(context.bot, entity)
 		? 'eligible'
 		: 'no_line_of_sight'
 }
@@ -237,7 +239,7 @@ export const selectCombatDecision = (context: MachineContext) => {
 	const candidates = evaluated
 		.filter(candidate => candidate.reason === 'eligible')
 		.map(candidate => candidate.entity)
-	const entity =
+	let entity =
 		candidates.sort(
 			(a, b) =>
 				Number(
@@ -251,6 +253,21 @@ export const selectCombatDecision = (context: MachineContext) => {
 				position.distanceTo(a.position) - position.distanceTo(b.position) ||
 				a.id - b.id
 		)[0] ?? null
+	// Lost coordinates hold the contact briefly, never movement authority.
+	const previous = context.combatTarget.entity
+	if (
+		!entity &&
+		previous &&
+		!context.deadEntities.has(previous) &&
+		context.threats.some(
+			threat =>
+				threat.entityId === previous.id &&
+				!threat.observed &&
+				Date.now() - threat.lastObservedAt <
+					context.preferences.threatRetentionMs
+		)
+	)
+		entity = previous
 	return {
 		target: {
 			entity,

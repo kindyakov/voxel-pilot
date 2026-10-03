@@ -8,6 +8,7 @@ import {
 } from '@/utils/combat/approachPolicy.js'
 import {
 	getMeleeExitRange,
+	hasCurrentCombatPosition,
 	hasRangedLoadout,
 	resolveCombatTarget
 } from '@/utils/combat/combatRange.js'
@@ -23,6 +24,7 @@ import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 const canUseRanged = ({ context }: MachineGuardParams): boolean => {
 	const target = resolveCombatTarget(context)
 	if (
+		!hasCurrentCombatPosition(context) ||
 		context.threatObservationProblem !== null ||
 		!target.entity ||
 		target.distance > context.preferences.rangedAttackRange ||
@@ -113,6 +115,7 @@ export const eventCanSkirmishRangedFromMelee = ({
 }
 
 const canMelee = ({ context }: MachineGuardParams) =>
+	hasCurrentCombatPosition(context) &&
 	context.combatTarget.entity !== null &&
 	context.threatObservationProblem === null &&
 	isFinitePosition(context.bot?.entity?.position) &&
@@ -127,6 +130,7 @@ export default {
 		canMelee(params) || canSkirmishRanged(params),
 	canMelee,
 	canResumeApproach: ({ context }: MachineGuardParams) =>
+		hasCurrentCombatPosition(context) &&
 		context.threatObservationProblem === null &&
 		isFinitePosition(context.bot?.entity?.position) &&
 		canResumeApproach(context) &&

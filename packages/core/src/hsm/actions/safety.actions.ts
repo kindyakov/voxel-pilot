@@ -82,7 +82,13 @@ export const safetyActions = {
 		undefined,
 		MachineEvent,
 		never
-	>(({ context }) => ({ approachAttempts: recordApproach(context, false) })),
+	>(({ context, event }) => ({
+		approachAttempts: recordApproach(
+			context,
+			false,
+			event.type === 'APPROACH_SAMPLE' ? event.waypoint : undefined
+		)
+	})),
 	recordApproachRouteFailure: assign<
 		MachineContext,
 		MachineEvent,

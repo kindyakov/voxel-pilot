@@ -31,7 +31,7 @@ export type HealthEvents =
 
 export type CombatEvents =
 	| { type: 'DEFENSIVE_SAFE' }
-	| { type: 'APPROACH_SAMPLE' }
+	| { type: 'APPROACH_SAMPLE'; waypoint?: Vec3 }
 	| { type: 'APPROACH_ROUTE_FAILED' }
 	| { type: 'PASSABILITY_CHANGED'; position: Vec3 }
 	| { type: 'RETREAT_SAFE' }

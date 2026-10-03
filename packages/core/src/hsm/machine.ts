@@ -674,7 +674,11 @@ export const createBotMachine = (
 					? context.threats.filter(
 							threat => threat.entityId !== event.entity.id
 						)
-					: context.threats
+					: context.threats.map(threat =>
+							threat.entityId === event.entity.id
+								? { ...threat, observed: false }
+								: threat
+						)
 				const remaining = {
 					...context,
 					attackContacts: died
