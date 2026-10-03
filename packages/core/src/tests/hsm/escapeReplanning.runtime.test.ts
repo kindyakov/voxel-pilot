@@ -25,6 +25,32 @@ const threat = (entityId: number, x: number, z: number): ThreatObservation => ({
 	creeper: null
 })
 
+/** Keep native AStar's sample order and scoped clock restoration in one place. */
+const withNativeSliceClock = <T>(
+	t: TestContext,
+	run: () => T,
+	options: {
+		elapsed: number
+		offset: number
+		partial: boolean
+		initial: boolean
+	}
+): T => {
+	const now = performance.now.bind(performance)
+	const base = now() + options.offset
+	let calls = 0
+	const clock = t.mock.method(performance, 'now', () =>
+		options.partial
+			? base + (++calls <= (options.initial ? 2 : 1) ? 0 : options.elapsed)
+			: now() + options.offset
+	)
+	try {
+		return run()
+	} finally {
+		clock.mock.restore()
+	}
+}
+
 /** Exercise native slice boundaries without replacing any result/path. */
 const deferNativeSearch = (
 	t: TestContext,
@@ -32,7 +58,6 @@ const deferNativeSearch = (
 	stage: 'candidate' | 'movement'
 ) => {
 	const getPath = bot.pathfinder.getPathFromTo.bind(bot.pathfinder)
-	const now = performance.now.bind(performance)
 	// Two candidate slices are the minimized goal-null reproduction. Movement
 	// stays partial across the original 4 setup + 16 measurement frames.
 	const partialSlices = stage === 'candidate' ? 2 : 20
@@ -55,17 +80,14 @@ const deferNativeSearch = (
 			)
 			let slices = 0
 			const compute = <T>(run: () => T, initial = false): T => {
-				const base = now() + Math.min(slices, partialSlices) * elapsed
-				let calls = 0
-				const clock = t.mock.method(performance, 'now', () =>
-					slices < partialSlices
-						? base + (++calls <= (initial ? 2 : 1) ? 0 : elapsed)
-						: now() + partialSlices * elapsed
-				)
 				try {
-					return run()
+					return withNativeSliceClock(t, run, {
+						elapsed,
+						offset: Math.min(slices, partialSlices) * elapsed,
+						partial: slices < partialSlices,
+						initial
+					})
 				} finally {
-					clock.mock.restore()
 					slices++
 				}
 			}
@@ -215,7 +237,6 @@ for (const initialPartial of [false, true]) {
 		const statuses: PartiallyComputedPath['status'][] = []
 		const contexts: unknown[] = []
 		const getPath = bot.pathfinder.getPathFromTo.bind(bot.pathfinder)
-		const now = performance.now.bind(performance)
 		let slices = 0
 		const search = t.mock.method(
 			bot.pathfinder,
@@ -226,19 +247,15 @@ for (const initialPartial of [false, true]) {
 					let next: ReturnType<typeof generator.next>
 					if (initialPartial) {
 						const first = slices++ === 0
-						const base = now()
-						let calls = 0
 						const elapsed = preferences.escapeSearchSliceMs + 1
 						// Exercise native AStar's slice boundary, not a fabricated partial result.
 						// Carry that elapsed slice into later native calls without changing app clocks.
-						const clock = t.mock.method(performance, 'now', () =>
-							first ? base + (++calls <= 2 ? 0 : elapsed) : now() + elapsed
-						)
-						try {
-							next = generator.next()
-						} finally {
-							clock.mock.restore()
-						}
+						next = withNativeSliceClock(t, () => generator.next(), {
+							elapsed,
+							offset: first ? 0 : elapsed,
+							partial: first,
+							initial: true
+						})
 					} else next = generator.next()
 					if (next.done) return next.value
 					const result: PartiallyComputedPath = next.value.result
