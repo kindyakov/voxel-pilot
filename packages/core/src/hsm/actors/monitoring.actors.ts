@@ -96,7 +96,9 @@ export const createMonitoringActors = (logger: RuntimeLogger) => {
 				context.preferences.safeEatDistance
 			)
 			const observed = candidates.filter(
-				entity => position.distanceTo(entity.position) <= radius
+				entity =>
+					position.distanceTo(entity.position) <= radius ||
+					context.attackContacts[entity.id]?.entity === entity
 			)
 			const enemies = observed.filter(
 				entity => assessMob(context, entity) !== null

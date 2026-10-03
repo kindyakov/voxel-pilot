@@ -4,6 +4,7 @@ import { Weapons } from 'minecrafthawkeye'
 import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import type { MachineContext } from '@/hsm/context.js'
+import { hasFreshThreatObservation } from '@/hsm/guards/survival.guards.js'
 import {
 	type BaseServiceState,
 	type ServiceAPI,
@@ -21,7 +22,10 @@ import {
 	stopMeleeAttack,
 	stopRangedAttack
 } from '@/utils/combat/runtimeControl.js'
-import { canUseMeleeLoadout } from '@/utils/combat/selfDefense.js'
+import {
+	canUseMeleeLoadout,
+	isDefensiveCandidate
+} from '@/utils/combat/selfDefense.js'
 
 interface MeleeAttackState extends BaseServiceState {
 	currentTarget: Entity | null
@@ -47,11 +51,31 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		bot.pvp?.target?.id === enemy.id
 
 	const issueMeleeAttack = (
-		bot: Bot,
-		enemy: Entity,
-		sendBack: (event: MachineEvent) => void
+		api: ServiceAPI<MeleeAttackState>,
+		enemy: Entity
 	) => {
-		const attackResult = bot.pvp.attack(enemy)
+		const { bot, sendBack } = api
+		const attackResult = bot.pvp.attack(enemy, {
+			canAttack: target => {
+				const context = api.getContext()
+				const weapon = bot.utils.getMeleeWeapon()
+				return (
+					!api.abortSignal.aborted &&
+					api.state.ready &&
+					context.movementOwner === 'PVP' &&
+					context.combatTarget.entity === target &&
+					context.enemies.includes(target) &&
+					hasFreshThreatObservation(context) &&
+					isDefensiveCandidate(context, target) &&
+					canUseMeleeLoadout(context) &&
+					Boolean(weapon) === api.state.armed &&
+					(weapon
+						? bot.heldItem?.type === weapon.type
+						: bot.heldItem === null) &&
+					canSeeEnemy(bot, target)
+				)
+			}
+		})
 
 		if (attackResult instanceof Promise) {
 			void attackResult.catch((error: unknown) => {
@@ -105,14 +129,8 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		)
 	}
 
-	const updateMelee = ({
-		context,
-		state,
-		bot,
-		sendBack,
-		setState,
-		abortSignal
-	}: ServiceAPI<MeleeAttackState>) => {
+	const updateMelee = (api: ServiceAPI<MeleeAttackState>) => {
+		const { context, state, bot, sendBack, setState, abortSignal } = api
 		if (!state.ready || abortSignal.aborted) return
 		const weapon = bot.utils.getMeleeWeapon()
 		if (
@@ -156,7 +174,7 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 				stopMeleeAttack(bot, 'retarget', logger, logCombatRuntime)
 			}
 
-			issueMeleeAttack(bot, enemy, sendBack)
+			issueMeleeAttack(api, enemy)
 			setState({ currentTarget: enemy })
 			logCombatRuntime('melee_attack_issued', {
 				enemyId: enemy.id,
@@ -167,7 +185,7 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		}
 
 		if (!isPvpTargetActive(bot, enemy)) {
-			issueMeleeAttack(bot, enemy, sendBack)
+			issueMeleeAttack(api, enemy)
 			logCombatRuntime('melee_attack_issued', {
 				enemyId: enemy.id,
 				distance: Number(target.distance.toFixed(2)),
