@@ -1,6 +1,8 @@
 import cliTruncate from 'cli-truncate'
 import { Box, Text } from 'ink'
 
+import { palette } from './palette.js'
+
 export function Header({
 	status,
 	right = '',
@@ -20,24 +22,26 @@ export function Header({
 	const brand = cliTruncate('VoxelPilot', columns, options)
 	const state = cliTruncate(
 		status,
-		Math.max(0, columns - brand.length - 1),
+		Math.max(0, columns - brand.length - 2),
 		options
 	)
-	const left = brand + (state ? ` ${state}` : '')
+	const left = brand + (state ? `  ${state}` : '')
 	const remaining = Math.max(0, columns - left.length - 1)
 	return (
 		<Box justifyContent='space-between' flexShrink={0}>
 			<Text bold={color} wrap='truncate-end'>
-				<Text color={color ? 'magenta' : undefined}>{brand}</Text>
+				<Text color={color ? palette.pink : undefined}>{brand}</Text>
 				{state && (
 					<>
-						{' '}
-						<Text color={color ? statusColor : undefined}>{state}</Text>
+						{'  '}
+						<Text color={color ? palette[statusColor] : undefined}>
+							{state}
+						</Text>
 					</>
 				)}
 			</Text>
 			{remaining > 0 && right && (
-				<Text dimColor={color} wrap='truncate-end'>
+				<Text color={color ? palette.muted : undefined} wrap='truncate-end'>
 					{cliTruncate(right, remaining, options)}
 				</Text>
 			)}

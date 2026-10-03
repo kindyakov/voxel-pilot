@@ -7,6 +7,7 @@ import {
 	compactDisplayText
 } from '../../terminal/display.js'
 import { Meter } from '../../ui/Meter.js'
+import { palette } from '../../ui/palette.js'
 import { type StatusClock, defaultStatusClock } from './clock.js'
 import { toStatusView } from './projection.js'
 import { useStatusNow } from './useStatusNow.js'
@@ -39,23 +40,67 @@ export function StatusPanel({
 	const goalColor = !color
 		? undefined
 		: harness.stale
-			? 'gray'
+			? palette.muted
 			: harness.goal.status === 'paused'
-				? 'yellow'
+				? palette.yellow
 				: harness.goal.status === 'active'
-					? 'green'
-					: undefined
+					? palette.green
+					: palette.foreground
 	if (expanded) {
 		const divider = (
-			<Text dimColor={color}>{(unicode ? '─' : '-').repeat(columns)}</Text>
+			<Text color={color ? palette.border : undefined}>
+				{(unicode ? '─' : '-').repeat(columns)}
+			</Text>
 		)
 		const space = <Text> </Text>
-		const lines = (text: string, tone?: 'magenta' | 'gray') =>
-			boundedDisplayLines(text, columns, 2, unicode).map((line, index) => (
-				<Text key={index} wrap='truncate-end' color={color ? tone : undefined}>
-					{line || ' '}
-				</Text>
-			))
+		const lines = (
+			text: string,
+			tone: string = palette.foreground,
+			bold = false
+		) =>
+			boundedDisplayLines(text, columns, 2, unicode)
+				.filter(Boolean)
+				.map((line, index) => (
+					<Text
+						key={index}
+						bold={color && bold}
+						wrap='truncate-end'
+						color={color ? tone : undefined}
+					>
+						{line}
+					</Text>
+				))
+		const activity = [
+			...lines(
+				harness.action + stale,
+				harness.stale ? palette.muted : palette.foreground,
+				true
+			),
+			...lines(
+				harness.mainActivity + stale,
+				harness.stale ? palette.muted : palette.pink
+			),
+			<Text color={color ? palette.muted : undefined} wrap='truncate-end'>
+				{clip(
+					`${harness.stale ? 'Последний вход' : 'Время состояния'}: ${harness.elapsed}`,
+					stale
+				)}
+			</Text>,
+			...lines(
+				`Мониторинг: ${harness.monitoring.join(', ')}${stale}`,
+				harness.stale ? palette.muted : palette.foreground
+			)
+		]
+		const goal = [
+			...lines(
+				harness.goal.text ?? '—',
+				harness.stale ? palette.muted : palette.foreground,
+				true
+			),
+			<Text color={goalColor} wrap='truncate-end'>
+				{clip(harness.goal.label, stale)}
+			</Text>
+		]
 		return (
 			<Box flexDirection='column' flexShrink={0} width={columns}>
 				<Meter
@@ -84,43 +129,58 @@ export function StatusPanel({
 				/>
 				{space}
 				{divider}
-				<Text dimColor={color}>ПОЗИЦИЯ</Text>
-				<Text dimColor={color && view.position.stale} wrap='truncate-end'>
-					{clip(view.position.text, view.position.stale ? ' · устарело' : '')}
+				<Text bold={color} color={color ? palette.muted : undefined}>
+					ПОЗИЦИЯ
+				</Text>
+				<Text
+					bold={color}
+					color={
+						color
+							? view.position.stale
+								? palette.muted
+								: palette.foreground
+							: undefined
+					}
+					wrap='truncate-end'
+				>
+					{clip(
+						view.position.text.replaceAll(' · ', '   '),
+						view.position.stale ? ' · устарело' : ''
+					)}
 				</Text>
 				{space}
 				{divider}
-				<Text dimColor={color}>HSM</Text>
-				{lines(
-					harness.mainActivity + stale,
-					harness.stale ? 'gray' : 'magenta'
-				)}
-				<Text dimColor={color && harness.stale} wrap='truncate-end'>
-					{clip(
-						`${harness.stale ? 'Последний вход' : 'Время состояния'}: ${harness.elapsed}`,
-						stale
-					)}
+				<Text bold={color} color={color ? palette.muted : undefined}>
+					HSM
 				</Text>
-				{lines(
-					`Действие: ${harness.action}${stale}`,
-					harness.stale ? 'gray' : undefined
-				)}
-				{lines(
-					`Мониторинг: ${harness.monitoring.join(', ')}${stale}`,
-					harness.stale ? 'gray' : undefined
-				)}
+				{activity.map((line, index) => (
+					<Box key={index} flexShrink={0}>
+						{line}
+					</Box>
+				))}
+				{Array.from({ length: 7 - activity.length }, (_value, index) => (
+					<Text key={index}> </Text>
+				))}
 				{divider}
-				<Text dimColor={color}>ЦЕЛЬ</Text>
-				{lines(harness.goal.text ?? '—', harness.stale ? 'gray' : undefined)}
-				<Text color={goalColor} wrap='truncate-end'>
-					{clip(harness.goal.label, stale)}
+				<Text bold={color} color={color ? palette.muted : undefined}>
+					ЦЕЛЬ
 				</Text>
+				{goal.map((line, index) => (
+					<Box key={index} flexShrink={0}>
+						{line}
+					</Box>
+				))}
+				{Array.from({ length: 3 - goal.length }, (_value, index) => (
+					<Text key={index}> </Text>
+				))}
 			</Box>
 		)
 	}
 	return (
 		<Box flexDirection='column' flexShrink={0} width={columns}>
-			<Text bold={color}>СТАТУС</Text>
+			<Text bold={color} color={color ? palette.foreground : undefined}>
+				СТАТУС
+			</Text>
 			<Meter
 				label='HP'
 				value={view.health.text}
@@ -140,35 +200,73 @@ export function StatusPanel({
 				color={color}
 				unicode={unicode}
 			/>
-			<Text dimColor={color && view.position.stale} wrap='truncate-end'>
+			<Text
+				color={
+					color
+						? view.position.stale
+							? palette.muted
+							: palette.foreground
+						: undefined
+				}
+				wrap='truncate-end'
+			>
 				{clip(
 					`ПОЗИЦИЯ: ${view.position.text}`,
 					view.position.stale ? ' · устарело' : ''
 				)}
 			</Text>
 			<Text
-				color={color ? (harness.stale ? 'gray' : 'magenta') : undefined}
+				color={
+					color ? (harness.stale ? palette.muted : palette.pink) : undefined
+				}
 				wrap='truncate-end'
 			>
 				{clip(`HSM: ${harness.mainActivity}`, stale)}
 			</Text>
-			<Text dimColor={color && harness.stale} wrap='truncate-end'>
+			<Text color={color ? palette.muted : undefined} wrap='truncate-end'>
 				{clip(
 					`${harness.stale ? (columns < 50 ? 'Последний вход' : 'От входа в последнее состояние') : 'Время состояния'}: ${harness.elapsed}`,
 					stale
 				)}
 			</Text>
-			<Text dimColor={color && harness.stale} wrap='truncate-end'>
+			<Text
+				color={
+					color
+						? harness.stale
+							? palette.muted
+							: palette.foreground
+						: undefined
+				}
+				wrap='truncate-end'
+			>
 				{clip(`Действие: ${harness.action}`, stale)}
 			</Text>
-			<Text dimColor={color && harness.stale} wrap='truncate-end'>
+			<Text
+				color={
+					color
+						? harness.stale
+							? palette.muted
+							: palette.foreground
+						: undefined
+				}
+				wrap='truncate-end'
+			>
 				{clip(`Мониторинг: ${harness.monitoring.join(', ')}`, stale)}
 			</Text>
 			<Text color={goalColor} wrap='truncate-end'>
 				{clip(`ЦЕЛЬ: ${harness.goal.label}`, stale)}
 			</Text>
 			{harness.goal.text !== null && (
-				<Text dimColor={color && harness.stale} wrap='truncate-end'>
+				<Text
+					color={
+						color
+							? harness.stale
+								? palette.muted
+								: palette.foreground
+							: undefined
+					}
+					wrap='truncate-end'
+				>
 					{clip(harness.goal.text)}
 				</Text>
 			)}

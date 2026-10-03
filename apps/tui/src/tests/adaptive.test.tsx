@@ -165,6 +165,31 @@ test('cell clipping handles Cyrillic, combining characters, emoji, controls and 
 	}
 })
 
+test('bounded status wrapping uses whole words before a safe long-token fallback', () => {
+	assert.deepEqual(
+		boundedDisplayLines('Following the approved synthetic route', 36, 2),
+		['Following the approved synthetic', 'route']
+	)
+	assert.deepEqual(boundedDisplayLines('environment > night', 18, 2), [
+		'environment >',
+		'night'
+	])
+	assert.deepEqual(boundedDisplayLines('ABCDEFGHIJKLMN', 7, 2), [
+		'ABCDEFG',
+		'HIJKLMN'
+	])
+	const safe = boundedDisplayLines(
+		'Камень 😀 界 e\u0301 \u001b]0;unsafe\u0007',
+		12,
+		4
+	)
+	for (const line of safe) {
+		assert.ok(stringWidth(line) <= 12)
+		assert.doesNotMatch(line, /[\u0000-\u001f\u007f-\u009f]/)
+	}
+	assert.match(safe.join(' '), /Камень 😀 界 e\u0301/)
+})
+
 function fixture(
 	t: test.TestContext,
 	capabilities: TerminalCapabilities = { color: false, unicode: true }
@@ -419,7 +444,7 @@ test('limited native display uses ASCII decorations and no SGR while preserving 
 		f.stdin.send('\u001b[A')
 	})
 	assert.match(f.frame(), /INFO\+ \| PAUSED/)
-	assert.match(f.frame(), /> 12:34:56 WARN/)
+	assert.match(f.frame(), /> 12:34:56\s+WARN/)
 	f.stdin.send('q')
 	assert.equal((await f.app.done).exitCode, 0)
 })
@@ -487,17 +512,21 @@ test('native expanded wide status follows the separated mockup hierarchy and bou
 		hp >= 0,
 		'wide HP label and actual numerator/maximum share a separate header'
 	)
-	assert.match(lines[hp + 1]!, /\[######----\]/)
+	assert.match(lines[hp + 1]!, /\[########------\]/)
 	assert.ok(food >= hp + 3, 'vitals have breathing space')
-	assert.match(lines[food + 1]!, /\[########--\]/)
+	assert.match(lines[food + 1]!, /\[###########---\]/)
 	const position = lines.findIndex(line => /ПОЗИЦИЯ\s*│/.test(line))
 	const hsm = lines.findIndex(line => /HSM\s*│/.test(line))
 	const goal = lines.findIndex(line => /ЦЕЛЬ\s*│/.test(line))
 	assert.ok(position > food + 1 && hsm > position + 1 && goal > hsm + 5)
-	assert.match(lines[position + 1]!, /X -124\.25 · Y 68 · Z 317\.5/)
+	assert.match(lines[position + 1]!, /X -124\.25   Y 68   Z 317\.5/)
 	assert.match(screen, /TASKS > EXECUTING > MINING > BREAKING/)
 	assert.match(screen, /Время состояния: 00:25/)
-	assert.match(screen, /Действие: mine_resource/)
+	assert.match(screen, /mine_resource/)
+	assert.ok(
+		screen.indexOf('mine_resource') < screen.indexOf('TASKS >'),
+		'the current action precedes the main path in the expanded hierarchy'
+	)
 	assert.match(screen, /Мониторинг: survival > safe/)
 	assert.match(screen, /environment > day/)
 	assert.match(lines[goal + 1]!, /Добудь 20 блоков камня/)
@@ -544,7 +573,7 @@ test('expanded native status retains full two-row paths and separate stale/pause
 		})
 	)
 	assert.match(stale, /HP\s+0 \(устарело\)\/30 \(устарело\)/)
-	assert.match(stale, /\[----------\]/)
+	assert.match(stale, /\[--------------\]/)
 	assert.match(stale, /Последний вход: 00:25 \| устарело/)
 	assert.match(stale, /На паузе \| устарело/)
 	assert.doesNotMatch(stale, /[┌┐└┘│─›↵…]/)
@@ -563,7 +592,7 @@ test('expanded native status retains full two-row paths and separate stale/pause
 				)
 				.trim()
 		)
-	assert.match(right.join(''), /TASKS > EXECUTING > MINING > BREAKING/)
+	assert.match(right.join(' '), /TASKS > EXECUTING > MINING > BREAKING/)
 	assert.equal(
 		f.runtime.telemetry.getSnapshot().harness.value!.mainActivity,
 		mainActivity

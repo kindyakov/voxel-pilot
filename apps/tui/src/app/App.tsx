@@ -20,6 +20,7 @@ import { boundedDisplayLines, compactDisplayText } from '../terminal/display.js'
 import { type TerminalLayout, terminalLayout } from '../terminal/layout.js'
 import { FailureBoundary } from '../ui/FailureBoundary.js'
 import { Header } from '../ui/Header.js'
+import { palette } from '../ui/palette.js'
 import type { ApplicationState, ApplicationStore } from './state.js'
 
 export interface DashboardProps {
@@ -117,7 +118,8 @@ export function Dashboard({
 			width={columns}
 			height={rows}
 			borderStyle={border ? (unicode ? 'single' : asciiBorder) : undefined}
-			borderColor={color ? 'gray' : undefined}
+			borderColor={color ? palette.border : undefined}
+			backgroundColor={color ? palette.background : undefined}
 			paddingX={border && layout.mode === 'tiny' ? 1 : 0}
 			overflow='hidden'
 		>
@@ -133,7 +135,9 @@ export function Dashboard({
 						/>
 					)}
 					{tinyFailure && application.failure && (
-						<Text wrap='truncate-end'>{clip(application.failure.message)}</Text>
+						<Text color={color ? palette.red : undefined} wrap='truncate-end'>
+							{clip(application.failure.message)}
+						</Text>
 					)}
 					{boundedDisplayLines(
 						application.message,
@@ -143,17 +147,22 @@ export function Dashboard({
 					).map((line, index) => (
 						<Text
 							key={index}
-							color={color ? 'yellow' : undefined}
+							color={color ? palette.yellow : undefined}
 							wrap='truncate-end'
 						>
 							{line || ' '}
 						</Text>
 					))}
 					{tinyNotice && (
-						<Text wrap='truncate-end'>{clip('Увеличьте окно терминала')}</Text>
+						<Text
+							color={color ? palette.foreground : undefined}
+							wrap='truncate-end'
+						>
+							{clip('Увеличьте окно терминала')}
+						</Text>
 					)}
 					<Box flexGrow={1} />
-					<Text wrap='truncate-end'>
+					<Text color={color ? palette.muted : undefined} wrap='truncate-end'>
 						{compactDisplayText(tinyExit, exitColumns, unicode)}
 					</Text>
 				</Box>
@@ -170,7 +179,7 @@ export function Dashboard({
 						/>
 					</Box>
 					{layout.mode === 'wide' && (
-						<Text dimColor={color}>
+						<Text color={color ? palette.border : undefined}>
 							{(unicode ? '─' : '-').repeat(columns - 2)}
 						</Text>
 					)}
@@ -180,8 +189,10 @@ export function Dashboard({
 								wrap='truncate-end'
 								color={
 									color && application.phase === 'stopping'
-										? 'yellow'
-										: undefined
+										? palette.yellow
+										: color
+											? palette.foreground
+											: undefined
 								}
 							>
 								{clip(application.message)}
@@ -212,7 +223,7 @@ export function Dashboard({
 									{logs}
 								</Box>
 								<Box width={3} justifyContent='center'>
-									<Text color={color ? 'gray' : undefined}>
+									<Text color={color ? palette.border : undefined}>
 										{Array(layout.contentRows)
 											.fill(unicode ? '│' : '|')
 											.join('\n')}
@@ -227,7 +238,7 @@ export function Dashboard({
 								<Box height={10} flexShrink={0} flexDirection='column'>
 									{facts}
 								</Box>
-								<Text dimColor={color}>
+								<Text color={color ? palette.border : undefined}>
 									{(unicode ? '─' : '-').repeat(width)}
 								</Text>
 								{logs}
@@ -235,12 +246,12 @@ export function Dashboard({
 						)}
 					</Box>
 					{layout.mode === 'wide' && (
-						<Text dimColor={color}>
+						<Text color={color ? palette.border : undefined}>
 							{(unicode ? '─' : '-').repeat(columns - 2)}
 						</Text>
 					)}
 					<Box paddingX={1} flexShrink={0}>
-						<Text dimColor={color} wrap='truncate-end'>
+						<Text color={color ? palette.muted : undefined} wrap='truncate-end'>
 							{footer}
 						</Text>
 					</Box>
@@ -300,7 +311,7 @@ export function App({
 				fallback={
 					<Text
 						wrap='truncate-end'
-						color={capabilities.color ? 'red' : undefined}
+						color={capabilities.color ? palette.red : undefined}
 					>
 						{compactDisplayText(
 							'TUI failed. Stopping… q / Ctrl+C — выход',

@@ -51,7 +51,7 @@ export function compactDisplayText(
 	})
 }
 
-/** Fixed safe cell rows, preserving the full prefix before final display shortening. */
+/** Fixed safe cell rows, wrapping whole words and falling back for long tokens. */
 export function boundedDisplayLines(
 	value: string,
 	columns: number,
@@ -64,9 +64,16 @@ export function boundedDisplayLines(
 			return cliTruncate(remaining, Math.max(0, columns), {
 				truncationCharacter: unicode ? '…' : '~'
 			})
-		const line = cliTruncate(remaining, Math.max(0, columns), {
+		const prefix = cliTruncate(remaining, Math.max(0, columns), {
 			truncationCharacter: ''
 		})
+		const boundary = prefix.lastIndexOf(' ')
+		const line =
+			prefix.length < remaining.length &&
+			remaining[prefix.length] !== ' ' &&
+			boundary > 0
+				? prefix.slice(0, boundary)
+				: prefix.trimEnd()
 		remaining = remaining.slice(line.length).trimStart()
 		return line
 	})

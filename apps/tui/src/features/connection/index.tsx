@@ -3,6 +3,7 @@ import { Box, Text } from 'ink'
 
 import type { TerminalCapabilities } from '../../terminal/capabilities.js'
 import { compactDisplayText } from '../../terminal/display.js'
+import { palette } from '../../ui/palette.js'
 
 export function ConnectionPanel({
 	connection,
@@ -22,10 +23,10 @@ export function ConnectionPanel({
 					!capabilities.color
 						? undefined
 						: connection.state === 'ready'
-							? 'green'
+							? palette.green
 							: failure
-								? 'red'
-								: 'yellow'
+								? palette.red
+								: palette.yellow
 				}
 				wrap='truncate-end'
 			>
@@ -37,7 +38,7 @@ export function ConnectionPanel({
 			</Text>
 			{failure && (
 				<Text
-					color={capabilities.color ? 'red' : undefined}
+					color={capabilities.color ? palette.red : undefined}
 					wrap='truncate-end'
 				>
 					{compactDisplayText(failure.message, columns, capabilities.unicode)}

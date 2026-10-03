@@ -7,6 +7,7 @@ import {
 	compactDisplayText,
 	compactLogMessage
 } from '../../terminal/display.js'
+import { palette } from '../../ui/palette.js'
 
 export { useLogView } from './useLogView.js'
 
@@ -25,7 +26,7 @@ export function LogPanel({
 }) {
 	const visible = view.entries.slice(-rows)
 	const filter = view.includeDebug ? 'DEBUG' : 'INFO+'
-	const title = `ЖУРНАЛ · ${filter} · ${view.mode.toUpperCase()}${view.mode === 'paused' ? ` · +${view.newCount} новых` : ''}`
+	const mode = ` · ${filter} · ${view.mode.toUpperCase()}${view.mode === 'paused' ? ` · +${view.newCount} новых` : ''}`
 	const loss = `${view.anchorLost ? 'ЯКОРЬ УТРАЧЕН · ' : ''}Вытеснено: ${view.evictedEntries} · усечено: ${view.truncatedEntries}`
 	const width = Math.max(1, columns)
 	const { color, unicode } = capabilities
@@ -33,23 +34,36 @@ export function LogPanel({
 		compactDisplayText(text, cells, unicode)
 	return (
 		<Box flexDirection='column' flexGrow={1} width={width}>
-			<Text bold={color} wrap='truncate-end'>
-				{clip(title)}
+			<Text color={color ? palette.foreground : undefined} wrap='truncate-end'>
+				<Text bold={color}>{clip('ЖУРНАЛ')}</Text>
+				<Text color={color ? palette.muted : undefined}>
+					{clip(mode, Math.max(0, width - 6))}
+				</Text>
 			</Text>
 			<Text
-				dimColor={color && !view.anchorLost}
-				color={color && view.anchorLost ? 'yellow' : undefined}
+				color={
+					color ? (view.anchorLost ? palette.yellow : palette.muted) : undefined
+				}
 				wrap='truncate-end'
 			>
 				{clip(loss)}
 			</Text>
-			<Text dimColor={color} wrap='truncate-end'>
-				{clip('  Время    Уров. Источник    Сообщение')}
+			<Text color={color ? palette.muted : undefined} wrap='truncate-end'>
+				{clip('  Время      Уровень Источник       Сообщение')}
 			</Text>
 			{visible.map(entry => (
-				<Box key={entry.id} flexShrink={0}>
+				<Box
+					key={entry.id}
+					width={width}
+					flexShrink={0}
+					backgroundColor={
+						color && view.mode === 'paused' && entry.id === view.displayAnchorId
+							? palette.selection
+							: undefined
+					}
+				>
 					<Box width={2}>
-						<Text color={color ? 'magenta' : undefined}>
+						<Text color={color ? palette.pink : undefined}>
 							{view.mode === 'paused' && entry.id === view.displayAnchorId
 								? unicode
 									? '› '
@@ -57,39 +71,56 @@ export function LogPanel({
 								: '  '}
 						</Text>
 					</Box>
-					<Box width={9}>
-						<Text wrap='truncate-end'>
+					<Box width={11}>
+						<Text color={color ? palette.muted : undefined} wrap='truncate-end'>
 							{clip(clock.formatTimestamp(entry.timestamp), 8)}
 						</Text>
 					</Box>
-					<Box width={6}>
+					<Box width={8}>
 						<Text
 							color={
 								!color
 									? undefined
 									: entry.level === 'error'
-										? 'red'
+										? palette.red
 										: entry.level === 'warn'
-											? 'yellow'
-											: undefined
+											? palette.yellow
+											: entry.level === 'debug'
+												? palette.muted
+												: palette.foreground
 							}
 						>
 							{entry.level.toUpperCase()}
 						</Text>
 					</Box>
-					<Box width={12}>
+					<Box width={15}>
 						<Text
-							color={color && entry.source === 'HSM' ? 'magenta' : undefined}
+							color={
+								color
+									? entry.source === 'HSM'
+										? palette.pink
+										: palette.foreground
+									: undefined
+							}
 							wrap='truncate-end'
 						>
-							{clip(entry.source, 11)}
+							{clip(entry.source, 12)}
 						</Text>
 					</Box>
 					<Box flexGrow={1} flexShrink={1}>
-						<Text wrap='truncate-end'>
+						<Text
+							color={
+								color
+									? entry.level === 'debug'
+										? palette.muted
+										: palette.foreground
+									: undefined
+							}
+							wrap='truncate-end'
+						>
 							{compactLogMessage(
 								entry.message,
-								Math.max(1, width - 29),
+								Math.max(1, width - 36),
 								entry.truncation !== null,
 								unicode
 							)}
@@ -97,7 +128,11 @@ export function LogPanel({
 					</Box>
 				</Box>
 			))}
-			{!visible.length && <Text dimColor={color}>Нет записей {filter}</Text>}
+			{!visible.length && (
+				<Text color={color ? palette.muted : undefined}>
+					Нет записей {filter}
+				</Text>
+			)}
 		</Box>
 	)
 }

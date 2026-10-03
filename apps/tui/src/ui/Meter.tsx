@@ -1,5 +1,7 @@
 import { Box, Text } from 'ink'
 
+import { palette } from './palette.js'
+
 export function Meter({
 	label,
 	value,
@@ -23,30 +25,41 @@ export function Meter({
 	readonly columns?: number
 	readonly unicode?: boolean
 }) {
+	const cells = expanded ? 14 : 10
 	const filled =
 		ratio === null || !Number.isFinite(ratio)
 			? null
-			: Math.round(Math.max(0, Math.min(1, ratio)) * 10)
+			: Math.round(Math.max(0, Math.min(1, ratio)) * cells)
 	const bar =
 		filled === null
 			? unicode
 				? '[—]'
 				: '[?]'
-			: `[${'#'.repeat(filled)}${'-'.repeat(10 - filled)}]`
+			: `[${'#'.repeat(filled)}${'-'.repeat(cells - filled)}]`
 	const barColor = !color
 		? undefined
 		: staleValue || staleMaximum || filled === null
-			? 'gray'
-			: 'green'
+			? palette.muted
+			: palette.green
 	if (expanded)
 		return (
 			<Box flexDirection='column' width={columns} flexShrink={0}>
 				<Box justifyContent='space-between'>
-					<Text bold={color} wrap='truncate-end'>
+					<Text
+						bold={color}
+						color={color ? palette.foreground : undefined}
+						wrap='truncate-end'
+					>
 						{label}
 					</Text>
 					<Text
-						dimColor={color && (staleValue || staleMaximum)}
+						color={
+							color
+								? staleValue || staleMaximum
+									? palette.muted
+									: palette.foreground
+								: undefined
+						}
 						wrap='truncate-end'
 					>
 						{value}
@@ -58,7 +71,7 @@ export function Meter({
 			</Box>
 		)
 	return (
-		<Text wrap='truncate-end'>
+		<Text color={color ? palette.foreground : undefined} wrap='truncate-end'>
 			{label}: {value}
 			{staleValue ? ' (устарело)' : ''} / {maximum}
 			{staleMaximum ? ' (устарело)' : ''} <Text color={barColor}>{bar}</Text>

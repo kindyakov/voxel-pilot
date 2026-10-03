@@ -21,7 +21,7 @@ src/
 │   ├── layout.ts            # Единый cell/record budget wide/narrow/tiny и страницы
 │   ├── capabilities.ts      # Явные TTY/color/locale hints и ASCII-рамка
 │   ├── logNavigation.ts     # Структурный action port и общая ёмкость страницы
-│   └── display.ts           # Безопасный single-line текст и display clock
+│   └── display.ts           # Безопасный текст, cell clipping/word wrapping и display clock
 ├── features/
 │   ├── connection/index.tsx # Публичное подключение и сохраняемый окончательный отказ
 │   ├── logs/                # Публичный hook/view, local external store переносимой модели
@@ -30,7 +30,7 @@ src/
 │       ├── projection.ts    # Чистая семантика unknown/zero/stale и длительности
 │       ├── clock.ts         # Отдельный display-time порт now/schedule
 │       └── useStatusNow.ts  # Одна отменяемая привязка времени к React
-├── ui/                      # Независимые Header, FailureBoundary и Meter
+├── ui/                      # Независимые Header, FailureBoundary, Meter и общая palette
 └── tests/                   # Полный app на native Ink и portable fake runtime
 ```
 
@@ -52,6 +52,8 @@ StatusClock принадлежит feature и проходит через option
 
 [capabilities.ts](src/terminal/capabilities.ts) принимает явные output/TERM/color/locale hints. Application читает только эти hints после preflight и допускает optional `capabilities` для безопасных hosts/tests. Импорт и reusable terminal не читают окружение. NO_COLOR/FORCE_COLOR=0 отключают styling; TERM=dumb/linux и явно не-UTF8 locale выбирают ASCII decorations. Семантические unknown/stale/goal/level/mode значения остаются текстом. Нормализация controls предшествует cell clipping; source truncation имеет отдельный marker, исходные DTO/ID не меняются. Поддержка raw TTY не определяется ОС.
 
+Независимая [palette](src/ui/palette.ts) задаёт общую тёмную тему, мягкий розовый акцент, зелёные индикаторы, светлый текст и slate-разделители. Все стили отключаются одним color capability. Журнал разделяет bold title и muted filter/mode, резервирует реальные интервалы таблицы и выделяет всю строку выбранного opaque-ID muted background с розовым chevron. Expanded Meter использует 14 ячеек, compact — 10; справа остаётся измеренный максимум. В expanded HSM действие показано первым, затем основной путь, время и отдельный мониторинг; координаты и цель выделены bold. [display](src/terminal/display.ts) переносит безопасный текст по границам слов, длинный token — по ячейкам, последняя строка показывает display shortening. Эти операции не меняют факты или навигационную модель.
+
 Terminal session владеет одним renderer. Exit observation регистрируется до user components/effects; cached waitUntilExit используется после teardown, чтобы Ink не зарегистрировал новый beforeExit-listener. Нормальный результат ждёт flush, unmount/exit и callback записи восстановления. При недоступном output дедлайн освобождает raw input и подписки, запрашивает восстановление экрана и возвращает ошибочный результат; подтверждение записанных пикселей невозможно, пока stream не отвечает. Static diagnostic отправляется после teardown, когда stderr доступен.
 
 Ink получает тот же native input через узкий guard `setRawMode`: его поздний queued teardown не может выбросить исключение вне app owner. Отказ включения запускает fatal, отказ восстановления даёт `terminal-close-failed` и ненулевой результат, даже если сохранение runtime успешно. Фактический raw state при неисправном native stream может остаться прежним; исходные ошибки не печатаются и остальные stream operations сохраняются.
@@ -67,6 +69,8 @@ App собирает runtime, terminal, features и UI. Reusable modules не и
 ## Проверки
 
 [adaptive.test.tsx](src/tests/adaptive.test.tsx) проверяет последний реальный native frame: cell/row limits, две раскладки, tiny/restore, единую ёмкость page keys, сохранение anchor/filter/arrivals/timer и упрощённые capabilities. Fixtures старых Unicode-проверок задают display capabilities явно, сохраняя утверждения независимо от host locale. Визуальную проверку выполняй отдельно на публичном fake compose в Windows Terminal и Linux PTY; live сервер требует согласованного окружения.
+
+[displayStyles.test.ts](src/tests/displayStyles.test.ts) запускает native Ink в отдельном процессе с контролируемыми display hints: проверяет точные RGB-акценты, background каждой ячейки выбранной строки, интервалы таблицы и отсутствие SGR при отключённом color capability. Это stream evidence; принятие внешнего нативного кадра выполняется отдельно.
 
 [logs.test.tsx](src/tests/logs.test.tsx) проверяет модель в полном native app через d/стрелки/PgUp/PgDn/End, matching arrivals, скрытый/вытесненный якорь, resize/tiny/feature failure и joined exit. Переносимые алгоритмы проверяются отдельно через публичный presentation API, терминальное сокращение — здесь.
 
