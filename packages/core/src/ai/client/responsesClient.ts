@@ -1,4 +1,3 @@
-import OpenAI from 'openai'
 import type { Responses } from 'openai/resources/responses/responses'
 
 import type {
@@ -8,6 +7,7 @@ import type {
 	CreateResponseResult,
 	OpenAIResponsesSdkLike
 } from '../contracts/agentClient.js'
+import { createOpenAISdk } from './openaiSdk.js'
 import { mapParsedToolCalls } from './parsers.js'
 import {
 	buildResponsesRequestDebugMarkdown,
@@ -27,25 +27,9 @@ export class OpenAIResponsesClient implements AgentModelClient {
 	constructor(
 		options: AgentClientOptions & { client?: OpenAIResponsesSdkLike }
 	) {
-		if (!options.client && !options.apiKey?.trim()) {
-			throw new Error('Explicit AI API key is required')
-		}
 		this.client =
 			options.client ??
-			(new OpenAI({
-				apiKey: options.apiKey,
-				baseURL: options.baseUrl ?? 'https://api.openai.com/v1',
-				organization: null,
-				project: null,
-				adminAPIKey: null,
-				webhookSecret: null,
-				defaultHeaders: {
-					Authorization: `Bearer ${options.apiKey}`,
-					'OpenAI-Organization': null,
-					'OpenAI-Project': null
-				},
-				logLevel: 'off'
-			}) as unknown as OpenAIResponsesSdkLike)
+			(createOpenAISdk(options) as unknown as OpenAIResponsesSdkLike)
 		this.model = options.model
 		this.timeoutMs = options.timeoutMs
 		this.maxOutputTokens = options.maxOutputTokens

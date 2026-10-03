@@ -71,6 +71,7 @@ export function createBotRuntime(
 	const listeners = new Set<{ listener: (snapshot: BotSnapshot) => void }>()
 	let snapshot: BotSnapshot
 	let stopping = false
+	let observationsClosed = false
 	let stopPromise: Promise<StopResult> | null = null
 	const publish = (connection: ConnectionSnapshot, facts: RuntimeFacts) => {
 		snapshot = Object.freeze({
@@ -109,7 +110,7 @@ export function createBotRuntime(
 		subscribeLogs: journal.subscribe,
 		subscribe(listener: (snapshot: BotSnapshot) => void) {
 			const subscription = { listener }
-			listeners.add(subscription)
+			if (!observationsClosed) listeners.add(subscription)
 			deliver(listener, snapshot)
 			return () => {
 				listeners.delete(subscription)
@@ -122,6 +123,7 @@ export function createBotRuntime(
 			if (stopping) return
 			if (['idle', 'stopped', 'failed'].includes(snapshot.connection.state)) {
 				stopPromise = null
+				observationsClosed = false
 				attachLogs()
 			}
 			owner.start()
@@ -144,7 +146,11 @@ export function createBotRuntime(
 					...result,
 					issues: Object.freeze([...result.issues])
 				})
+				// Existing observers receive the terminal snapshot; reentrant/late
+				// subscriptions receive it immediately without a retained membership.
+				observationsClosed = true
 				owner.completeStop(frozen)
+				listeners.clear()
 				disposeLogs?.()
 				disposeLogs = undefined
 				journal.detach()

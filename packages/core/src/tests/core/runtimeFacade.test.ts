@@ -149,6 +149,140 @@ test('facade is inert, frozen and supplies cached complete unknown snapshots wit
 	await flush()
 })
 
+test('settled stop releases snapshot observers; stopped late subscription is immediate-only until restart', async t => {
+	const { runtime, bots } = fixture(t)
+	const old: BotSnapshot[] = [],
+		late: BotSnapshot[] = [],
+		fresh: BotSnapshot[] = []
+	const oldDispose = runtime.telemetry.subscribe(value => {
+		old.push(value)
+	})
+	runtime.start()
+	bots[0]!.emit('botReady')
+	await flush()
+	await runtime.stop()
+	const terminal = runtime.telemetry.getSnapshot()
+	assert.equal(terminal.connection.state, 'stopped')
+	assert.equal(
+		old.at(-1),
+		terminal,
+		'existing observer receives the terminal publication'
+	)
+	const oldCount = old.length
+	const lateDispose = runtime.telemetry.subscribe(value => {
+		late.push(value)
+	})
+	assert.deepEqual(late, [terminal])
+	assert.equal(runtime.telemetry.getSnapshot(), terminal)
+	runtime.start()
+	assert.equal(bots.length, 2)
+	assert.equal(
+		old.length,
+		oldCount,
+		'settled stop must release old snapshot memberships'
+	)
+	assert.deepEqual(
+		late,
+		[terminal],
+		'stopped late callback must not survive explicit restart'
+	)
+	const freshDispose = runtime.telemetry.subscribe(value => {
+		fresh.push(value)
+	})
+	oldDispose()
+	oldDispose()
+	lateDispose()
+	bots[1]!.emit('botReady')
+	await flush()
+	assert.equal(fresh.at(-1)?.connection.state, 'ready')
+	assert.equal(old.length, oldCount)
+	assert.deepEqual(late, [terminal])
+	freshDispose()
+	await runtime.stop()
+})
+
+test('reentrant terminal subscription is immediate-only and independent disposal preserves terminal delivery', async t => {
+	const { runtime, bots, attempts } = fixture(t)
+	const nested: BotSnapshot[] = [],
+		terminal: BotSnapshot[] = []
+	let disposeOther = () => {},
+		skipped = 0
+	let joined: Promise<StopResult> | undefined
+	runtime.telemetry.subscribe(value => {
+		if (value.connection.state !== 'stopped') return
+		terminal.push(value)
+		disposeOther()
+		runtime.start()
+		joined = runtime.stop()
+		runtime.telemetry.subscribe(snapshot => {
+			nested.push(snapshot)
+		})
+	})
+	disposeOther = runtime.telemetry.subscribe(value => {
+		if (value.connection.state === 'stopped') skipped++
+	})
+	runtime.start()
+	const stop = runtime.stop()
+	await stop
+	assert.equal(joined, stop)
+	assert.equal(
+		attempts(),
+		1,
+		'reentrant start during terminal publication remains fenced'
+	)
+	assert.equal(skipped, 0)
+	assert.deepEqual(terminal, [runtime.telemetry.getSnapshot()])
+	assert.deepEqual(nested, terminal)
+	runtime.start()
+	assert.equal(bots.length, 2)
+	assert.equal(terminal.length, 1)
+	assert.equal(
+		nested.length,
+		1,
+		'callback registered inside terminal delivery must be released too'
+	)
+	await runtime.stop()
+})
+
+test('deadline releases old and late snapshot callbacks while new restart observers await actual finalization', async t => {
+	const { runtime, bots, load } = fixture(t)
+	const loading = deferred()
+	load.mock.mockImplementationOnce(() => loading.promise)
+	const old: BotSnapshot[] = [],
+		late: BotSnapshot[] = [],
+		fresh: BotSnapshot[] = []
+	runtime.telemetry.subscribe(value => {
+		old.push(value)
+	})
+	runtime.start()
+	bots[0]!.emit('botReady')
+	const stop = runtime.stop()
+	t.mock.timers.tick(1000)
+	assert.equal((await stop).outcome, 'timed-out')
+	const terminal = runtime.telemetry.getSnapshot()
+	const oldCount = old.length
+	assert.equal(old.at(-1), terminal)
+	runtime.telemetry.subscribe(value => {
+		late.push(value)
+	})
+	assert.deepEqual(late, [terminal])
+	runtime.start()
+	runtime.telemetry.subscribe(value => {
+		fresh.push(value)
+	})
+	assert.equal(bots.length, 1)
+	loading.resolve()
+	await flush()
+	assert.equal(bots.length, 2)
+	assert.equal(old.length, oldCount, 'deadline must release pre-stop callbacks')
+	assert.deepEqual(late, [terminal])
+	assert.equal(fresh.at(-1)?.connection.state, 'connecting')
+	bots[1]!.emit('botReady')
+	await flush()
+	assert.equal(fresh.at(-1)?.connection.state, 'ready')
+	await runtime.stop()
+})
+
 test('reentrant stop on connecting prevents native creation and start; stopping joins memoized promise', async t => {
 	const { runtime, attempts } = fixture(t)
 	let stopped: Promise<StopResult> | undefined
