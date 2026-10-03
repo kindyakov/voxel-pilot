@@ -8,10 +8,9 @@ import type {
 	LogUpdate
 } from '@voxel-pilot/contracts'
 
+import { createSecretRedactor } from '@/config/credentialRedactor.js'
 import type { AIConfig } from '@/config/runtimeConfig.js'
 import type { RuntimeLogRecord } from '@/config/runtimeLogger.js'
-
-import { createSecretRedactor } from './safeText.js'
 
 export interface LogHistoryOptions extends Partial<LogHistoryLimits> {
 	readonly level?: LogLevel

@@ -1,6 +1,6 @@
 import type { AIConfig } from '@/config/runtimeConfig.js'
 
-/** Captures known instance credentials; never reads environment or raw runtime objects. */
+/** Shared instance credential policy; text formatting/caps belong to each caller. */
 export function createSecretRedactor(
 	ai: Pick<AIConfig, 'apiKey' | 'baseUrl'>
 ): (text: string) => string {

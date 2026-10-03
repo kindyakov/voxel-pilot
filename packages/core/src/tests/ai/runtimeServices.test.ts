@@ -212,6 +212,67 @@ test('provider errors redact instance credentials without changing transport cla
 	assert.match(exposed, /REDACTED/)
 })
 
+test('model failures share instance redaction for fragments, encoding and percent-case while preserving useful context', async () => {
+	const common = createTestAgentDependencies()
+	const apiKey = 'review/key/value'
+	const endpoint = new URL('https://fixture.invalid/v1')
+	endpoint.username = 'review/user'
+	endpoint.password = 'review/password'
+	endpoint.searchParams.set('token', 'review/query')
+	endpoint.hash = 'review%2Ffragment'
+	const baseUrl = endpoint.toString()
+	const credentials = [
+		apiKey,
+		'review/user',
+		'review/password',
+		'review/query',
+		'review/fragment'
+	]
+	const forms = credentials.flatMap(value => [
+		value,
+		encodeURIComponent(value),
+		encodeURIComponent(value).replace(/%[A-F\d]{2}/g, escape =>
+			escape.toLowerCase()
+		)
+	])
+	for (const failure of [
+		Object.assign(
+			new Error(`context-preserved ${baseUrl} ${forms.join(' ')}`),
+			{ code: 'ECONNRESET' }
+		),
+		`text-context-preserved ${forms.join(' ')}`
+	]) {
+		const records: RuntimeLogRecord[] = []
+		const runner = createAgentTurnRunner({
+			...common,
+			logger: createTestLogger(records),
+			ai: { ...common.ai, provider: 'routerai', apiKey, baseUrl }
+		})
+		const input = createInput()
+		input.client = {
+			async createResponse() {
+				throw failure
+			}
+		}
+		const result = await runner(input)
+		assert.equal(result.kind, 'failed')
+		assert.ok(
+			result.kind === 'failed' && result.reason.includes('context-preserved')
+		)
+		assert.ok(
+			result.kind === 'failed' &&
+				result.isTransport === failure instanceof Error
+		)
+		const exposed = JSON.stringify({ result, records })
+		for (const form of forms)
+			assert.ok(
+				!exposed.includes(form),
+				'known instance credential form must remain private'
+			)
+		assert.match(exposed, /REDACTED/)
+	}
+})
+
 test('chat and responses dumps use selected directories, remain opt-in and keep private text out of logs', async t => {
 	const temporary = await mkdtemp(join(tmpdir(), 'voxel-pilot-ai-services-'))
 	t.after(async () => {
@@ -449,4 +510,12 @@ test('explicit clients reject missing keys instead of inheriting ambient SDK cre
 		() => new OpenAICompatibleChatClient(options),
 		/Explicit AI API key/
 	)
+	for (const apiKey of ['', ' ', '\t\n']) {
+		const blank = createTestClientOptions({ apiKey })
+		assert.throws(() => new OpenAIResponsesClient(blank), /Explicit AI API key/)
+		assert.throws(
+			() => new OpenAICompatibleChatClient(blank),
+			/Explicit AI API key/
+		)
+	}
 })

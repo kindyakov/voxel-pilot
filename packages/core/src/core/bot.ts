@@ -8,6 +8,7 @@ import type {
 } from '@voxel-pilot/contracts'
 import * as mineflayer from 'mineflayer'
 
+import { createSecretRedactor } from '@/config/credentialRedactor.js'
 import type { MinecraftConfig } from '@/config/runtimeConfig.js'
 import type { RuntimeServices } from '@/config/runtimeServices.js'
 
@@ -37,7 +38,6 @@ import {
 } from './finalization.js'
 import { type RuntimeFacts, deliver, measured } from './telemetry/facts.js'
 import { observeNativeFacts } from './telemetry/nativeFacts.js'
-import { createSecretRedactor } from './telemetry/safeText.js'
 
 export interface ConnectionDependencies {
 	createBot: (options: MinecraftConfig) => Bot
