@@ -8,6 +8,7 @@ import { createActor, fromPromise } from 'xstate'
 
 import type { HarnessDependencies } from '@/hsm/dependencies.js'
 import { createBotMachine } from '@/hsm/machine.js'
+import type { MachineFactoryOptions } from '@/hsm/machine.js'
 
 import { loadMovement } from '@/modules/plugins/movement.js'
 import { loadPvp } from '@/modules/plugins/pvp.js'
@@ -173,10 +174,25 @@ export class HandoffBot extends EventEmitter {
 	get heldItem() {
 		return this.inventory.slots[36 + this.quickBarSlot] ?? null
 	}
-	async equip(item: Item, destination: string) {
+	async equip(
+		item: Item,
+		destination: string,
+		options?: { signal?: AbortSignal }
+	) {
+		options?.signal?.throwIfAborted()
 		this.equippedItems.push(item.name)
 		await this.equipGate
+		options?.signal?.throwIfAborted()
 		this.inventory.slots[this.getEquipmentDestSlot(destination)] = item
+	}
+	async unequip(destination: string, options?: { signal?: AbortSignal }) {
+		options?.signal?.throwIfAborted()
+		if (destination !== 'hand') throw new Error('Fixture only frees the hand')
+		const empty = this.inventory.slots.findIndex(
+			(item, slot) => slot >= 36 && slot < 45 && item === null
+		)
+		if (empty < 0) throw new Error('No empty hotbar slot in fixture')
+		this.setQuickBarSlot(empty - 36)
 	}
 	async dig(block: { position: Vec3 }) {
 		this.digCalls.push(block.position)
@@ -222,7 +238,8 @@ export class HandoffBot extends EventEmitter {
 export const createHarness = (
 	backgroundTracking = false,
 	version = '1.20.4',
-	dependencies: HarnessDependencies = testHarnessDependencies()
+	dependencies: HarnessDependencies = testHarnessDependencies(),
+	options: MachineFactoryOptions = {}
 ) => {
 	const bot = new HandoffBot(version)
 	const VersionItem = require('prismarine-item')(version)
@@ -237,9 +254,13 @@ export const createHarness = (
 	bot.pathfinder.setMovements(bot.movements)
 	const actor = createActor(
 		createBotMachine(dependencies, {
-			actors: backgroundTracking
-				? {}
-				: { serviceEntitiesTracking: fromPromise(async () => {}) }
+			...options,
+			actors: {
+				...options.actors,
+				...(backgroundTracking
+					? {}
+					: { serviceEntitiesTracking: fromPromise(async () => {}) })
+			}
 		}),
 		{ input: { bot: bot.asBot() } }
 	)

@@ -34,11 +34,28 @@ export type RecoveryRelocation =
 	| { status: 'pending'; sourcePosition: Vec3 | null }
 	| { status: 'planned'; from: Vec3; goal: Vec3 }
 
+/** Confirmed attack contact, refreshed by the common observer, never by a pursuit timer. */
+export interface AttackContact {
+	entity: Entity | null
+	ranged: boolean
+	lastObservedAt: number
+	position: Vec3 | null
+}
+
+export interface DefensiveRelocation {
+	from: Vec3 | null
+	sourceId: number | null
+	sourcePosition: Vec3 | null
+}
+
 export interface MachineContext {
 	bot: Bot | null
 	health: number
 	recoveryRelocation: RecoveryRelocation | null
 	aggressionByEntity: Record<number, number>
+	attackContacts: Record<number, AttackContact>
+	defensiveRelocation: DefensiveRelocation | null
+	defensiveDamageHandled: number
 	/** Death is terminal for this entity object, not for a reusable server ID. */
 	deadEntities: ReadonlySet<Entity>
 	recoveryNoFoodNotified: boolean
@@ -104,6 +121,7 @@ export interface MachineContext {
 		creeperDangerDistance: number
 		creeperRetreatDistance: number
 		aggressionRetentionMs: number
+		defensiveQuietMs: number
 		maxCountSlotsInInventory: number
 		foodEmergency: number
 		foodRestored: number
@@ -172,6 +190,9 @@ export const context: MachineContext = {
 	health: 20,
 	recoveryRelocation: null,
 	aggressionByEntity: {},
+	attackContacts: {},
+	defensiveRelocation: null,
+	defensiveDamageHandled: 0,
 	deadEntities: new Set(),
 	recoveryNoFoodNotified: false,
 	threatObservationAt: null,
@@ -232,6 +253,7 @@ export const context: MachineContext = {
 		creeperDangerDistance: 12,
 		creeperRetreatDistance: 16,
 		aggressionRetentionMs: 10000,
+		defensiveQuietMs: 2000,
 		maxCountSlotsInInventory: 45,
 		foodEmergency: 6,
 		foodRestored: 18,

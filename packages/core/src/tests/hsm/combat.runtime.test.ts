@@ -7,7 +7,7 @@ import type { Item } from '@/types/index.js'
 import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
 
-import { ItemFactory, registry } from './fixtures/handoffBot.js'
+import { BlockFactory, ItemFactory, registry } from './fixtures/handoffBot.js'
 import { publishEntities } from './fixtures/publishEntities.js'
 import { createBotMachine } from './fixtures/services.js'
 
@@ -30,6 +30,7 @@ const createEnemy = (distance: number) => ({
 })
 
 class CombatBot extends EventEmitter {
+	_client = new EventEmitter()
 	username = 'Bot'
 	entity = { id: 999, position: new Vec3(0, 64, 0), height: 1.8 }
 	entities = {}
@@ -166,8 +167,13 @@ class CombatBot extends EventEmitter {
 		return []
 	}
 	async sleep() {}
-	blockAt() {
-		return null
+	blockAt(position: Vec3) {
+		const block = BlockFactory.fromStateId(
+			registry.blocksByName.air.minStateId,
+			0
+		)
+		block.position = position.floored()
+		return block
 	}
 	findBlocks() {
 		return []
@@ -277,7 +283,9 @@ test('a rejected ranged equip falls back once and stays in melee for this encoun
 		)
 		assert.equal(actor.getSnapshot().context.rangedUnavailable, true)
 		actor.send({ type: 'STOP_COMBAT' })
-		actor.send({ type: 'START_COMBAT', target: createEnemy(8) as any })
+		const nextEnemy = createEnemy(8)
+		await enterCombat(actor, nextEnemy)
+		actor.send({ type: 'START_COMBAT', target: nextEnemy as any })
 		await delay(20)
 		assert.equal(bot.equipCalls.filter(name => name === 'bow').length, 2)
 	} finally {

@@ -119,3 +119,40 @@ test('a replacement weapon selected by heldItemChanged is not overwritten by can
 	assert.equal(native.heldItem?.name, 'bow')
 	assert.equal(native.inventory.selectedItem, null)
 })
+
+test('canceling free-hand preparation after its atomic swap preserves items and the replacement hand', async t => {
+	const { native, clicks, put, onClick } = fixture(t)
+	for (let slot = 38; slot < 45; slot++)
+		put(slot, slot === 38 ? 'bow' : 'stone')
+	const before = native.inventory.slots
+		.flatMap(item => (item ? [item.name] : []))
+		.sort()
+	const controller = new AbortController()
+	onClick(() => {
+		controller.abort(new Error('Free-hand preparation canceled'))
+		native.setQuickBarSlot(2)
+	})
+	await assert.rejects(
+		native.unequip('hand', { signal: controller.signal }),
+		/canceled/
+	)
+	assert.equal(native.heldItem?.name, 'bow')
+	assert.equal(native.quickBarSlot, 2)
+	assert.equal(native.inventory.selectedItem, null)
+	assert.deepEqual(
+		native.inventory.slots.flatMap(item => (item ? [item.name] : [])).sort(),
+		before
+	)
+	assert.deepEqual(clicks, [2])
+	onClick(() => {})
+	await native.unequip('hand', { signal: new AbortController().signal })
+	assert.equal(
+		native.heldItem,
+		null,
+		'new owner can successfully free its hand'
+	)
+	assert.deepEqual(
+		native.inventory.slots.flatMap(item => (item ? [item.name] : [])).sort(),
+		before
+	)
+})

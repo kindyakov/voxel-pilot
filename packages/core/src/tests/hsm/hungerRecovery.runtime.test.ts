@@ -8,6 +8,58 @@ import { loadAutoEat } from '@/modules/plugins/autoEat.js'
 
 import { ItemFactory, createHarness, registry } from './fixtures/handoffBot.js'
 
+test('unknown damage before a healthy hunger meal starts cancels preparation and requires actual safe relocation', async t => {
+	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
+	const { bot, actor, step } = createHarness(true)
+	t.after(() => actor.stop())
+	loadAutoEat(bot.asBot())
+	const bread = new ItemFactory(registry.itemsByName.bread.id, 16)
+	bread.slot = 36
+	bot.inventory.items = () => [bread]
+	for (let i = 0; i < 2; i++) {
+		t.mock.timers.tick(100)
+		await flush()
+	}
+	bot.food = 5
+	actor.send({ type: 'UPDATE_FOOD', food: 5 })
+	assert.ok(
+		actor
+			.getSnapshot()
+			.matches({ MAIN_ACTIVITY: { URGENT_NEEDS: 'EMERGENCY_EATING' } })
+	)
+	assert.equal(bot.autoEat.isEating, false)
+	const origin = bot.entity.position.clone()
+	const damagedAt = Date.now()
+	bot.emit('entityHurt', bot.entity)
+	assert.ok(
+		actor.getSnapshot().matches({ MAIN_ACTIVITY: 'DEFENSIVE_RELOCATION' })
+	)
+	assert.equal(bot.usingItem, false)
+	for (let i = 0; i < 20; i++) {
+		t.mock.timers.tick(50)
+		await flush()
+		step()
+		assert.equal(bot.usingItem, false)
+	}
+	assert.ok(bot.entity.position.distanceTo(origin) > 0.25)
+	for (let i = 0; i < 240 && !bot.usingItem; i++) {
+		t.mock.timers.tick(50)
+		await flush()
+		step()
+	}
+	assert.equal(bot.usingItem, true)
+	assert.ok(
+		bot.entity.position.distanceTo(origin) >=
+			actor.getSnapshot().context.preferences.fleeTargetDistance - 1
+	)
+	assert.ok(
+		Date.now() - damagedAt >=
+			actor.getSnapshot().context.preferences.defensiveQuietMs
+	)
+	assert.equal(actor.getSnapshot().context.defensiveRelocation, null)
+	assert.equal(actor.getSnapshot().context.health, 20)
+})
+
 test('an active hunger meal continues inside the 30/20 band and stops at 20 without fleeing', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, enemy, observe } = createHarness()
@@ -112,7 +164,7 @@ test('hunger-only recovery leaves safe no-food waiting once, and resumes when fo
 	)
 })
 
-test('damage stops hunger-only eating without flight, and leaving the damaged place restores eating', async t => {
+test('unknown-source damage stops hunger-only eating and actual safe relocation restores eating', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
 	const { bot, actor, step } = createHarness(true)
 	t.after(() => actor.stop())
@@ -128,6 +180,8 @@ test('damage stops hunger-only eating without flight, and leaving the damaged pl
 		await flush()
 	}
 	assert.equal(bot.usingItem, true)
+	const damagedPosition = bot.entity.position.clone()
+	const damagedAt = Date.now()
 	bot.emit('entityHurt', bot.entity)
 	assert.equal(bot.usingItem, false)
 	for (let i = 0; i < 20; i++) {
@@ -135,19 +189,28 @@ test('damage stops hunger-only eating without flight, and leaving the damaged pl
 		await flush()
 		step()
 	}
-	assert.equal(bot.entity.position.x, 0)
-	assert.equal(bot.entity.position.z, 0)
+	assert.ok(
+		actor.getSnapshot().matches({ MAIN_ACTIVITY: 'DEFENSIVE_RELOCATION' })
+	)
+	assert.ok(bot.entity.position.distanceTo(damagedPosition) > 0.25)
 	assert.equal(
 		bot.usingItem,
 		false,
 		'do not restart eating at the place where damage interrupted it'
 	)
-	// A later task or server movement leaves that place; hunger itself does not flee.
-	bot.entity.position.x = 20
-	actor.send({ type: 'UPDATE_POSITION', position: bot.entity.position })
-	for (let i = 0; i < 5; i++) {
-		t.mock.timers.tick(100)
+	for (let i = 0; i < 240 && !bot.usingItem; i++) {
+		t.mock.timers.tick(50)
 		await flush()
+		step()
 	}
 	assert.equal(bot.usingItem, true)
+	assert.ok(
+		bot.entity.position.distanceTo(damagedPosition) >=
+			actor.getSnapshot().context.preferences.fleeTargetDistance - 1
+	)
+	assert.ok(
+		Date.now() - damagedAt >=
+			actor.getSnapshot().context.preferences.defensiveQuietMs
+	)
+	assert.equal(actor.getSnapshot().context.defensiveRelocation, null)
 })

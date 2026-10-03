@@ -11,6 +11,7 @@ import { GoalXZ } from '@/modules/plugins/goals.js'
 
 import { isFinitePosition } from '@/utils/minecraft/spatial.js'
 
+import { coverCandidates, isCoveredFrom } from './cover.js'
 import { EscapeSafety } from './escapeSafety.js'
 import { hasMovementController } from './movementController.js'
 import { MovementProgress } from './movementProgress.js'
@@ -45,6 +46,8 @@ export class EscapeRuntime {
 	private routeComplete = false
 	private threats: ThreatObservation[] = []
 	private routeSafety: EscapeSafety | null = null
+	private coverSource: Vec3 | null = null
+	private coverSourceHeight = 1.8
 
 	constructor(
 		private readonly bot: Bot,
@@ -119,7 +122,8 @@ export class EscapeRuntime {
 		this.routeSafety = new EscapeSafety(
 			this.bot.entity.position,
 			this.threats,
-			this.preferences
+			this.preferences,
+			this.coverProof()
 		)
 		if (
 			result.path?.length &&
@@ -167,8 +171,12 @@ export class EscapeRuntime {
 	move(
 		threat: ThreatObservation | null,
 		threats: ThreatObservation[],
-		relocation: Vec3 | null
+		relocation: Vec3 | null,
+		coverSource: Vec3 | null = null,
+		coverSourceHeight = 1.8
 	): EscapeMode {
+		this.coverSource = coverSource
+		this.coverSourceHeight = coverSourceHeight
 		this.threats = threats
 		const position: Vec3 = this.bot.entity.position
 		if (
@@ -179,7 +187,12 @@ export class EscapeRuntime {
 			return 'NONE'
 		}
 		if (this.mode === 'PATHFINDER') {
-			const safety = new EscapeSafety(position, threats, this.preferences)
+			const safety = new EscapeSafety(
+				position,
+				threats,
+				this.preferences,
+				this.coverProof()
+			)
 			// Refresh all hazards, but stop only when the remaining path became unsafe
 			// or no longer preserves clearance. Progress already made must not be demanded again.
 			if (
@@ -210,6 +223,7 @@ export class EscapeRuntime {
 		}
 		if (
 			!relocation &&
+			!coverSource &&
 			threat &&
 			threat.distance < 15 &&
 			threats.filter(
@@ -256,7 +270,12 @@ export class EscapeRuntime {
 		}
 		if (this.mode !== 'PATHFINDER') {
 			clearMicroMovement(this.bot)
-			this.routeSafety = new EscapeSafety(position, threats, this.preferences)
+			this.routeSafety = new EscapeSafety(
+				position,
+				threats,
+				this.preferences,
+				this.coverProof()
+			)
 			this.bot.pathfinder.setMovements(this.movements)
 			this.mode = 'PATHFINDER'
 			const away = threat
@@ -278,6 +297,15 @@ export class EscapeRuntime {
 				}
 			).sort((a, b) => this.clearance(b, threats) - this.clearance(a, threats))
 			if (relocation) this.candidates.unshift(relocation)
+			if (coverSource)
+				this.candidates.unshift(
+					...coverCandidates(
+						this.bot,
+						coverSource,
+						this.preferences.fleeTargetDistance,
+						this.coverSourceHeight
+					)
+				)
 		}
 		if (!this.search) {
 			this.goal = this.candidates.shift() ?? null
@@ -335,6 +363,19 @@ export class EscapeRuntime {
 			} else this.goal = null
 		}
 		return this.mode
+	}
+
+	private coverProof() {
+		const source = this.coverSource
+		return source
+			? (position: { x: number; y: number; z: number }) =>
+					isCoveredFrom(
+						this.bot,
+						new Vec3(position.x, position.y, position.z),
+						source,
+						this.coverSourceHeight
+					)
+			: undefined
 	}
 
 	private hasThreatLayoutChanged(

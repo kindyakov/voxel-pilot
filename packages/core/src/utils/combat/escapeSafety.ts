@@ -45,7 +45,8 @@ export class EscapeSafety {
 	constructor(
 		origin: Vec3,
 		threats: ThreatObservation[],
-		private readonly preferences: MachineContext['preferences']
+		private readonly preferences: MachineContext['preferences'],
+		private readonly coveredDestination?: (position: Position) => boolean
 	) {
 		this.hazards = threats.map(threat => ({
 			position: threat.position.clone(),
@@ -88,6 +89,7 @@ export class EscapeSafety {
 		}
 		return (
 			!complete ||
+			this.coveredDestination?.(previous) === true ||
 			this.hazards.length === 0 ||
 			this.clearance(previous) >= this.initialClearance + requiredProgress
 		)

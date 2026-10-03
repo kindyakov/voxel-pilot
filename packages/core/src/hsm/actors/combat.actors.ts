@@ -4,6 +4,7 @@ import { Weapons } from 'minecrafthawkeye'
 import type { RuntimeLogger } from '@/config/runtimeLogger.js'
 
 import type { MachineContext } from '@/hsm/context.js'
+import { hasFreshThreatObservation } from '@/hsm/guards/survival.guards.js'
 import {
 	type BaseServiceState,
 	type ServiceAPI,
@@ -11,8 +12,10 @@ import {
 } from '@/hsm/helpers/createStatefulService.js'
 import type { MachineEvent } from '@/hsm/types.js'
 
+import { AcceptedApproachRoute } from '@/utils/combat/approachRoute.js'
 import {
 	getMeleeExitRange,
+	hasCurrentCombatPosition,
 	hasRangedLoadout,
 	resolveCombatTarget
 } from '@/utils/combat/combatRange.js'
@@ -21,10 +24,18 @@ import {
 	stopMeleeAttack,
 	stopRangedAttack
 } from '@/utils/combat/runtimeControl.js'
+import {
+	canUseMeleeLoadout,
+	isDefensiveCandidate
+} from '@/utils/combat/selfDefense.js'
 
 interface MeleeAttackState extends BaseServiceState {
 	currentTarget: Entity | null
 	ready: boolean
+	armed: boolean
+	attackStarting: boolean
+	attackGeneration: number
+	route: AcceptedApproachRoute
 }
 
 interface RangedSkirmishState extends BaseServiceState {
@@ -44,27 +55,78 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 	const isPvpTargetActive = (bot: Bot, enemy: Entity) =>
 		bot.pvp?.target?.id === enemy.id
 
+	const hasPreparedMeleeLoadout = (context: MachineContext, armed: boolean) => {
+		const bot = context.bot
+		if (!bot) return false
+		const weapon = bot.utils.getMeleeWeapon()
+		return (
+			canUseMeleeLoadout(context) &&
+			Boolean(weapon) === armed &&
+			(weapon ? bot.heldItem?.type === weapon.type : bot.heldItem === null)
+		)
+	}
+
 	const issueMeleeAttack = (
-		bot: Bot,
-		enemy: Entity,
-		sendBack: (event: MachineEvent) => void
+		api: ServiceAPI<MeleeAttackState>,
+		enemy: Entity
 	) => {
-		const attackResult = bot.pvp.attack(enemy)
+		const { bot, sendBack } = api
+		const attackGeneration = api.state.attackGeneration + 1
+		api.setState({ attackStarting: true, attackGeneration })
+		const attackResult = bot.pvp.attack(enemy, {
+			canAttack: target => {
+				const context = api.getContext()
+				return (
+					!api.abortSignal.aborted &&
+					api.state.ready &&
+					context.movementOwner === 'PVP' &&
+					context.combatTarget.entity === target &&
+					context.enemies.includes(target) &&
+					hasFreshThreatObservation(context) &&
+					isDefensiveCandidate(context, target) &&
+					hasPreparedMeleeLoadout(context, api.state.armed) &&
+					canSeeEnemy(bot, target)
+				)
+			}
+		})
 
 		if (attackResult instanceof Promise) {
-			void attackResult.catch((error: unknown) => {
-				logger.error('[COMBAT] melee_attack_failed', {
-					error:
-						error instanceof Error
-							? (error.stack ?? error.message)
-							: String(error)
+			void attackResult
+				.then(() => {
+					const context = api.getContext()
+					if (
+						!api.abortSignal.aborted &&
+						api.state.attackGeneration === attackGeneration &&
+						context.movementOwner === 'PVP' &&
+						bot.pvp.target === enemy &&
+						context.approachAttempts[enemy.id]?.blockedReason === 'approach'
+					) {
+						// Exhausted pursuit can still strike an enemy in reach. Native PVP
+						// normally installs a tighter follow goal; this owner revokes that goal.
+						bot.pathfinder.setGoal(null)
+						bot.clearControlStates()
+					}
 				})
-				sendBack({
-					type: 'ERROR',
-					error: error instanceof Error ? error.message : String(error)
+				.catch((error: unknown) => {
+					logger.error('[COMBAT] melee_attack_failed', {
+						error:
+							error instanceof Error
+								? (error.stack ?? error.message)
+								: String(error)
+					})
+					sendBack({
+						type: 'ERROR',
+						error: error instanceof Error ? error.message : String(error)
+					})
 				})
-			})
-		}
+				.finally(() => {
+					if (
+						!api.abortSignal.aborted &&
+						api.state.attackGeneration === attackGeneration
+					)
+						api.setState({ attackStarting: false })
+				})
+		} else api.setState({ attackStarting: false })
 	}
 
 	const getWeaponType = (weaponName: string): Weapons => {
@@ -91,7 +153,7 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		context: MachineContext,
 		target: { entity: Entity | null; distance: number }
 	) => {
-		if (!target.entity) {
+		if (!target.entity || !hasCurrentCombatPosition(context)) {
 			return false
 		}
 
@@ -103,25 +165,18 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		)
 	}
 
-	const updateMelee = ({
-		context,
-		state,
-		bot,
-		sendBack,
-		setState,
-		abortSignal
-	}: ServiceAPI<MeleeAttackState>) => {
+	const updateMelee = (api: ServiceAPI<MeleeAttackState>) => {
+		const { context, state, bot, sendBack, setState, abortSignal } = api
 		if (!state.ready || abortSignal.aborted) return
-		const weapon = bot.utils.getMeleeWeapon()
-		if (!weapon || bot.heldItem?.type !== weapon.type) {
-			// Inventory availability is not permission to hit with an empty hand.
+		if (!hasPreparedMeleeLoadout(context, state.armed)) {
+			// Inventory availability is not permission to skip weapon preparation.
 			// Re-enter through the HSM so the old controller stops before rearming.
 			sendBack({ type: 'WEAPON_BROKEN' })
 			return
 		}
 		const target = resolveCombatTarget(context)
 
-		if (!target.entity) {
+		if (!target.entity || !hasCurrentCombatPosition(context)) {
 			if (state.currentTarget) {
 				stopMeleeAttack(bot, 'no_enemies', logger, logCombatRuntime)
 				setState({ currentTarget: null })
@@ -142,7 +197,10 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		}
 
 		const enemy = target.entity
-		sendBack({ type: 'APPROACH_SAMPLE' })
+		sendBack({
+			type: 'APPROACH_SAMPLE',
+			waypoint: state.route.sample(bot.entity.position)
+		})
 		if (abortSignal.aborted) return
 
 		if (!state.currentTarget || state.currentTarget.id !== enemy.id) {
@@ -150,7 +208,7 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 				stopMeleeAttack(bot, 'retarget', logger, logCombatRuntime)
 			}
 
-			issueMeleeAttack(bot, enemy, sendBack)
+			issueMeleeAttack(api, enemy)
 			setState({ currentTarget: enemy })
 			logCombatRuntime('melee_attack_issued', {
 				enemyId: enemy.id,
@@ -160,8 +218,8 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 			return
 		}
 
-		if (!isPvpTargetActive(bot, enemy)) {
-			issueMeleeAttack(bot, enemy, sendBack)
+		if (!state.attackStarting && !isPvpTargetActive(bot, enemy)) {
+			issueMeleeAttack(api, enemy)
 			logCombatRuntime('melee_attack_issued', {
 				enemyId: enemy.id,
 				distance: Number(target.distance.toFixed(2)),
@@ -175,17 +233,28 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 		name: 'MeleeAttack',
 		operationTimeoutMs: 15_000,
 		tickInterval: 500,
-		initialState: { currentTarget: null, ready: false },
+		initialState: {
+			currentTarget: null,
+			ready: false,
+			armed: false,
+			attackStarting: false,
+			attackGeneration: 0,
+			route: new AcceptedApproachRoute()
+		},
 		onStart: async api => {
 			const { bot, abortSignal, setState } = api
+			setState({ route: new AcceptedApproachRoute() })
 			bot.utils.stopEating?.()
 			const meleeWeapon = bot.utils.getMeleeWeapon()
 			if (meleeWeapon) {
 				await bot.equip(meleeWeapon, 'hand', { signal: abortSignal })
 				if (abortSignal.aborted) return
 				logger.debug(`Melee equipped: ${meleeWeapon.name}`)
+			} else {
+				await bot.unequip('hand', { signal: abortSignal })
+				if (abortSignal.aborted) return
 			}
-			setState({ ready: true })
+			setState({ ready: true, armed: Boolean(meleeWeapon) })
 			// Read the current target after equip: it may have changed while awaiting inventory.
 			updateMelee(api)
 		},
@@ -193,12 +262,23 @@ export const createCombatActors = (logger: RuntimeLogger) => {
 
 		onEvents: () => ({
 			physicsTick: updateMelee,
-			path_update: ({ sendBack }, result: { status?: string }) => {
+			path_reset: ({ state }) => state.route.clear(),
+			goal_updated: ({ state }) => state.route.clear(),
+			path_stop: ({ state }) => state.route.clear(),
+			path_update: (
+				{ sendBack, state },
+				result: {
+					status?: string
+					path?: { x: number; y: number; z: number }[]
+				}
+			) => {
+				if (result.path) state.route.publish(result.path)
 				if (result.status === 'noPath' || result.status === 'timeout')
 					sendBack({ type: 'APPROACH_ROUTE_FAILED' })
 			}
 		}),
-		onCleanup: ({ bot, setState }) => {
+		onCleanup: ({ bot, setState, state }) => {
+			state.route.clear()
 			stopMeleeAttack(bot, 'cleanup', logger, logCombatRuntime)
 			setState({ currentTarget: null })
 		}

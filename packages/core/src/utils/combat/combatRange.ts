@@ -1,8 +1,17 @@
 import type { Entity } from '@/types/index.js'
 
 import type { MachineContext } from '@/hsm/context.js'
+import { hasFreshThreatObservation } from '@/hsm/guards/survival.guards.js'
 
 import { isFinitePosition } from '@/utils/minecraft/spatial.js'
+
+/** Remembered contact coordinates may pause a goal, but cannot authorize pursuit. */
+export const hasCurrentCombatPosition = (context: MachineContext) =>
+	hasFreshThreatObservation(context) &&
+	Boolean(
+		context.combatTarget.entity &&
+		context.enemies.includes(context.combatTarget.entity)
+	)
 
 /** Actors and guards must use the same live geometry, not a cached scan distance. */
 export const resolveCombatTarget = (

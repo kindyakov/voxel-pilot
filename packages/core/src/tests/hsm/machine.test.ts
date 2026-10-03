@@ -7,7 +7,7 @@ import test from 'node:test'
 import { setImmediate as flushImmediate } from 'node:timers/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 
-import type { Block, Bot, Item } from '@/types/index.js'
+import type { Block, Bot, Entity, Item } from '@/types/index.js'
 import { Vec3 } from 'vec3'
 import { createActor, fromPromise } from 'xstate'
 import type { AnyActorLogic } from 'xstate'
@@ -24,6 +24,7 @@ import {
 
 import type { MachineContext } from '@/hsm/context.js'
 import { getMiningTask } from '@/hsm/tasks/task.js'
+import type { MachineEvent } from '@/hsm/types.js'
 
 import { NoOpAgentClient } from '@/ai/client.js'
 import type { AgentTurnResult } from '@/ai/contracts/agentTurn.js'
@@ -483,33 +484,19 @@ test('disabled AI leaves autonomous healing and armed combat operational', async
 	}
 })
 
-const createVec3 = (x: number, y: number, z: number) => ({
-	x,
-	y,
-	z,
-	distanceTo(other: { x: number; y: number; z: number }) {
-		const dx = x - other.x
-		const dy = y - other.y
-		const dz = z - other.z
-		return Math.sqrt(dx * dx + dy * dy + dz * dz)
-	},
-	offset(dx: number, dy: number, dz: number) {
-		return createVec3(x + dx, y + dy, z + dz)
-	},
-	minus(other: { x: number; y: number; z: number }) {
-		return {
-			x: x - other.x,
-			y: y - other.y,
-			z: z - other.z,
-			normalize() {
-				const length = Math.sqrt(
-					this.x * this.x + this.y * this.y + this.z * this.z
-				)
-				return createVec3(this.x / length, this.y / length, this.z / length)
-			}
-		}
-	}
-})
+const createVec3 = (x: number, y: number, z: number) => new Vec3(x, y, z)
+
+const loadedBlock = (
+	name: 'air' | 'furnace',
+	position: { x: number; y: number; z: number }
+) => {
+	const block = BlockFactory.fromStateId(
+		registry.blocksByName[name].minStateId,
+		0
+	)
+	block.position = new Vec3(position.x, position.y, position.z).floored()
+	return block
+}
 
 // Match Mineflayer's local window acquisition/release, including close failures.
 const trackWindow = (
@@ -541,6 +528,7 @@ type FakeTaskMemory = Pick<
 >
 
 class FakeBot extends EventEmitter {
+	_client = new EventEmitter()
 	username = 'Bot'
 	entity = { id: 999, position: createVec3(0, 64, 0), height: 1.8 }
 	entities = {}
@@ -703,8 +691,8 @@ class FakeBot extends EventEmitter {
 		return []
 	}
 	async sleep() {}
-	blockAt() {
-		return null
+	blockAt(position: { x: number; y: number; z: number }) {
+		return loadedBlock('air', position)
 	}
 	findBlocks() {
 		return []
@@ -808,6 +796,19 @@ const enemy = createEntityFixture({
 	position: new Vec3(2, 64, 0),
 	isValid: true
 })
+
+const startObservedCombat = (
+	actor: { send: (event: MachineEvent) => void },
+	target: Entity
+) => {
+	actor.send({
+		type: 'UPDATE_ENTITIES',
+		entities: [target],
+		enemies: [target],
+		players: []
+	})
+	actor.send({ type: 'START_COMBAT', target })
+}
 
 interface TestActorOptions {
 	thinkingActor?: AnyActorLogic
@@ -1524,13 +1525,13 @@ test('combat falls back to MELEE_ATTACKING when ranged mode is unavailable', asy
 	const { actor } = createTestActor()
 
 	try {
-		actor.send({
-			type: 'START_COMBAT',
-			target: {
+		startObservedCombat(
+			actor,
+			createEntityFixture({
 				...enemy,
 				position: createVec3(8, 64, 0)
-			} as any
-		})
+			})
+		)
 		await waitForTurn()
 
 		assert.equal(
@@ -1574,13 +1575,13 @@ test('combat chooses RANGED_SKIRMISHING when ranged window is valid', async () =
 	actor.start()
 
 	try {
-		actor.send({
-			type: 'START_COMBAT',
-			target: {
+		startObservedCombat(
+			actor,
+			createEntityFixture({
 				...enemy,
 				position: createVec3(8, 64, 0)
-			} as any
-		})
+			})
+		)
 		await waitForTurn()
 
 		assert.equal(
@@ -1599,10 +1600,7 @@ test('combat chooses MELEE_ATTACKING in close range and assigns pvp ownership', 
 	const { actor } = createTestActor()
 
 	try {
-		actor.send({
-			type: 'START_COMBAT',
-			target: enemy as any
-		})
+		startObservedCombat(actor, enemy)
 		await waitForTurn()
 
 		assert.equal(
@@ -1717,12 +1715,13 @@ test('melee combat does not thrash into ranged skirmish on small distance jitter
 	}
 
 	actor.start()
+	const observedEnemy = createEntityFixture({
+		...enemy,
+		position: enemy.position.clone()
+	})
 
 	try {
-		actor.send({
-			type: 'START_COMBAT',
-			target: enemy as any
-		})
+		startObservedCombat(actor, observedEnemy)
 		await waitForTurn()
 
 		assert.equal(
@@ -1732,26 +1731,14 @@ test('melee combat does not thrash into ranged skirmish on small distance jitter
 			true
 		)
 
+		observedEnemy.position = createVec3(5.2, 64, 0)
 		publishEntities(actor, {
 			type: 'UPDATE_ENTITIES',
-			entities: [
-				{
-					...enemy,
-					position: createVec3(5.2, 64, 0)
-				} as any
-			],
-			enemies: [
-				{
-					...enemy,
-					position: createVec3(5.2, 64, 0)
-				} as any
-			],
+			entities: [observedEnemy],
+			enemies: [observedEnemy],
 			players: [],
 			combatTarget: {
-				entity: {
-					...enemy,
-					position: createVec3(5.2, 64, 0)
-				} as any,
+				entity: observedEnemy,
 				distance: 5.2
 			}
 		})
@@ -1849,10 +1836,7 @@ test('UPDATE_HEALTH preempts combat into urgent healing while a melee threat is 
 	const { actor } = createTestActor()
 
 	try {
-		actor.send({
-			type: 'START_COMBAT',
-			target: enemy as any
-		})
+		startObservedCombat(actor, enemy)
 		await waitForTurn()
 		await waitForTurn()
 
@@ -1882,14 +1866,11 @@ test('UPDATE_HEALTH preempts combat into urgent healing while a melee threat is 
 	}
 })
 
-test('critical food preempts active melee combat even while the hostile is close', async () => {
+test('healthy hunger preserves active melee combat while the hostile is close', async () => {
 	const { actor } = createTestActor()
 
 	try {
-		actor.send({
-			type: 'START_COMBAT',
-			target: enemy as any
-		})
+		startObservedCombat(actor, enemy)
 		await waitForTurn()
 		await waitForTurn()
 
@@ -1910,10 +1891,11 @@ test('critical food preempts active melee combat even while the hostile is close
 		assert.equal(actor.getSnapshot().context.food, 5)
 		assert.equal(
 			actor.getSnapshot().matches({
-				MAIN_ACTIVITY: { URGENT_NEEDS: 'EMERGENCY_EATING' }
+				MAIN_ACTIVITY: { COMBAT: 'MELEE_ATTACKING' }
 			} as never),
 			true
 		)
+		assert.equal(actor.getSnapshot().context.movementOwner, 'PVP')
 	} finally {
 		actor.stop()
 	}
@@ -2043,10 +2025,7 @@ test('melee attack is reissued when the pvp controller silently loses the target
 	actor.start()
 
 	try {
-		actor.send({
-			type: 'START_COMBAT',
-			target: enemy as any
-		})
+		startObservedCombat(actor, enemy)
 		await waitForTurn()
 		await waitForTurn()
 
@@ -2106,10 +2085,7 @@ test('combat-to-urgent handoff force stops pvp before survival takes ownership',
 	actor.start()
 
 	try {
-		actor.send({
-			type: 'START_COMBAT',
-			target: enemy as any
-		})
+		startObservedCombat(actor, enemy)
 		await waitForTurn()
 		await waitForTurn()
 
@@ -2819,12 +2795,12 @@ test('START_COMBAT closes an active window before entering combat', async () => 
 
 	const bot = new FakeBot() as any
 	bot.blockAt = (position: { x: number; y: number; z: number }) =>
-		position.x === 1 && position.y === 64 && position.z === 1
-			? {
-					name: 'furnace',
-					position: createVec3(1, 64, 1)
-				}
-			: null
+		loadedBlock(
+			position.x === 1 && position.y === 64 && position.z === 1
+				? 'furnace'
+				: 'air',
+			position
+		)
 	bot.openFurnace = async () =>
 		trackWindow(
 			bot,
@@ -2917,12 +2893,12 @@ test('UPDATE_ENTITIES closes an active window before auto-combat preemption', as
 
 	const bot = new FakeBot() as any
 	bot.blockAt = (position: { x: number; y: number; z: number }) =>
-		position.x === 1 && position.y === 64 && position.z === 1
-			? {
-					name: 'furnace',
-					position: createVec3(1, 64, 1)
-				}
-			: null
+		loadedBlock(
+			position.x === 1 && position.y === 64 && position.z === 1
+				? 'furnace'
+				: 'air',
+			position
+		)
 	bot.openFurnace = async () =>
 		trackWindow(
 			bot,
@@ -3441,12 +3417,12 @@ test('open_window abort after open preserves the session when close fails', asyn
 
 	const bot = new FakeBot() as any
 	bot.blockAt = (position: { x: number; y: number; z: number }) =>
-		position.x === 1 && position.y === 64 && position.z === 1
-			? {
-					name: 'furnace',
-					position: createVec3(1, 64, 1)
-				}
-			: null
+		loadedBlock(
+			position.x === 1 && position.y === 64 && position.z === 1
+				? 'furnace'
+				: 'air',
+			position
+		)
 	bot.openFurnace = async () =>
 		trackWindow(
 			bot,

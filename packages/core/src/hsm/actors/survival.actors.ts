@@ -14,8 +14,11 @@ import {
 	createStatefulService
 } from '@/hsm/helpers/createStatefulService.js'
 
+import { isCoveredFrom } from '@/utils/combat/cover.js'
+import { defensiveRelocationSafe } from '@/utils/combat/defensiveResponse.js'
 import { EscapeRuntime } from '@/utils/combat/escapeRuntime.js'
 import { hasPassabilityChanged } from '@/utils/combat/passability.js'
+import { planRecoveryRelocation } from '@/utils/combat/recoveryRelocation.js'
 import { refreshRecoveryRelocation } from '@/utils/combat/recoveryRelocation.js'
 import {
 	stopMeleeAttack,
@@ -34,7 +37,9 @@ interface SafetyState extends BaseServiceState {
 
 export const createSurvivalActors = (logger: RuntimeLogger) => {
 	/** Safety is continuous; eating and route attempts can fail without releasing the obligation. */
-	const createSafetyService = (kind: 'health' | 'food' | 'retreat') =>
+	const createSafetyService = (
+		kind: 'health' | 'food' | 'retreat' | 'defense'
+	) =>
 		createStatefulService<SafetyState>({
 			logger,
 			name:
@@ -42,7 +47,9 @@ export const createSurvivalActors = (logger: RuntimeLogger) => {
 					? 'TacticalRetreat'
 					: kind === 'health'
 						? 'EmergencyHealing'
-						: 'EmergencyEating',
+						: kind === 'defense'
+							? 'DefensiveRelocation'
+							: 'EmergencyEating',
 			tickInterval: 100,
 			asyncTickInterval: 100,
 			initialState: {
@@ -110,6 +117,74 @@ export const createSurvivalActors = (logger: RuntimeLogger) => {
 					setMode(
 						'IDLE',
 						context.threatObservationProblem ?? 'invalid_bot_position'
+					)
+					return
+				}
+				if (kind === 'defense') {
+					bot.utils.stopEating()
+					const obligation = context.defensiveRelocation
+					if (!obligation) return
+					if (defensiveRelocationSafe(context)) {
+						escape.stop()
+						setMode('IDLE', 'defensive_relocation_safe')
+						sendBack({ type: 'DEFENSIVE_SAFE' })
+						return
+					}
+					if (!hasFreshThreatObservation(context)) {
+						escape.stop()
+						setMode('IDLE', 'waiting_for_fresh_observation')
+						return
+					}
+					const contact =
+						obligation.sourceId === null
+							? null
+							: context.attackContacts[obligation.sourceId]
+					const source = contact?.position ?? obligation.sourcePosition
+					const sourceHeight = contact?.entity?.height
+					const rangedSource =
+						contact?.ranged && sourceHeight && Number.isFinite(sourceHeight)
+							? source
+							: null
+					const departed =
+						obligation.from &&
+						Math.hypot(
+							position.x - obligation.from.x,
+							position.z - obligation.from.z
+						) >=
+							context.preferences.fleeTargetDistance - 1
+					if (
+						rangedSource &&
+						isCoveredFrom(bot, position, rangedSource, sourceHeight)
+					) {
+						escape.stop()
+						setMode('IDLE', 'covered_contact_still_dangerous')
+						return
+					}
+					if (departed && !contact && !context.nearestThreat) {
+						escape.stop()
+						setMode('IDLE', 'waiting_for_damage_quiet_and_fresh_safety')
+						return
+					}
+					const relocation = planRecoveryRelocation(
+						obligation.from ?? position,
+						source,
+						bot.entity.yaw,
+						context.preferences.fleeTargetDistance
+					)
+					const threat =
+						context.threats.find(
+							threat => threat.entityId === obligation.sourceId
+						) ?? context.nearestThreat
+					const owner = escape.move(
+						threat,
+						context.threats,
+						relocation.status === 'planned' ? relocation.goal : null,
+						rangedSource,
+						sourceHeight
+					)
+					setMode(
+						owner === 'NONE' ? 'IDLE' : owner,
+						owner === 'NONE' ? 'no_escape_route' : 'defensive_relocation'
 					)
 					return
 				}
@@ -271,6 +346,7 @@ export const createSurvivalActors = (logger: RuntimeLogger) => {
 	return {
 		serviceEmergencyHealing: createSafetyService('health'),
 		serviceEmergencyEating: createSafetyService('food'),
-		serviceTacticalRetreat: createSafetyService('retreat')
+		serviceTacticalRetreat: createSafetyService('retreat'),
+		serviceDefensiveRelocation: createSafetyService('defense')
 	}
 }

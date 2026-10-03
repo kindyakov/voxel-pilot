@@ -27,6 +27,7 @@ import {
 import { createAgentTurnRunner } from '@/ai/loop.js'
 import { isAiPilotDisabled } from '@/ai/pilotAvailability.js'
 
+import { startNativeDamageSession } from '@/modules/connection/nativeDamage.js'
 import { createConnectionInitializer } from '@/modules/connection/runtimeConnection.js'
 
 import { BotUtils } from '@/utils/minecraft/botUtils.js'
@@ -238,6 +239,7 @@ class MinecraftBot extends EventEmitter {
 				issues: []
 			}
 			this.session = session
+			session.listeners.push(startNativeDamageSession(bot))
 			const onReady = () => {
 				void this.initializeSession(session)
 			}

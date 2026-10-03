@@ -47,8 +47,9 @@ const assessMobWithReason = (
 		return { kind: 'uncertain', reason: 'invalid_entity_position' }
 	const attackedAt = context.aggressionByEntity[entity.id]
 	if (
-		attackedAt !== undefined &&
-		Date.now() - attackedAt < context.preferences.aggressionRetentionMs
+		(attackedAt !== undefined &&
+			Date.now() - attackedAt < context.preferences.aggressionRetentionMs) ||
+		context.attackContacts[entity.id]?.entity === entity
 	)
 		return { kind: 'hostile', reason: 'confirmed_attack_on_bot' }
 	if (policy === 'slime_size') {
@@ -150,6 +151,21 @@ export const hasCombatWeapon = (context: MachineContext) =>
 	Boolean(context.bot?.utils.getMeleeWeapon()) ||
 	Boolean(context.bot?.utils.getRangeWeapon() && context.bot.utils.getArrow())
 
+/** An available ranged loadout is not permission to skip it with fists. */
+export const canUseMeleeLoadout = (context: MachineContext) => {
+	const bot = context.bot
+	if (!bot) return false
+	if (bot.utils.getMeleeWeapon()) return true
+	if (hasRangedLoadout(context)) return false
+	// Missing storage is a recoverable preparation wait, not a broken controller.
+	return (
+		!bot.heldItem ||
+		bot.inventory.slots.some(
+			(item, slot) => slot >= 9 && slot < 45 && item === null
+		)
+	)
+}
+
 export const forbidsMelee = (context: MachineContext) =>
 	context.threats.some(
 		threat =>
@@ -174,6 +190,9 @@ const defensiveCandidateReason = (
 	const assessment = assessMobWithReason(context, entity)
 	if (assessment.kind !== 'hostile') return assessment.reason
 	const distance = context.bot.entity.position.distanceTo(entity.position)
+	const confirmedShooter =
+		context.attackContacts[entity.id]?.ranged === true &&
+		context.attackContacts[entity.id]?.entity === entity
 	const continuingEncounter =
 		entity.id === context.combatTarget.entity?.id ||
 		context.threats.some(
@@ -189,7 +208,8 @@ const defensiveCandidateReason = (
 					vanillaFollowRange[entity.name ?? ''] ??
 						context.preferences.selfDefenseDistance
 				)
-	if (!(distance <= range)) return 'outside_engagement_range'
+	if (!confirmedShooter && !(distance <= range))
+		return 'outside_engagement_range'
 	if (
 		context.threats.some(
 			threat => threat.entityId === entity.id && threat.creeper?.disengaged
@@ -200,7 +220,12 @@ const defensiveCandidateReason = (
 			distance <= context.preferences.creeperDangerDistance)
 	)
 		return 'creeper_melee_disengaged'
-	return canSeeEnemy(context.bot, entity) ? 'eligible' : 'no_line_of_sight'
+	// Confirmed fire permits navigation around cover, never a blind hit.
+	return confirmedShooter ||
+		continuingEncounter ||
+		canSeeEnemy(context.bot, entity)
+		? 'eligible'
+		: 'no_line_of_sight'
 }
 
 export const selectCombatDecision = (context: MachineContext) => {
@@ -214,12 +239,35 @@ export const selectCombatDecision = (context: MachineContext) => {
 	const candidates = evaluated
 		.filter(candidate => candidate.reason === 'eligible')
 		.map(candidate => candidate.entity)
-	const entity =
+	let entity =
 		candidates.sort(
 			(a, b) =>
+				Number(
+					context.attackContacts[b.id]?.ranged === true &&
+						context.attackContacts[b.id]?.entity === b
+				) -
+					Number(
+						context.attackContacts[a.id]?.ranged === true &&
+							context.attackContacts[a.id]?.entity === a
+					) ||
 				position.distanceTo(a.position) - position.distanceTo(b.position) ||
 				a.id - b.id
 		)[0] ?? null
+	// Lost coordinates hold the contact briefly, never movement authority.
+	const previous = context.combatTarget.entity
+	if (
+		!entity &&
+		previous &&
+		!context.deadEntities.has(previous) &&
+		context.threats.some(
+			threat =>
+				threat.entityId === previous.id &&
+				!threat.observed &&
+				Date.now() - threat.lastObservedAt <
+					context.preferences.threatRetentionMs
+		)
+	)
+		entity = previous
 	return {
 		target: {
 			entity,

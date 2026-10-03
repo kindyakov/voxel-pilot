@@ -71,6 +71,13 @@ import { createTaskContext } from '@/ai/taskContext.js'
 import { parseExecution } from '@/ai/tools/executionDefinitions.js'
 
 import { refreshApproaches } from '@/utils/combat/approachPolicy.js'
+import {
+	canAnswerDefensiveDamage,
+	defensiveRelocationSafe,
+	hasDangerousAttackContact,
+	needsDefensiveRelocation,
+	refreshAttackContacts
+} from '@/utils/combat/defensiveResponse.js'
 import { hasMovementController } from '@/utils/combat/movementController.js'
 import {
 	assessMob,
@@ -342,6 +349,7 @@ export const createBotMachine = (
 		actors: {
 			idleGaze,
 			serviceTacticalRetreat: survivalActors.serviceTacticalRetreat,
+			serviceDefensiveRelocation: survivalActors.serviceDefensiveRelocation,
 			worldObservation,
 			windowLifetime: fromCallback<MachineEvent, WindowRuntime>(
 				({ input }) =>
@@ -581,6 +589,7 @@ export const createBotMachine = (
 				return {
 					threatObservationAt: Date.now(),
 					threatObservationProblem: null,
+					attackContacts: refreshAttackContacts(context, observedEntities),
 					deadEntities: new Set(
 						[...context.deadEntities].filter(
 							entity =>
@@ -650,7 +659,9 @@ export const createBotMachine = (
 				}
 			),
 			sendMissingCombatWeaponMessage: ({ context }) => {
-				context.bot?.chat('Оружия нет (или нет боеприпасов). Бой не начинаю.')
+				context.bot?.chat(
+					'Оружия нет (или нет боеприпасов). Для ближней самообороны использую кулаки.'
+				)
 			},
 
 			removeEntity: assign(({ context, event }) => {
@@ -663,9 +674,20 @@ export const createBotMachine = (
 					? context.threats.filter(
 							threat => threat.entityId !== event.entity.id
 						)
-					: context.threats
+					: context.threats.map(threat =>
+							threat.entityId === event.entity.id
+								? { ...threat, observed: false }
+								: threat
+						)
 				const remaining = {
 					...context,
+					attackContacts: died
+						? Object.fromEntries(
+								Object.entries(context.attackContacts).filter(
+									([id]) => Number(id) !== event.entity.id
+								)
+							)
+						: context.attackContacts,
 					deadEntities: died
 						? new Set([...context.deadEntities, event.entity])
 						: context.deadEntities,
@@ -716,6 +738,9 @@ export const createBotMachine = (
 				threatObservationProblem: 'observer_failed'
 			}),
 			updateAfterDeath: assign({
+				attackContacts: {},
+				defensiveRelocation: null,
+				defensiveDamageHandled: 0,
 				combatNoWeaponNotified: false,
 				recoveryRelocation: null,
 				aggressionByEntity: {},
@@ -1109,7 +1134,6 @@ export const createBotMachine = (
 			START_COMBAT: [
 				{
 					guard: ({ context, event }) =>
-						hasCombatWeapon(context) &&
 						isDefensiveCandidate(context, event.target),
 					target: '#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT',
 					actions: [
@@ -1169,6 +1193,7 @@ export const createBotMachine = (
 							({ context }) =>
 								context.health > 0 &&
 								context.food < context.preferences.foodEmergency &&
+								!context.defensiveRelocation &&
 								canAttemptRecovery(context) &&
 								isRecoverySafe(context)
 						]),
@@ -1178,6 +1203,7 @@ export const createBotMachine = (
 						guard: and([
 							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS')),
 							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.OBSERVATION_WAIT')),
+							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.DEFENSIVE_RELOCATION')),
 							({ context }) =>
 								context.health > 0 && context.threatObservationProblem !== null
 						]),
@@ -1193,6 +1219,21 @@ export const createBotMachine = (
 								requiresAvoidance(context)
 						]),
 						target: '.COMBAT.RETREATING'
+					},
+					{
+						guard: and([
+							not(
+								stateIn(
+									'#MINECRAFT_BOT.MAIN_ACTIVITY.URGENT_NEEDS.EMERGENCY_HEALING'
+								)
+							),
+							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.RETREATING')),
+							not(stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.DEFENSIVE_RELOCATION')),
+							({ context }) =>
+								context.health > 0 && needsDefensiveRelocation(context)
+						]),
+						target: '.DEFENSIVE_RELOCATION',
+						actions: 'startDefensiveRelocation'
 					}
 				],
 				on: {
@@ -1209,6 +1250,43 @@ export const createBotMachine = (
 					}
 				},
 				states: {
+					DEFENSIVE_RELOCATION: {
+						entry: ['closeActiveWindowSession', 'ownMovementNone'],
+						exit: ['ownMovementNone'],
+						initial: 'RUNNING',
+						always: {
+							guard: ({ context }) => canAnswerDefensiveDamage(context),
+							target: 'COMBAT',
+							actions: 'updateCombatTarget'
+						},
+						states: {
+							RUNNING: {
+								invoke: {
+									src: 'serviceDefensiveRelocation',
+									input: ({ context }: { context: MachineContext }) => ({
+										bot: context.bot!,
+										options: {}
+									}),
+									onError: 'RETRYING'
+								}
+							},
+							RETRYING: { after: { recoveryRetry: 'RUNNING' } }
+						},
+						on: {
+							DEFENSIVE_SAFE: {
+								guard: ({ context }) => defensiveRelocationSafe(context),
+								target: 'RESUMING',
+								actions: 'finishDefensiveRelocation'
+							},
+							USER_COMMAND: { actions: 'setGoalFromUserCommand' },
+							STOP_CURRENT_GOAL: { actions: 'clearGoal' },
+							START_COMBAT: {},
+							STOP_COMBAT: {},
+							UPDATE_COMBAT_TARGET: { actions: 'updateCombatTarget' },
+							SURVIVAL_MODE_CHANGED: { actions: 'syncSurvivalModeOwner' },
+							ERROR: { target: '.RETRYING', actions: 'recordCombatFailure' }
+						}
+					},
 					OBSERVATION_WAIT: {
 						entry: ['closeActiveWindowSession', 'ownMovementNone'],
 						always: {
@@ -1403,7 +1481,8 @@ export const createBotMachine = (
 										stateIn('#MINECRAFT_BOT.MAIN_ACTIVITY.COMBAT.RETREATING')
 									),
 									({ context }) =>
-										!context.combatTarget.entity || !hasCombatWeapon(context)
+										!context.combatTarget.entity &&
+										!hasDangerousAttackContact(context)
 								]),
 								target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING',
 								actions: 'notifyMissingCombatWeapon'
@@ -1434,6 +1513,12 @@ export const createBotMachine = (
 							}
 						],
 						on: {
+							USER_COMMAND: { actions: 'setGoalFromUserCommand' },
+							STOP_CURRENT_GOAL: { actions: 'clearGoal' },
+							RESUME_PAUSED_GOAL: {
+								guard: 'canResumePausedGoal',
+								actions: 'resumePausedGoal'
+							},
 							RANGED_UNAVAILABLE: {
 								target: '.DECIDING',
 								actions: ['disableRanged', 'updateCombatTarget']
@@ -1464,6 +1549,12 @@ export const createBotMachine = (
 							WAITING: {
 								entry: ['ownMovementNone', 'logCombatWaiting'],
 								always: [
+									{
+										guard: ({ context }) =>
+											!context.combatTarget.entity &&
+											!hasDangerousAttackContact(context),
+										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING'
+									},
 									{
 										guard: 'canResumeApproach',
 										target: 'DECIDING',
@@ -1518,7 +1609,8 @@ export const createBotMachine = (
 								always: [
 									{
 										guard: ({ context }) =>
-											!context.combatTarget.entity || !hasCombatWeapon(context),
+											!context.combatTarget.entity &&
+											!hasDangerousAttackContact(context),
 										target: '#MINECRAFT_BOT.MAIN_ACTIVITY.RESUMING'
 									},
 									{
